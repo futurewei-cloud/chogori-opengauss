@@ -83,6 +83,7 @@ static char* ChoosePartitionName(
 static char* ChooseIndexNameAddition(const List* colnames);
 static void RangeVarCallbackForReindexIndex(
     const RangeVar* relation, Oid relId, Oid oldRelId, bool target_is_partition, void* arg);
+static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, AdaptMem* memInfo = NULL, bool dbWide = false);
 static bool columnIsExist(Relation rel, const Form_pg_attribute attTup, const List* indexParams);
 static bool relationHasInformationalPrimaryKey(const Relation conrel);
 static void handleErrMsgForInfoCnstrnt(const IndexStmt* stmt, const Relation rel);
@@ -296,6 +297,77 @@ bool CheckIndexCompatible(Oid oldId, char* accessMethodName, List* attributeList
 }
 
 /*
+ * WaitForOlderSnapshots
+ *
+ * Wait for transactions that might have an older snapshot than the given xmin
+ * limit, because it might not contain tuples deleted just before it has
+ * been taken. Obtain a list of VXIDs of such transactions, and wait for them 
+ * individually. This is used when building an index concurrently.
+ * 
+ * We can exclude any running transactions that have xmin> the xmin given;
+ * their oldest snapshot must be newer than our xmin limit.
+ * We can also exclude any transactions that have xmin = zero, since they
+ * evidently have no live snapshot at all (and any one they might be in
+ * process of taking is certainly newer than ours). Transactions in other
+ * DBs can be ignored too, since they'll never even be able to see the
+ * index being worked on.
+ * 
+ * We can also exclude autovacuum processes and processes running manual
+ * lazy VACUUMs, because they won't be fazed by missing index entries
+ * either. (Manual ANALYZEs, however, can't be excluded because they
+ * might be within transactions that are going to do arbitrary operations
+ * later.)
+ * 
+ * Also, GetCurrentVirtualXIDs never reports our own vxid, so we need not
+ * check for that.
+ * 
+ * If a process goes idle-in-transaction with xmin zero, we do not need to
+ * wait for it anymore, per the above argument. We do not have the 
+ * infrastructure right now to stop waiting if that happens, but we can at
+ * begin to wait. We do this by repeatedly rechecking the output of
+ * GetCurrentVirtualXIDs. If, during any iteration, a particular vxid
+ * doesn't show up in the output, we know we can forget about it.
+ */
+static void WaitForOlderSnapshots(TransactionId limitXmin)
+{
+    int n_old_snapshots;
+    int i;
+    VirtualTransactionId* old_snapshots;
+
+    old_snapshots = GetCurrentVirtualXIDs(limitXmin, true, false, PROC_IS_AUTOVACUUM | PROC_IN_VACUUM, &n_old_snapshots);
+
+    for (i = 0; i < n_old_snapshots; i++){
+        if (!VirtualTransactionIdIsValid(old_snapshots[i]))
+            continue;/* found uninteresting in previous cycle */
+        
+        if (i > 0) {
+            /* see if anything's changed ... */
+            VirtualTransactionId* newer_snapshots = NULL;
+            int n_newer_snapshots;
+            int j;
+            int k;
+
+            newer_snapshots = GetCurrentVirtualXIDs(
+                limitXmin, true, false, PROC_IS_AUTOVACUUM | PROC_IN_VACUUM, &n_newer_snapshots);
+            for (j = i; j < n_old_snapshots; j++){
+                if (!VirtualTransactionIdIsValid(old_snapshots[j]))
+                    continue; /* found uninteresting in prevous cycle */
+                for (k = 0; k < n_newer_snapshots; k++){
+                    if(VirtualTransactionIdEquals(old_snapshots[j], newer_snapshots[k]))
+                        break;
+                } 
+                if (k >= n_newer_snapshots) /* not there anymore */
+                    SetInvalidVirtualTransactionId(old_snapshots[j]);
+            }
+            pfree_ext(newer_snapshots);
+        }
+
+        if(VirtualTransactionIdIsValid(old_snapshots[i]))
+            (void)VirtualXactLock(old_snapshots[i], true);
+    }
+}
+
+/*
  * DefineIndex
  *		Creates a new index.
  *
@@ -327,7 +399,6 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
     List* indexColNames = NIL;
     List* allIndexParams = NIL;
     Relation rel;
-    Relation indexRelation;
     HeapTuple tuple;
     Form_pg_am accessMethodForm;
     bool amcanorder = false;
@@ -339,8 +410,6 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
     int numberOfKeyAttributes;
     TransactionId limitXmin;
     VirtualTransactionId* old_lockholders = NULL;
-    VirtualTransactionId* old_snapshots = NULL;
-    int n_old_snapshots = 0;
     LockRelId heaprelid;
     LOCKTAG heaplocktag;
     LOCKMODE lockmode;
@@ -1329,35 +1398,12 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
      * rolled back.  Thus, each visible tuple is either the end of its
      * HOT-chain or the extension of the chain is HOT-safe for this index.
      */
-    /* Open and lock the parent heap relation */
-    rel = heap_openrv(stmt->relation, ShareUpdateExclusiveLock);
-
-    /* And the target index relation */
-    indexRelation = index_open(indexRelationId, RowExclusiveLock);
-
+    
     /* Set ActiveSnapshot since functions in the indexes may need it */
     PushActiveSnapshot(GetTransactionSnapshot());
 
-    /* We have to re-build the IndexInfo struct, since it was lost in commit */
-    indexInfo = BuildIndexInfo(indexRelation);
-    Assert(!indexInfo->ii_ReadyForInserts);
-    indexInfo->ii_Concurrent = true;
-    indexInfo->ii_BrokenHotChain = false;
-
-    u_sess->attr.attr_sql.create_index_concurrently = true;
-    /* Now build the index */
-    index_build(rel, NULL, indexRelation, NULL, indexInfo, stmt->primary, false, INDEX_CREATE_NONE_PARTITION);
-
-    /* Close both the relations, but keep the locks */
-    heap_close(rel, NoLock);
-    index_close(indexRelation, NoLock);
-
-    /*
-     * Update the pg_index row to mark the index as ready for inserts. Once we
-     * commit this transaction, any new transactions that open the table must
-     * insert new entries into the index for insertions and non-HOT updates.
-     */
-    index_set_state_flags(indexRelationId, INDEX_CREATE_SET_READY);
+    /* Perform concurrent build of index */
+    index_concurrently_build(relationId, indexRelationId, stmt->primary);
 
     /* we can do away with our snapshot */
     PopActiveSnapshot();
@@ -1431,66 +1477,9 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
      * The index is now valid in the sense that it contains all currently
      * interesting tuples.	But since it might not contain tuples deleted just
      * before the reference snap was taken, we have to wait out any
-     * transactions that might have older snapshots.  Obtain a list of VXIDs
-     * of such transactions, and wait for them individually.
-     *
-     * We can exclude any running transactions that have xmin > the xmin of
-     * our reference snapshot; their oldest snapshot must be newer than ours.
-     * We can also exclude any transactions that have xmin = zero, since they
-     * evidently have no live snapshot at all (and any one they might be in
-     * process of taking is certainly newer than ours).  Transactions in other
-     * DBs can be ignored too, since they'll never even be able to see this
-     * index.
-     *
-     * We can also exclude autovacuum processes and processes running manual
-     * lazy VACUUMs, because they won't be fazed by missing index entries
-     * either.	(Manual ANALYZEs, however, can't be excluded because they
-     * might be within transactions that are going to do arbitrary operations
-     * later.)
-     *
-     * Also, GetCurrentVirtualXIDs never reports our own vxid, so we need not
-     * check for that.
-     *
-     * If a process goes idle-in-transaction with xmin zero, we do not need to
-     * wait for it anymore, per the above argument.  We do not have the
-     * infrastructure right now to stop waiting if that happens, but we can at
-     * least avoid the folly of waiting when it is idle at the time we would
-     * begin to wait.  We do this by repeatedly rechecking the output of
-     * GetCurrentVirtualXIDs.  If, during any iteration, a particular vxid
-     * doesn't show up in the output, we know we can forget about it.
+     * transactions that might have older snapshots. 
      */
-    old_snapshots =
-        GetCurrentVirtualXIDs(limitXmin, true, false, PROC_IS_AUTOVACUUM | PROC_IN_VACUUM, &n_old_snapshots);
-
-    for (i = 0; i < n_old_snapshots; i++) {
-        if (!VirtualTransactionIdIsValid(old_snapshots[i]))
-            continue; /* found uninteresting in previous cycle */
-
-        if (i > 0) {
-            /* see if anything's changed ... */
-            VirtualTransactionId* newer_snapshots = NULL;
-            int n_newer_snapshots;
-            int j;
-            int k;
-
-            newer_snapshots = GetCurrentVirtualXIDs(
-                limitXmin, true, false, PROC_IS_AUTOVACUUM | PROC_IN_VACUUM, &n_newer_snapshots);
-            for (j = i; j < n_old_snapshots; j++) {
-                if (!VirtualTransactionIdIsValid(old_snapshots[j]))
-                    continue; /* found uninteresting in previous cycle */
-                for (k = 0; k < n_newer_snapshots; k++) {
-                    if (VirtualTransactionIdEquals(old_snapshots[j], newer_snapshots[k]))
-                        break;
-                }
-                if (k >= n_newer_snapshots) /* not there anymore */
-                    SetInvalidVirtualTransactionId(old_snapshots[j]);
-            }
-            pfree_ext(newer_snapshots);
-        }
-
-        if (VirtualTransactionIdIsValid(old_snapshots[i]))
-            (void)VirtualXactLock(old_snapshots[i], true);
-    }
+    WaitForOlderSnapshots(limitXmin);
 
     /*
      * Index can now be marked valid -- update its pg_index entry
@@ -2417,7 +2406,7 @@ List* ChooseIndexColumnNames(const List* indexElems)
  * ReindexIndex
  *		Recreate a specific index.
  */
-void ReindexIndex(RangeVar* indexRelation, const char* partition_name, AdaptMem* mem_info)
+void ReindexIndex(RangeVar* indexRelation, const char* partition_name, AdaptMem* mem_info, bool concurrent)
 {
     Oid indOid;
     Oid indPartOid = InvalidOid;
@@ -2430,7 +2419,7 @@ void ReindexIndex(RangeVar* indexRelation, const char* partition_name, AdaptMem*
     if (partition_name != NULL)
         lockmode = AccessShareLock;
     else
-        lockmode = AccessExclusiveLock;
+        lockmode = concurrent ? ShareUpdateExclusiveLock : AccessExclusiveLock;
 
     indOid = RangeVarGetRelidExtended(indexRelation,
         lockmode,
@@ -2460,18 +2449,22 @@ void ReindexIndex(RangeVar* indexRelation, const char* partition_name, AdaptMem*
             PartitionNameCallbackForIndexPartition,
             (void*)&heapPartOid,
             ShareLock);  // lock on heap partition
-    reindex_index(indOid, indPartOid, false, mem_info, false);
-
+    
+    if (concurrent)
+        ReindexRelationConcurrently(indOid, indPartOid, mem_info, false);
+    else {
+        reindex_index(indOid, indPartOid, false, mem_info, false);
 #ifndef ENABLE_MULTIPLE_NODES
-    Oid relId = IndexGetRelation(indOid, false);
-    if (RelationIsCUFormatByOid(relId) && irel->rd_index != NULL && irel->rd_index->indisunique) {
-        /*
-         * Unique index on CU owns a unique index on delta table, but delta index is not visble
-         * to user. We reindex delta index manually.
-         */
-        ReindexDeltaIndex(indOid, indPartOid);
-    }
+        Oid relId = IndexGetRelation(indOid, false);
+        if (RelationIsCUFormatByOid(relId) && irel->rd_index != NULL && irel->rd_index->indisunique) {
+            /*
+             * Unique index on CU owns a unique index on delta table, but delta index is not visble
+             * to user. We reindex delta index manually.
+             */
+            ReindexDeltaIndex(indOid, indPartOid);
+        }
 #endif
+    }
 }
 
 void PartitionNameCallbackForIndexPartition(Oid partitionedRelationOid, const char* partitionName, Oid partId,
@@ -2614,9 +2607,10 @@ static void RangeVarCallbackForReindexIndex(
  * ReindexTable
  *		Recreate all indexes of a table (and of its toast table, if any)
  */
-void ReindexTable(RangeVar* relation, const char* partition_name, AdaptMem* mem_info)
+void ReindexTable(RangeVar* relation, const char* partition_name, AdaptMem* mem_info, bool concurrent)
 {
     Oid heapOid;
+    bool result;
 
     if (partition_name != NULL) {
         Oid heapPartOid;
@@ -2628,20 +2622,25 @@ void ReindexTable(RangeVar* relation, const char* partition_name, AdaptMem* mem_
 
         heapPartOid = partitionNameGetPartitionOid(
             heapOid, partition_name, PART_OBJ_TYPE_TABLE_PARTITION, ShareLock, false, false, NULL, NULL, NoLock);
-        reindexPartition(heapOid,
-            heapPartOid,
-            REINDEX_REL_PROCESS_TOAST | REINDEX_REL_SUPPRESS_INDEX_USE | REINDEX_REL_CHECK_CONSTRAINTS,
-            REINDEX_ALL_INDEX);
+        if(concurrent)
+            ReindexRelationConcurrently(heapOid, heapPartOid, mem_info);
+        else
+            reindexPartition(heapOid,
+                heapPartOid,
+                REINDEX_REL_PROCESS_TOAST | REINDEX_REL_SUPPRESS_INDEX_USE | REINDEX_REL_CHECK_CONSTRAINTS,
+                REINDEX_ALL_INDEX);
     } else {
         /* The lock level used here should match ReindexRelation(). */
         heapOid =
-            RangeVarGetRelidExtended(relation, ShareLock, false, false, false, false, RangeVarCallbackOwnsTable, NULL);
-
-        TrForbidAccessRbObject(RelationRelationId, heapOid, relation->relname);
-
-        if (!ReindexRelation(heapOid,
+            RangeVarGetRelidExtended(relation, concurrent ? ShareUpdateExclusiveLock : ShareLock, false, false, false, false, RangeVarCallbackOwnsTable, NULL);
+        if (concurrent)
+            result = ReindexRelationConcurrently(heapOid, InvalidOid, mem_info);
+        else
+            result = ReindexRelation(heapOid,
             REINDEX_REL_PROCESS_TOAST | REINDEX_REL_SUPPRESS_INDEX_USE | REINDEX_REL_CHECK_CONSTRAINTS,
-            REINDEX_ALL_INDEX, NULL, mem_info))
+            REINDEX_ALL_INDEX, NULL, mem_info);
+        
+        if (!result)
             ereport(NOTICE, (errmsg("table \"%s\" has no indexes", relation->relname)));
     }
 }
@@ -2653,7 +2652,7 @@ void ReindexTable(RangeVar* relation, const char* partition_name, AdaptMem* mem_
  * @ in partition_name: the  partition_table is used to execute the operation of 'reindex internal table name partition
  *partition_name'.
  */
-void ReindexInternal(RangeVar* relation, const char* partition_name)
+void ReindexInternal(RangeVar* relation, const char* partition_name, bool concurrent)
 {
     Oid heapOid;
     Relation rel;
@@ -2756,7 +2755,7 @@ void ReindexInternal(RangeVar* relation, const char* partition_name)
  * separate transaction, so we can release the lock on it right away.
  * That means this must not be called within a user transaction block!
  */
-void ReindexDatabase(const char* databaseName, bool do_system, bool do_user, AdaptMem* mem_info)
+void ReindexDatabase(const char* databaseName, bool do_system, bool do_user, AdaptMem* mem_info, bool concurrent)
 {
     Relation relationRelation;
     TableScanDesc scan;
@@ -2765,6 +2764,7 @@ void ReindexDatabase(const char* databaseName, bool do_system, bool do_user, Ada
     MemoryContext old;
     List* relids = NIL;
     ListCell* l = NULL;
+    bool concurrent_warning = false;
 
     AssertArg(databaseName);
 
@@ -2791,9 +2791,9 @@ void ReindexDatabase(const char* databaseName, bool do_system, bool do_user, Ada
      * We always want to reindex pg_class first.  This ensures that if there
      * is any corruption in pg_class' indexes, they will be fixed before we
      * process any other tables.  This is critical because reindexing itself
-     * will try to update pg_class.
+     * will try to update pg_class. But reindex concurrent don't update pg_class.
      */
-    if (do_system) {
+    if (do_system && !concurrent) {
         old = MemoryContextSwitchTo(private_context);
         relids = lappend_oid(relids, RelationRelationId);
         MemoryContextSwitchTo(old);
@@ -2833,6 +2833,23 @@ void ReindexDatabase(const char* databaseName, bool do_system, bool do_user, Ada
         if (TrIsRefRbObjectEx(RelationRelationId, HeapTupleGetOid(tuple), NameStr(classtuple->relname))) {
             continue;
         }
+        /*
+         * Skip system tables that index_create() would reject to index
+         * concurrently, XXX We need the additional check for
+         * FirstNormalObjectId to skip information_schema tables, because
+         * IsCatalogClass() here does not cover information_schema, but the
+         * check in index_create() will error on the TOAST tables of
+         * information_schema tables.
+         */
+        if (concurrent &&
+            (IsCatalogClass(HeapTupleGetOid(tuple), classtuple) || HeapTupleGetOid(tuple) < FirstNormalObjectId)) {
+                if (!concurrent_warning)
+                    ereport(WARNING,
+                            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                            errmsg("concurrent reindex is not supported for catalog relations, skipping all")));
+                concurrent_warning = true;            
+                continue;
+            }
 
         old = MemoryContextSwitchTo(private_context);
         relids = lappend_oid(relids, HeapTupleGetOid(tuple));
@@ -2846,14 +2863,18 @@ void ReindexDatabase(const char* databaseName, bool do_system, bool do_user, Ada
     CommitTransactionCommand();
     foreach (l, relids) {
         Oid relid = lfirst_oid(l);
+        bool result = false;
 
         StartTransactionCommand();
         /* functions in indexes may want a snapshot set */
         PushActiveSnapshot(GetTransactionSnapshot());
         PG_TRY();
         {
-
-            if (ReindexRelation(relid, REINDEX_REL_PROCESS_TOAST, REINDEX_ALL_INDEX, NULL, mem_info, true))
+            if (concurrent)
+                result = ReindexRelationConcurrently(relid, InvalidOid, mem_info, true);
+            else
+                result = ReindexRelation(relid, REINDEX_REL_PROCESS_TOAST, REINDEX_ALL_INDEX, NULL, mem_info, true); 
+            if (result)
                 ereport(NOTICE,
                     (errmsg("table \"%s.%s\" was reindexed",
                         get_namespace_name(get_rel_namespace(relid)),
@@ -2879,6 +2900,900 @@ void ReindexDatabase(const char* databaseName, bool do_system, bool do_user, Ada
     StartTransactionCommand();
 
     MemoryContextDelete(private_context);
+}
+
+/*
+ * ReindexRelationConcurrently - process REINDEX CONCURRENTLY for given
+ * relation OID
+ * 
+ * The relation can be either an index or a table. If it is a table, all its
+ * valid indexes will be rebuilt, including its associated toast table
+ * indexes. If it is an index, this index itself will be rebuit.
+ * 
+ * The locks taken on parent tables and involved indexes are kept until the
+ * transaction is committed, at which point a session lock is taken on each 
+ * relation. Both of these protect against concurrent schema changes.
+ */
+static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, AdaptMem* memInfo, bool dbWide)
+{
+    List* heapRelationIds = NIL;
+    List* heapPartitionIds = NIL;
+    List* indexIds = NIL;
+    List* newIndexIds = NIL;
+    List* indexPartIds = NIL;
+    List* newIndexPartIds = NIL;
+    List* relationLocks = NIL;
+    List* lockTags = NIL;
+    List* relToastOids = NIL;
+    ListCell* lc; 
+    ListCell* lc2;
+    MemoryContext private_context;
+    MemoryContext oldcontext;
+    char relkind;
+    VirtualTransactionId* old_lockholders = NULL;
+
+    /*
+     * Create a memory context that will survive forced transaction commits we
+     * do below. Since it is a child of t_thrd.mem_cxt.portal_mem_cxt, it will go away
+     * eventually even if we suffer an error: there's no need for special
+     * abort cleanup logic.
+     */
+    private_context = AllocSetContextCreate(t_thrd.mem_cxt.portal_mem_cxt, "ReindexConcurrent",
+                    ALLOCSET_DEFAULT_MINSIZE, ALLOCSET_DEFAULT_INITSIZE, ALLOCSET_DEFAULT_MAXSIZE);
+
+    relkind = get_rel_relkind(relationOid);
+
+    switch(relkind){
+        case RELKIND_RELATION :
+        case RELKIND_MATVIEW :
+        case RELKIND_TOASTVALUE :
+        {
+            /*
+             * In the case of a relation. find all its indexes include
+             * toast indexes
+             */
+            Relation heapRelation;
+
+            /* open relation to get its indexes */
+            heapRelation = heap_open(relationOid, ShareUpdateExclusiveLock);
+
+            /* Save the list of relation OIDs in private context */
+            oldcontext = MemoryContextSwitchTo(private_context);
+
+            /* Track this Relation for session lock */
+	    if (!RELATION_IS_PARTITIONED(heapRelation))
+            	heapRelationIds = lappend_oid(heapRelationIds, relationOid);
+
+            MemoryContextSwitchTo(oldcontext);
+
+            /* Add all the valid indexes of relation to list */
+            foreach(lc, RelationGetIndexList(heapRelation)){
+                Oid cellOid = lfirst_oid(lc);
+                Relation indexRelation = index_open(cellOid, ShareUpdateExclusiveLock);
+
+                if (!indexRelation->rd_index->indisvalid)
+                    ereport (WARNING, 
+                            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                            errmsg("cannot reindex concurrently invalid index \" %s.%s\", skipping",
+                            get_namespace_name(get_rel_namespace(cellOid)),
+                            get_rel_name(cellOid))));
+                else if (indexRelation->rd_index->indisexclusion)
+                    ereport (WARNING,
+                            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                            errmsg("cannot reindex concurrently exclusion constraint index \" %s.%s.\", skipping",
+                            get_namespace_name(get_rel_namespace(cellOid)),
+                            get_rel_name(cellOid))));
+                else if (RelationIsGlobalIndex(indexRelation))
+                    ereport (WARNING,
+                            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                            errmsg("cannot reindex concurrently global partition index \" %s.%s\", skipping",
+                            get_namespace_name(get_rel_namespace(cellOid)),
+                            get_rel_name(cellOid))));
+                else if (RelationIsPartitioned(indexRelation)) {
+                    if (OidIsValid(relationPartOid)) {
+                        Oid indexPartitionid = InvalidOid;
+
+                        indexPartitionid = heapPartitionIdGetindexPartitionId(cellOid, relationPartOid);
+
+                        /* Save the list of relation OIDs in private context */
+                        oldcontext = MemoryContextSwitchTo(private_context);
+
+                        heapPartitionIds = lappend_oid(heapPartitionIds, relationPartOid);
+                        indexPartIds = lappend_oid(indexPartIds, indexPartitionid);
+                    
+                        MemoryContextSwitchTo(oldcontext);
+                    }
+                    else {
+                        List* indexPartOidList = NULL;
+                        ListCell* partCell = NULL;
+
+                        indexPartOidList = indexGetPartitionOidList(indexRelation);
+                        foreach (partCell, indexPartOidList) {
+                            Oid indexPartOid = lfirst_oid(partCell);
+
+                            if (!OidIsValid(indexPartOid))
+                                ereport(WARNING,
+                                        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                                        errmsg("cannot reindex concurrently invalid partition index oid %u, skipping"), indexPartOid));
+                            else {
+                                Oid heapPartitionId = PartIndexGetPartition(indexPartOid, false);
+                                /* Save the list of relation OIDs in private context */
+                                oldcontext = MemoryContextSwitchTo(private_context);
+
+                                heapPartitionIds = lappend_oid(heapPartitionIds, heapPartitionId);
+                                indexPartIds = lappend_oid(indexPartIds, indexPartOid);
+                        
+                                MemoryContextSwitchTo(oldcontext);
+                            }
+                        }
+                    }
+                }
+                else {
+                    /* Save the list of relation OIDs in private context */
+                    oldcontext = MemoryContextSwitchTo(private_context);
+
+                    indexIds = lappend_oid(indexIds, cellOid);
+
+                    MemoryContextSwitchTo(oldcontext);
+                }
+                index_close(indexRelation, NoLock);
+            }
+
+            /* Also add the toast indexes */
+            if (!RELATION_IS_PARTITIONED(heapRelation)) {
+                if (OidIsValid(heapRelation->rd_rel->reltoastrelid)){
+                    Oid toastOid = heapRelation->rd_rel->reltoastrelid;
+                    relToastOids = lappend_oid(relToastOids, toastOid);
+                }
+            }
+            else {
+                List* partTupleList = NIL;
+                ListCell* partCell = NULL;
+
+                partTupleList = searchPgPartitionByParentId(PART_OBJ_TYPE_TABLE_PARTITION, relationOid);
+
+                foreach (partCell, partTupleList) {
+                    Oid toastOid = ((Form_pg_partition)GETSTRUCT((HeapTuple)lfirst(partCell)))->reltoastrelid;
+
+                    if(OidIsValid(toastOid)) {
+                        relToastOids = lappend_oid(relToastOids, toastOid);
+                    }
+                }
+            }
+
+            foreach (lc, relToastOids) {
+                Oid toastOid = lfirst_oid(lc);
+
+                Relation toastRelation = heap_open(toastOid, ShareUpdateExclusiveLock);
+
+                /* Save the list of relation OIDs in private context */
+                oldcontext = MemoryContextSwitchTo(private_context);
+
+                /* Track the relation for session lock */
+                heapRelationIds = lappend_oid(heapRelationIds, toastOid);
+
+                MemoryContextSwitchTo(oldcontext);
+
+                foreach(lc2, RelationGetIndexList(toastRelation)){
+                    Oid cellOid = lfirst_oid(lc2);
+                    Relation indexRelation = index_open(cellOid, ShareUpdateExclusiveLock);
+
+                    if (!indexRelation->rd_index->indisvalid)
+                        ereport(WARNING,
+                                (errcode(ERRCODE_INDEX_CORRUPTED),
+                                errmsg("cannot reindex concurrently invalid index \"%s.%s\", skipping",
+                                get_namespace_name(get_rel_namespace(cellOid)),
+                                get_rel_name(cellOid))));
+                    else {
+                        /* Save the list of relation OIDs in private context */
+                        oldcontext = MemoryContextSwitchTo(private_context);
+
+                        indexIds = lappend_oid(indexIds, cellOid);
+
+                        MemoryContextSwitchTo(oldcontext);
+                    }
+                    index_close(indexRelation, NoLock);
+                }
+
+                heap_close(toastRelation, NoLock);
+            }
+
+
+            heap_close(heapRelation, NoLock);
+            break;
+        }
+        case RELKIND_INDEX:
+        {
+            /*
+             * For an index simply add its oid to list, Invalid indexes
+             * cannot be included in list
+             */
+            Relation indexRelation = index_open(relationOid, ShareUpdateExclusiveLock);
+            Oid heapId = IndexGetRelation(relationOid, false);
+            Relation heapRelation = heap_open(heapId, ShareUpdateExclusiveLock);
+
+            /* A share relation cannot be reindexed concurrently */
+            if (IsSharedRelation(heapId)) 
+                ereport(ERROR,
+                        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        errmsg("concurrent reindex is not supported for share relation")));
+
+            /* A system catalog cannot be reindexed concurrently */
+            if (IsSystemNamespace(get_rel_namespace(heapId)))
+                ereport(ERROR,
+                        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        errmsg("concurrently reindex is not supported for catalog relation")));
+
+            if (!indexRelation->rd_index->indisvalid)
+                ereport(WARNING,
+                        (errcode(ERRCODE_INDEX_CORRUPTED),
+                        errmsg("cannot reindex concurrently invalid index \"%s.%s\", skipping",
+                        get_namespace_name(get_rel_namespace(relationOid)),
+                        get_rel_name(relationOid))));
+            else if (RelationIsGlobalIndex(indexRelation))
+                    ereport (ERROR,
+                            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                            errmsg("cannot reindex concurrently global partition index \" %s.%s\"",
+                            get_namespace_name(get_rel_namespace(relationOid)),
+                            get_rel_name(relationOid))));
+            else if (RelationIsPartitioned(indexRelation)) {
+                if (OidIsValid(relationPartOid)) {
+                    Oid heapPartitionId = PartIndexGetPartition(relationPartOid, false);
+                    /* Save the list of relation OIDs in private context */
+                    oldcontext = MemoryContextSwitchTo(private_context);
+
+                    heapPartitionIds = lappend_oid(heapPartitionIds, heapPartitionId);
+                    indexPartIds = lappend_oid(indexPartIds, relationPartOid);
+
+                    MemoryContextSwitchTo(oldcontext);
+                }
+                else {
+                    List* indexPartOidList = NULL;
+                    ListCell* partCell = NULL;
+
+                    indexPartOidList = indexGetPartitionOidList(indexRelation);
+                    foreach (partCell, indexPartOidList) {
+                        Oid indexPartOid = lfirst_oid(partCell);
+
+                        if (!OidIsValid(indexPartOid))
+                            ereport(WARNING,
+                                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                                    errmsg("cannot reindex concurrently invalid partition index oid %u, skipping"), indexPartOid));
+                        else {
+                            Oid heapPartitionId = PartIndexGetPartition(indexPartOid, false);
+                            /* Save the list of relation OIDs in private context */
+                            oldcontext = MemoryContextSwitchTo(private_context);
+
+                            heapPartitionIds = lappend_oid(heapPartitionIds, heapPartitionId);
+                            indexPartIds = lappend_oid(indexPartIds, indexPartOid);
+                        
+                            MemoryContextSwitchTo(oldcontext);
+                        }
+                    }
+                }
+            }
+            else{
+                /* Save the list of relation OIDs in private context */
+                oldcontext = MemoryContextSwitchTo(private_context);
+
+                heapRelationIds = list_make1_oid(heapId);
+                indexIds = lappend_oid(indexIds, relationOid);
+
+                MemoryContextSwitchTo(oldcontext);
+            }
+
+            index_close(indexRelation, NoLock);
+            heap_close(heapRelation, NoLock);
+            break;
+        }
+
+        case RELKIND_GLOBAL_INDEX:
+        {
+            ereport (ERROR,
+                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                    errmsg("cannot reindex concurrently global partition index \" %s.%s\"",
+                    get_namespace_name(get_rel_namespace(relationOid)),
+                    get_rel_name(relationOid))));
+        }
+
+        default:
+            /* return error if the typr of relation is not supported*/
+            ereport(ERROR,
+                    (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+                    errmsg("cannot reindex concurrently this type of relation")));
+            break;
+    }
+
+    /* Definitely no indexes, so leave */
+    if (indexIds == NIL && indexPartIds == NIL){
+        PopActiveSnapshot();
+        return false;
+    }
+
+    Assert(heapRelationIds != NIL || heapPartitionIds != NIL);
+
+    /*-----
+     * Now we have all the indexes we want to process in indexIds.
+     * 
+     * The phases now are:
+     * 
+     * 1. create now indexes in the catalog
+     * 2. build new indexes
+     * 3. let new indexes catch up with tuples inserted in the meantime
+     * 4. swap index names
+     * 5. mark old indexes as dead
+     * 6. drop old indexes
+     * 
+     * We process each phase for all indexes before moving to the next phase,
+     * for efficiency.
+     */
+
+    /*
+     * Phase 1 of REINDEX CONCURRENTLY
+     * Create a new index with the same properties as the old one, but it is
+     * only registed in catalogs and will be built later. Then get session
+     * locks on all involved tables. See analogous code in DefineIndex() for
+     * more detailed comments.
+     */
+
+    foreach(lc, indexIds){
+        char* concurrentName;
+        Oid indexId = lfirst_oid(lc);
+        Oid newIndexId;
+        Relation indexRel;
+        Relation heapRel;
+        Relation newIndexRel;
+        LockRelId lockrelid;
+
+        indexRel = index_open(indexId, ShareUpdateExclusiveLock);
+        heapRel = heap_open(indexRel->rd_index->indrelid, ShareUpdateExclusiveLock);
+
+        /* Choose a temporary relation name for the new index */
+        concurrentName = ChooseRelationName(get_rel_name(indexId), NULL, "ccnew", 5, 
+                                            get_rel_namespace(indexRel->rd_index->indrelid),
+                                            false);
+
+        /* Create new index definition based on given index */
+        newIndexId = index_concurrently_create_copy(heapRel, indexId, concurrentName);
+
+        /* Now open the relation of the new index, a lock is also needed on it */
+        newIndexRel = index_open(newIndexId, ShareUpdateExclusiveLock);
+
+        /* Save the list of OIDs and locks in Private context */
+        oldcontext = MemoryContextSwitchTo(private_context);
+
+        newIndexIds = lappend_oid(newIndexIds, newIndexId);
+
+        /*
+         * Save lockrelid to protect each relation from drop then close
+         * relations. The lockrelid on parent relation is not taken here to
+         * avoid mutiple locks taken on the same relation, instead we rely on
+         * parentRelationIds built earlier.
+         */
+        lockrelid = indexRel->rd_lockInfo.lockRelId;
+        relationLocks = lappend(relationLocks, &lockrelid);
+        lockrelid = newIndexRel->rd_lockInfo.lockRelId;
+        relationLocks = lappend(relationLocks, &lockrelid);
+
+        MemoryContextSwitchTo(oldcontext);
+
+        index_close(indexRel, NoLock);
+        index_close(newIndexRel, NoLock);
+        heap_close(heapRel, NoLock);
+    }
+
+    foreach (lc, indexPartIds) {
+        char* concurrentName;
+        Oid indexPartId = lfirst_oid(lc);
+        Oid newIndexPartId;
+        Oid indexId;
+        Relation indexRelation;
+        Partition indexPartition;
+        Partition newIndexPartition;
+        LockRelId lockrelid;
+
+        indexId = PartIdGetParentId(indexPartId, false);
+        indexRelation = index_open(indexId, AccessShareLock);
+        indexPartition = partitionOpen(indexRelation, indexPartId, ShareUpdateExclusiveLock);
+
+        /* Choose a temporary relation name for the new index */
+        concurrentName = ChoosePartitionName(getPartitionName(indexPartId, false), NULL, "ccnew", indexId, PART_OBJ_TYPE_INDEX_PARTITION);
+
+        /* Create new index definition based on given index */
+        newIndexPartId = index_concurrently_part_create_copy(indexPartId, concurrentName);
+
+        /* Now open the relation of the new index, a lock is also needed on it */
+        newIndexPartition = partitionOpen(indexRelation, newIndexPartId, ShareUpdateExclusiveLock);
+
+        /* Save the list of OIDs and locks in Private context */
+        oldcontext = MemoryContextSwitchTo(private_context);
+
+        newIndexPartIds = lappend_oid(newIndexPartIds, newIndexPartId);
+
+        /*
+         * Save lockrelid to protect each relation from drop then close
+         * relations. The lockrelid on parent relation is not taken here to
+         * avoid mutiple locks taken on the same relation, instead we rely on
+         * parentRelationIds built earlier.
+         */
+        lockrelid = indexPartition->pd_lockInfo.lockRelId;
+        relationLocks = lappend(relationLocks, &lockrelid);
+        lockrelid = newIndexPartition->pd_lockInfo.lockRelId;
+        relationLocks = lappend(relationLocks, &lockrelid);
+
+        MemoryContextSwitchTo(oldcontext);
+
+        partitionClose(indexRelation, indexPartition, NoLock);
+        partitionClose(indexRelation, newIndexPartition, NoLock);
+        index_close(indexRelation, NoLock);
+    }
+
+    /*
+     * Save the heap lock for following visibility checks with other backends
+     * might conflict with this session.
+     */
+    foreach(lc, heapRelationIds){
+        Relation heapRelation = heap_open(lfirst_oid(lc), ShareUpdateExclusiveLock);
+        LockRelId lockrelid = heapRelation->rd_lockInfo.lockRelId;
+        LOCKTAG* heaplocktag;
+
+        /* Save the list of locks in private context */
+        oldcontext = MemoryContextSwitchTo(private_context);
+
+        /* Add lockrelid of heap relation to the list of locked relations */
+        relationLocks = lappend(relationLocks, &lockrelid);
+
+        heaplocktag = (LOCKTAG*) palloc(sizeof(LOCKTAG));
+
+        /* Save the LOCKTAG for this parent relation for the wait phase */
+        SET_LOCKTAG_RELATION(*heaplocktag, lockrelid.dbId, lockrelid.relId);
+        lockTags = lappend(lockTags, heaplocktag);
+
+        MemoryContextSwitchTo(oldcontext);
+
+        /* Close heap relation */
+        heap_close(heapRelation, NoLock);
+    }
+
+    /* 
+     * Save the heap partition lock for following visibility checks wth other backends
+     * might conflict with this session.
+     */
+    foreach(lc, heapPartitionIds){
+        Oid heapPartId = lfirst_oid(lc);
+        Oid heapId = PartIdGetParentId(heapPartId, false);
+        Relation heapRelation = heap_open(heapId, AccessShareLock);
+        Partition heapPartition = partitionOpen(heapRelation, heapPartId, ShareUpdateExclusiveLock);
+        LockRelId lockrelid = heapPartition->pd_lockInfo.lockRelId;
+        LOCKTAG* heapPartlocktag;
+
+        /* Save the list of locks in private context */
+        oldcontext = MemoryContextSwitchTo(private_context);
+
+        /* Add lockrelid of heap relation to the list of locked relations */
+        relationLocks = lappend(relationLocks, &lockrelid);
+
+        heapPartlocktag = (LOCKTAG*) palloc(sizeof(LOCKTAG));
+
+        /* Save the LOCKTAG for this parent relation for the wait phase */
+        SET_LOCKTAG_RELATION(*heapPartlocktag, lockrelid.dbId, lockrelid.relId);
+        lockTags = lappend(lockTags, heapPartlocktag);
+
+        MemoryContextSwitchTo(oldcontext);
+
+        /* Close heap Partition */
+        partitionClose(heapRelation, heapPartition, NoLock);
+        heap_close(heapRelation, NoLock);
+
+    }
+
+    /* Get a session-level lock on each table */
+    foreach(lc, relationLocks){
+        LockRelId* lockRel = (LockRelId*) lfirst(lc);
+
+        LockRelationIdForSession(lockRel, ShareUpdateExclusiveLock);
+    }
+
+    PopActiveSnapshot();
+    CommitTransactionCommand();
+    StartTransactionCommand();
+
+    /*
+     * Phase 2 of REINDEX CONCURRENTLY
+     *
+     * Build the new indexes in a separate transaction for each index to avoid
+     * having open transactions for an unnecessary long time. But before
+     * doing that, wait until no running transactions could have the table of
+     * the index open with the old list of indexes. See "phase 2" in
+     * DefineIndex() for more details. 
+     */
+    foreach(lc, lockTags){
+        LOCKTAG* locktag = (LOCKTAG*) lfirst(lc);
+        old_lockholders = GetLockConflicts(locktag, ShareLock);
+
+        while (VirtualTransactionIdIsValid(*old_lockholders)) {
+            (void)VirtualXactLock(*old_lockholders, true);
+            old_lockholders++;
+        }
+    }
+    CommitTransactionCommand();
+
+    forboth (lc, indexIds, lc2, newIndexIds) {
+        Relation indexRel;
+        Oid oldIndexId = lfirst_oid(lc);
+        Oid newIndexId = lfirst_oid(lc2);
+        Oid heapId;
+        bool isPrimary;
+
+        CHECK_FOR_INTERRUPTS();
+
+        /* Start new transaction for this index's concurrent build */
+        StartTransactionCommand();
+
+        /* Set ActiveSnapshot since functions in the indexes may need it */
+        PushActiveSnapshot(GetTransactionSnapshot());
+
+        /*
+         * Index relation has been closed by previous commit, so reopen it to
+         * get its information.
+         */
+        indexRel = index_open(oldIndexId, ShareUpdateExclusiveLock);
+        heapId = indexRel->rd_index->indrelid;
+        isPrimary = indexRel->rd_rel->relhaspkey;
+        index_close(indexRel, NoLock);
+
+        /* Perform concurrent build of new index */
+        index_concurrently_build(heapId, newIndexId, isPrimary, memInfo, dbWide);
+
+        PopActiveSnapshot();
+        CommitTransactionCommand();
+    }
+
+    forboth(lc, indexPartIds, lc2, newIndexPartIds){
+        Relation indexRelation;
+        Oid oldIndexPartId = lfirst_oid(lc);
+        Oid newIndexPartId = lfirst_oid(lc2);
+        Oid indexId;
+        Oid heapId;
+        Oid heapPartId;
+
+        CHECK_FOR_INTERRUPTS();
+
+        /* Start new transaction for this index's concurrent build */
+        StartTransactionCommand();
+
+        /* Set ActiveSnapshot since functions in the partindexes may need it */
+        PushActiveSnapshot(GetTransactionSnapshot());
+
+        indexId = PartIdGetParentId(oldIndexPartId, false);
+        heapPartId = PartIndexGetPartition(oldIndexPartId, false);
+        indexRelation = index_open(indexId, AccessShareLock);
+        heapId = indexRelation->rd_index->indrelid;
+
+        index_close(indexRelation, NoLock);
+
+        /* Perform concurrent build of new part index */
+        index_concurrently_part_build(heapId, heapPartId, indexId, newIndexPartId, memInfo, dbWide);
+
+        PopActiveSnapshot();
+        CommitTransactionCommand();
+    }
+    StartTransactionCommand();
+
+    /*
+     * Phase 3 of REINDEX CONCURRENTLY
+     * 
+     * During this phase the old indexes catch up with any new tuples that
+     * were created during the previous phase. See "Phase 3" in DefineIndex()
+     * for more details;
+     */
+    foreach(lc, lockTags){
+        LOCKTAG* locktag = (LOCKTAG*) lfirst(lc);
+        old_lockholders = GetLockConflicts(locktag, ShareLock);
+
+        while (VirtualTransactionIdIsValid(*old_lockholders)) {
+            (void)VirtualXactLock(*old_lockholders, true);
+            old_lockholders++;
+        }
+    }
+    CommitTransactionCommand();
+
+    foreach(lc, newIndexIds){
+        Oid newIndexId = lfirst_oid(lc);
+        Oid heapId;
+        TransactionId limitXmin;
+        Snapshot snapshot;
+
+        CHECK_FOR_INTERRUPTS();
+
+        StartTransactionCommand();
+
+        heapId = IndexGetRelation(newIndexId, false);
+
+        /*
+         * Take the "reference snapshot" that will be used by validate_index()
+         * to filter candidate tuples.
+         */
+        snapshot = RegisterSnapshot(GetTransactionSnapshot());
+        PushActiveSnapshot(snapshot);
+
+        validate_index(heapId, newIndexId, snapshot);
+
+        /*
+         * We can now do away with our active snapshot, we still need to save
+         * the xmin limit to wait for older snapshot.
+         */
+        limitXmin = snapshot->xmin;
+
+        PopActiveSnapshot();
+        UnregisterSnapshot(snapshot);
+
+        /*
+         * To ensure no deadlocks, we must commit and start yet another
+         * transaction, and do our wait before any snapshot has been taken in
+         * it.
+         */
+        CommitTransactionCommand();
+        StartTransactionCommand();
+
+        /*
+         * The index is now valid in the sense that it contains all currently
+         * interesting tuples. But since it might not contain tuples deleted just
+         * before the reference snap was taken, we have to wait out any
+         * transactions that might have older snapshots.
+         */
+        WaitForOlderSnapshots(limitXmin);
+
+        CommitTransactionCommand();
+    }
+    
+    foreach(lc, newIndexPartIds){
+        Oid newIndexPartId = lfirst_oid(lc);
+        Oid heapPartId;
+        TransactionId limitXmin;
+        Snapshot snapshot;
+
+        CHECK_FOR_INTERRUPTS();
+
+        StartTransactionCommand();
+
+        heapPartId = PartIndexGetPartition(newIndexPartId, false);
+
+        /*
+         * Take the "reference snapshot" that will be used by validate_index()
+         * to filter candidate tuples.
+         */
+        snapshot = RegisterSnapshot(GetTransactionSnapshot());
+        PushActiveSnapshot(snapshot);
+
+        validate_index(heapPartId, newIndexPartId, snapshot, true);
+
+        /*
+         * We can now do away with our active snapshot, we still need to save
+         * the xmin limit to wait for older snapshot.
+         */
+        limitXmin = snapshot->xmin;
+
+        PopActiveSnapshot();
+        UnregisterSnapshot(snapshot);
+
+        /*
+         * To ensure no deadlocks, we must commit and start yet another
+         * transaction, and do our wait before any snapshot has been taken in
+         * it.
+         */
+        CommitTransactionCommand();
+        StartTransactionCommand();
+
+        /*
+         * The index is now valid in the sense that it contains all currently
+         * interesting tuples. But since it might not contain tuples deleted just
+         * before the reference snap was taken, we have to wait out any
+         * transactions that might have older snapshots.
+         */
+        WaitForOlderSnapshots(limitXmin);
+
+        CommitTransactionCommand();
+    }
+
+    /*
+     * Phase 4 of REINDEX CONCURRENTLY
+     * 
+     * Now that the new indexes have been validated, swap each new index with
+     * its corresponding old index.
+     * 
+     * We mark the new indexes as valid and the old indexes as not valid at
+     * the same time to make sure we only get constraint violations from the
+     * indexes with the correct names.
+     */
+    StartTransactionCommand();
+
+    forboth(lc, indexIds, lc2, newIndexIds){
+        char* oldName;
+        Oid oldIndexId = lfirst_oid(lc);
+        Oid newIndexId = lfirst_oid(lc2);
+        Oid heapId;
+
+        CHECK_FOR_INTERRUPTS();
+        heapId = IndexGetRelation(oldIndexId, false);
+
+        /* Choose a relation name for old index */
+        oldName = ChooseRelationName(get_rel_name(oldIndexId), NULL, "ccold", 5, get_rel_namespace(heapId), false);
+
+        /*
+         * Swap old index with the new one. This also marks the new one as
+         * valid and the old one as not valid.
+         */
+        index_concurrently_swap(newIndexId, oldIndexId, oldName);
+
+        /*
+         * Invalidate the relcache for the table, so that after this commit
+         * all sessions will refresh any cached plans that might reference the
+         * index.
+         */
+        CacheInvalidateRelcacheByRelid(heapId);
+
+        /*
+         * CCI here so that subsequent iterations see the oldName in the
+         * catalog and can choose a nonconflicting name for their oldName.
+         * Otherwise, this could lead to confilcts if a table has two indexes
+         * whose names are equal for the first NAMEDATALEN-minus-a-few
+         * characters.
+         */
+        CommandCounterIncrement();
+    }
+
+    forboth(lc, indexPartIds, lc2, newIndexPartIds){
+        char* oldName;
+        Oid oldIndexPartId = lfirst_oid(lc);
+        Oid newIndexPartId = lfirst_oid(lc2);
+        Oid indexId = InvalidOid;
+        Oid heapPartId = InvalidOid;
+        Relation indexRelation;
+
+
+        CHECK_FOR_INTERRUPTS();
+
+        indexId = PartIdGetParentId(oldIndexPartId, false);
+        indexRelation = index_open(indexId, AccessShareLock);
+        heapPartId = PartIndexGetPartition(oldIndexPartId, false);
+
+        /* Choose a relation name for old part index */
+        oldName = ChoosePartitionName(getPartitionName(oldIndexPartId, false), NULL, "ccold", indexId, PART_OBJ_TYPE_INDEX_PARTITION);
+        /*
+         * Swap old part index with the new one. This also marks the one as
+         * valid and the old one as not valid.
+         */
+        index_concurrently_part_swap(indexRelation, newIndexPartId, oldIndexPartId, oldName);
+
+        index_close(indexRelation, NoLock);
+
+        /*
+         * Invalidate the relcache for the table, so that after this commit
+         * all sessions will refresh any cached plans that might reference the
+         * index.
+         */
+        CacheInvalidatePartcacheByPartid(heapPartId);
+
+        /*
+         * CCI here so that subsequent iterations see the oldName in the
+         * catalog and can choose a nonconflicting name for their oldName.
+         * Otherwise, this could lead to confilcts if a table has two indexes
+         * whose names are equal for the first NAMEDATALEN-minus-a-few
+         * characters.
+         */
+        CommandCounterIncrement();
+    }
+    
+    /* Commit this transaction and make index swaps visible */
+    CommitTransactionCommand();
+    StartTransactionCommand();
+
+    /*
+     * Phase 5 of REINDEXX CONCURRENTLY 
+     * 
+     * Mark the old indexes as dead, First we must wait until no running 
+     * transaction could be using the index for a query. See also
+     * index_drop() for more details.
+     */
+    foreach(lc, lockTags){
+        LOCKTAG* locktag = (LOCKTAG*) lfirst(lc);
+        old_lockholders = GetLockConflicts(locktag, ShareLock);
+
+        while (VirtualTransactionIdIsValid(*old_lockholders)) {
+            (void)VirtualXactLock(*old_lockholders, true);
+            old_lockholders++;
+        }
+    }
+
+    foreach(lc, indexIds){
+        Oid oldIndexId = lfirst_oid(lc);
+        Oid heapId;
+
+        CHECK_FOR_INTERRUPTS();
+        heapId = IndexGetRelation(oldIndexId, false);
+        index_concurrently_set_dead(heapId, oldIndexId);
+    }
+
+    /* Commit this transaction to make the updates visible. */
+    CommitTransactionCommand();
+    StartTransactionCommand();
+
+    /*
+     * Phase 6 of REINDEX CONCURRENTLY 
+     * 
+     * Drop the old indexes.
+     */
+    foreach(lc, lockTags){
+        LOCKTAG* locktag = (LOCKTAG*) lfirst(lc);
+        old_lockholders = GetLockConflicts(locktag, ShareLock);
+
+        while (VirtualTransactionIdIsValid(*old_lockholders)) {
+            (void)VirtualXactLock(*old_lockholders, true);
+            old_lockholders++;
+        }
+    }
+
+    PushActiveSnapshot(GetTransactionSnapshot());
+
+    {
+        ObjectAddresses* objects = new_object_addresses();
+
+        foreach(lc, indexIds){
+            Oid oldIndexId = lfirst_oid(lc);
+            ObjectAddress* object =(ObjectAddress*) palloc(sizeof(ObjectAddress));
+
+            object->classId = RelationRelationId;
+            object->objectId = oldIndexId;
+            object->objectSubId = 0;
+
+            add_exact_object_address(object, objects);
+        }
+
+        /*
+         * Use PERFORM_DELETION_CONCURRENT_LOCK co that index_drop() uses the
+         * right lock level.
+         */
+        performMultipleDeletions(objects, DROP_RESTRICT, PERFORM_DELETION_CONCURRENTLY_LOCK | PERFORM_DELETION_INTERNAL);
+    }
+
+    /* Drop old part index */
+    foreach(lc, indexPartIds){
+        Oid oldIndexPartId = lfirst_oid(lc);
+        Oid indexId = InvalidOid;
+        Oid heapPartId = InvalidOid;
+        Relation indexRelation;
+
+        indexId = PartIdGetParentId(oldIndexPartId, false);
+        indexRelation = index_open(indexId, ShareUpdateExclusiveLock);
+        heapPartId = PartIndexGetPartition(oldIndexPartId, false);
+
+        heapDropPartitionIndex(indexRelation, oldIndexPartId);
+
+        CacheInvalidatePartcacheByPartid(heapPartId);
+
+        index_close(indexRelation, NoLock);
+    }
+
+    PopActiveSnapshot();
+    CommitTransactionCommand();
+
+    /*
+     * Finally, release the session-level lock on the table.
+     */
+
+    foreach(lc, relationLocks){
+        LockRelId* lockRel = (LockRelId*) lfirst(lc);
+
+        UnlockRelationIdForSession(lockRel, ShareUpdateExclusiveLock);
+    }
+
+    /* Start a new transaction to finish process properly */
+    StartTransactionCommand();
+
+    MemoryContextDelete(private_context);
+    
+    return true;
 }
 
 /*
