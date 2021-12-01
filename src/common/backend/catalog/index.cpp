@@ -1320,11 +1320,13 @@ Oid index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const 
     IndexInfo* indexInfo;
     Oid newIndexId = InvalidOid;
     HeapTuple indexTuple, classTuple;
+    Form_pg_index indexForm;
     Datum indclassDatum, colOptionDatum, optionDatum;
     oidvector* indclass;
     int2vector* indcoloptions;
     bool isnull;
     List* indexColNames = NIL;
+    bool isprimary;
 
     indexRelation = index_open(oldIndexId, RowExclusiveLock);
 
@@ -1342,6 +1344,10 @@ Oid index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const 
     colOptionDatum = SysCacheGetAttr(INDEXRELID, indexTuple, Anum_pg_index_indoption, &isnull);
     Assert(!isnull);
     indcoloptions = (int2vector*) DatumGetPointer(colOptionDatum);
+
+    /* Get index info about primary */
+    indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+    isprimary = indexForm->indisprimary;
 
     /* Fetch options of index if any */
     classTuple = SearchSysCache1(RELOID, oldIndexId);
@@ -1368,7 +1374,7 @@ Oid index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const 
                             (indexRelation->rd_rel->relkind == RELKIND_GLOBAL_INDEX),
                             indexRelation->rd_rel->relkind == RELKIND_GLOBAL_INDEX);
 
-    /* New create the new index */
+    /* Now create the new index */
     newIndexId = index_create(heapRelation, 
                                             newName, 
                                             InvalidOid, 
@@ -1381,7 +1387,7 @@ Oid index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const 
                                             indclass->values,
                                             indcoloptions->values,
                                             optionDatum,
-                                            false,
+                                            isprimary,
                                             false,
                                             false,
                                             false,
@@ -1391,7 +1397,7 @@ Oid index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const 
                                             &extra
                                             );
     
-    /* Now create the new index */
+    /* Close the relations used and clean up */
     index_close(indexRelation, NoLock);
     ReleaseSysCache(indexTuple);
     ReleaseSysCache(classTuple);
