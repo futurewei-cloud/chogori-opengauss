@@ -831,8 +831,15 @@ test: comment_proc
 test: hw_package
 test: procedure_privilege_test
 test: cast_privileges_test
+
+test: reindex_concurrently
+test: reindex_concurrently_parallel
+test: reindex_concurrently_partition
+test: reindex_concurrently_partition_parallel
+
 #test: hw_dbms_sql1
 test: hw_cipher_sm4
 test: hw_cipher_aes128
 test: sequence_cache_test
 test: pg_buffercache_pages
+
