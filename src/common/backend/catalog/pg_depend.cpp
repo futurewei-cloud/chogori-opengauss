@@ -451,8 +451,7 @@ long changeDependenciesOn(Oid refClassId, Oid oldRefObjectId, Oid newRefObjectId
 
         if(newIsPinned)
             simple_heap_delete(depRel, &tup->t_self);
-        else
-        {
+        else {
             /* make a modifiable copy */
             tup = heap_copytuple(tup);
             depform = (Form_pg_depend) GETSTRUCT(tup);

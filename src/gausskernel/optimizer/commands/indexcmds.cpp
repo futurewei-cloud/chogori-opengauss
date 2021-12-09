@@ -2961,8 +2961,8 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
             oldcontext = MemoryContextSwitchTo(private_context);
 
             /* Track this Relation for session lock */
-	    if (!RELATION_IS_PARTITIONED(heapRelation))
-            	heapRelationIds = lappend_oid(heapRelationIds, relationOid);
+            if (!RELATION_IS_PARTITIONED(heapRelation))
+                heapRelationIds = lappend_oid(heapRelationIds, relationOid);
 
             MemoryContextSwitchTo(oldcontext);
 
@@ -3002,8 +3002,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
                         indexPartIds = lappend_oid(indexPartIds, indexPartitionid);
                     
                         MemoryContextSwitchTo(oldcontext);
-                    }
-                    else {
+                    } else {
                         List* indexPartOidList = NULL;
                         ListCell* partCell = NULL;
 
@@ -3027,8 +3026,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
                             }
                         }
                     }
-                }
-                else {
+                } else {
                     /* Save the list of relation OIDs in private context */
                     oldcontext = MemoryContextSwitchTo(private_context);
 
@@ -3045,8 +3043,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
                     Oid toastOid = heapRelation->rd_rel->reltoastrelid;
                     relToastOids = lappend_oid(relToastOids, toastOid);
                 }
-            }
-            else {
+            } else {
                 List* partTupleList = NIL;
                 ListCell* partCell = NULL;
 
@@ -3146,8 +3143,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
                     indexPartIds = lappend_oid(indexPartIds, relationPartOid);
 
                     MemoryContextSwitchTo(oldcontext);
-                }
-                else {
+                } else {
                     List* indexPartOidList = NULL;
                     ListCell* partCell = NULL;
 
@@ -3171,8 +3167,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
                         }
                     }
                 }
-            }
-            else{
+            } else {
                 /* Save the list of relation OIDs in private context */
                 oldcontext = MemoryContextSwitchTo(private_context);
 
@@ -3236,7 +3231,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
      * more detailed comments.
      */
 
-    foreach(lc, indexIds){
+    foreach(lc, indexIds) {
         char* concurrentName;
         Oid indexId = lfirst_oid(lc);
         Oid newIndexId;
@@ -3332,7 +3327,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
      * Save the heap lock for following visibility checks with other backends
      * might conflict with this session.
      */
-    foreach(lc, heapRelationIds){
+    foreach(lc, heapRelationIds) {
         Relation heapRelation = heap_open(lfirst_oid(lc), ShareUpdateExclusiveLock);
         LockRelId lockrelid = heapRelation->rd_lockInfo.lockRelId;
         LOCKTAG* heaplocktag;
@@ -3359,7 +3354,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
      * Save the heap partition lock for following visibility checks wth other backends
      * might conflict with this session.
      */
-    foreach(lc, heapPartitionIds){
+    foreach(lc, heapPartitionIds) {
         Oid heapPartId = lfirst_oid(lc);
         Oid heapId = PartIdGetParentId(heapPartId, false);
         Relation heapRelation = heap_open(heapId, AccessShareLock);
@@ -3388,7 +3383,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
     }
 
     /* Get a session-level lock on each table */
-    foreach(lc, relationLocks){
+    foreach(lc, relationLocks) {
         LockRelId* lockRel = (LockRelId*) lfirst(lc);
 
         LockRelationIdForSession(lockRel, ShareUpdateExclusiveLock);
@@ -3449,7 +3444,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
         CommitTransactionCommand();
     }
 
-    forboth(lc, indexPartIds, lc2, newIndexPartIds){
+    forboth(lc, indexPartIds, lc2, newIndexPartIds) {
         Relation indexRelation;
         Oid oldIndexPartId = lfirst_oid(lc);
         Oid newIndexPartId = lfirst_oid(lc2);
@@ -3498,7 +3493,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
     }
     CommitTransactionCommand();
 
-    foreach(lc, newIndexIds){
+    foreach(lc, newIndexIds) {
         Oid newIndexId = lfirst_oid(lc);
         Oid heapId;
         TransactionId limitXmin;
@@ -3547,7 +3542,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
         CommitTransactionCommand();
     }
     
-    foreach(lc, newIndexPartIds){
+    foreach(lc, newIndexPartIds) {
         Oid newIndexPartId = lfirst_oid(lc);
         Oid heapPartId;
         TransactionId limitXmin;
@@ -3608,7 +3603,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
      */
     StartTransactionCommand();
 
-    forboth(lc, indexIds, lc2, newIndexIds){
+    forboth(lc, indexIds, lc2, newIndexIds) {
         char* oldName;
         Oid oldIndexId = lfirst_oid(lc);
         Oid newIndexId = lfirst_oid(lc2);
@@ -3643,7 +3638,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
         CommandCounterIncrement();
     }
 
-    forboth(lc, indexPartIds, lc2, newIndexPartIds){
+    forboth(lc, indexPartIds, lc2, newIndexPartIds) {
         char* oldName;
         Oid oldIndexPartId = lfirst_oid(lc);
         Oid newIndexPartId = lfirst_oid(lc2);
@@ -3696,7 +3691,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
      * transaction could be using the index for a query. See also
      * index_drop() for more details.
      */
-    foreach(lc, lockTags){
+    foreach(lc, lockTags) {
         LOCKTAG* locktag = (LOCKTAG*) lfirst(lc);
         old_lockholders = GetLockConflicts(locktag, ShareLock);
 
@@ -3706,7 +3701,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
         }
     }
 
-    foreach(lc, indexIds){
+    foreach(lc, indexIds) {
         Oid oldIndexId = lfirst_oid(lc);
         Oid heapId;
 
@@ -3724,7 +3719,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
      * 
      * Drop the old indexes.
      */
-    foreach(lc, lockTags){
+    foreach(lc, lockTags) {
         LOCKTAG* locktag = (LOCKTAG*) lfirst(lc);
         old_lockholders = GetLockConflicts(locktag, ShareLock);
 
@@ -3739,7 +3734,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
     {
         ObjectAddresses* objects = new_object_addresses();
 
-        foreach(lc, indexIds){
+        foreach(lc, indexIds) {
             Oid oldIndexId = lfirst_oid(lc);
             ObjectAddress* object =(ObjectAddress*) palloc(sizeof(ObjectAddress));
 
@@ -3758,7 +3753,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
     }
 
     /* Drop old part index */
-    foreach(lc, indexPartIds){
+    foreach(lc, indexPartIds) {
         Oid oldIndexPartId = lfirst_oid(lc);
         Oid indexId = InvalidOid;
         Oid heapPartId = InvalidOid;
@@ -3782,7 +3777,7 @@ static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, Ad
      * Finally, release the session-level lock on the table.
      */
 
-    foreach(lc, relationLocks){
+    foreach(lc, relationLocks) {
         LockRelId* lockRel = (LockRelId*) lfirst(lc);
 
         UnlockRelationIdForSession(lockRel, ShareUpdateExclusiveLock);

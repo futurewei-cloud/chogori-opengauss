@@ -3624,13 +3624,13 @@ static void RangeVarCallbackForDropRelation(
     * only concerns indexes of toast relations that became invalid during a
     * REINDEX CONCURRENTLY process.
     */
-    if(IsSystemClass(classform)&&relkind == RELKIND_INDEX){
+    if(IsSystemClass(classform)&&relkind == RELKIND_INDEX) {
         HeapTuple locTuple;
         Form_pg_index indexform;
         bool indisvalid;
 
         locTuple = SearchSysCache1(INDEXRELID,ObjectIdGetDatum(relOid));
-        if(!HeapTupleIsValid(locTuple)){
+        if(!HeapTupleIsValid(locTuple)) {
             ReleaseSysCache(tuple);
             return;
         }

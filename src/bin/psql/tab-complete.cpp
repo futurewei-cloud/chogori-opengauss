@@ -2643,7 +2643,7 @@ static char** PsqlCompletion(const char *text, int start, int end)
             COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_indexes, " UNION SELECT 'CONCURRENTLY'");
         else if (pg_strcasecmp(PREV_WD, "SYSTEM") == 0 || pg_strcasecmp(PREV_WD, "DATABASE") == 0)
             COMPLETE_WITH_QUERY(Query_for_list_of_databases " UNION SELECT 'CONCURRENTLY'");
-    } else if (pg_strcasecmp(PREV3_WD, "REINDEX") == 0){
+    } else if (pg_strcasecmp(PREV3_WD, "REINDEX") == 0) {
         if (pg_strcasecmp(PREV2_WD, "TABLE") == 0 && pg_strcasecmp(PREV_WD, "CONCURRENTLY") == 0)
             COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tm, NULL);
         else if (pg_strcasecmp(PREV2_WD, "INDEX") == 0 && pg_strcasecmp(PREV_WD, "CONCURRENTLY") == 0)

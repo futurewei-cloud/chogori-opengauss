@@ -1466,7 +1466,6 @@ void index_concurrently_build(Oid heapRelationId, Oid indexRelationId, bool isPr
      * insert new entries into the index for insertions and non-HOT updates.
      */
     index_set_state_flags(indexRelationId, INDEX_CREATE_SET_READY);
-
 } 
 
 /*
@@ -1569,8 +1568,7 @@ void index_concurrently_swap(Oid newIndexId, Oid oldIndexId, const char* oldName
     pg_constraint = heap_open(ConstraintRelationId, RowExclusiveLock);
     pg_trigger = heap_open(TriggerRelationId, RowExclusiveLock);
 
-    foreach(lc, constraintOids)
-    {
+    foreach(lc, constraintOids) {
         HeapTuple constraintTuple, triggerTuple;
         Form_pg_constraint conForm;
         ScanKeyData key[1];
@@ -1712,7 +1710,6 @@ void index_concurrently_swap(Oid newIndexId, Oid oldIndexId, const char* oldName
     /* The lock taken previously is not released until the end of transaction */
     relation_close(oldClassRel, NoLock);
     relation_close(newClassRel, NoLock);
-
 }
 
 /*
@@ -1757,7 +1754,6 @@ void index_concurrently_set_dead(Oid heapId, Oid indexId)
      */
     heap_close(userHeapRelation, NoLock);
     index_close(userIndexRelation, NoLock);
-    
 }
 
 /* 
@@ -1805,7 +1801,7 @@ Oid index_concurrently_part_create_copy(Oid oldIndexPartId, const char* newName)
 
     /* Fetch the options of index if any */
     classTuple = SearchSysCache1(RELOID, indexId);
-    if(!HeapTupleIsValid(classTuple)){
+    if(!HeapTupleIsValid(classTuple)) {
         ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("cache lookup failed for relation %u", indexId)));
     }
     optionDatum = SysCacheGetAttr(RELOID, classTuple, Anum_pg_class_reloptions, &isnull);
@@ -1814,7 +1810,7 @@ Oid index_concurrently_part_create_copy(Oid oldIndexPartId, const char* newName)
      * Extract the list of column names to be used for the index
      * creation.
      */
-    for(int i = 0; i < indexInfo->ii_NumIndexAttrs; i++){
+    for(int i = 0; i < indexInfo->ii_NumIndexAttrs; i++) {
         TupleDesc indexTupDesc = RelationGetDescr(indexRelation);
         Form_pg_attribute att = TupleDescAttr(indexTupDesc, i);
 
@@ -1896,7 +1892,6 @@ void index_concurrently_part_build(Oid heapRelationId, Oid heapPartitionId, Oid 
     partitionClose(indexRelation, indexPartition, NoLock);
     heap_close(heapRelation, NoLock);
     index_close(indexRelation, NoLock);
-
 }
 
 /* 
@@ -1905,7 +1900,7 @@ void index_concurrently_part_build(Oid heapRelationId, Oid heapPartitionId, Oid 
  * Swap name, dependencies, and constraints of the old index over to the new
  * index, while marking the old index as invalid and the new as valid.
  */
-void index_concurrently_part_swap(Relation indexRelation, Oid newIndexPartId, Oid oldIndexPartId, const char *oldName){
+void index_concurrently_part_swap(Relation indexRelation, Oid newIndexPartId, Oid oldIndexPartId, const char *oldName) {
     Relation pg_partition;
     Partition oldIndexPartition, newIndexPartition;
     HeapTuple oldIndexPartTuple, newIndexPartTuple;
@@ -1975,7 +1970,6 @@ void index_concurrently_part_swap(Relation indexRelation, Oid newIndexPartId, Oi
     /* The lock taken previously is not released until the end of transaction */
     partitionClose(indexRelation, oldIndexPartition, NoLock);
     partitionClose(indexRelation, newIndexPartition, NoLock);
-
 }
 
 
