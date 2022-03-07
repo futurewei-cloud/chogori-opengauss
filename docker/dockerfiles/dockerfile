@@ -1,8 +1,11 @@
 #FROM centos:7.6.1810
 #FROM centos:latest
-FROM centos:7
+#FROM centos:7
+FROM tgagor/centos:stream8
 
-RUN yum install -y epel-release
+#RUN dnf --disablerepo '*' --enablerepo=extras swap centos-linux-repos centos-stream-repos
+#RUN dnf distro-sync
+#RUN yum install -y epel-release
 ENV container docker
 RUN yum -y update; yum clean all
 RUN yum -y install systemd; yum clean all; \
