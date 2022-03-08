@@ -29,5 +29,17 @@ RUN cd /tmp && git clone https://github.com/opengauss-mirror/openGauss-server.gi
 RUN cd /tmp && git clone https://github.com/opengauss-mirror/openGauss-third_party.git
 RUN cd /tmp && wget https://opengauss.obs.cn-south-1.myhuaweicloud.com/1.1.0/x86/openGauss-1.1.0-CentOS-64bit-all.tar.gz
 RUN cd /tmp && wget https://opengauss.obs.cn-south-1.myhuaweicloud.com/2.1.0/openGauss-third_party_binarylibs.tar.gz && tar zxvf openGauss-third_party_binarylibs.tar.gz
+RUN cd /tmp && \
+   git clone --recursive https://github.com/dmlc/xgboost && \
+   cd xgboost && \
+   mkdir build && \
+   cd build && \
+   cmake .. && \
+   make -j 4 && \
+   make install && \
+   cd /tmp && \
+   rm -rf /tmp/xgboost && \
+   cd
+
 VOLUME [ "/sys/fs/cgroup" ]
 CMD ["/usr/sbin/init"]
