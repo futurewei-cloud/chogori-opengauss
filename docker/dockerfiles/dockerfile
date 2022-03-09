@@ -19,7 +19,7 @@ RUN yum install -y bzip2 bzip2-devel curl libaio wget
 RUN yum -y install java-1.8.0-openjdk-devel
 RUN yum -y groupinstall "Development Tools"
 RUN yum -y install docker cmake clang openssl openssl-devel llvm llvm-devel llvm-libs cmake redhat-lsb-core
-RUN yum install -y libaio-devel ncurses-devel pam-devel libffi-devel python3 python3-devel
+RUN yum install -y libaio-devel ncurses-devel pam-devel libffi-devel python3 python3-devel libnsl
 RUN alternatives --set python /usr/bin/python3
 
 #RUN yum install -y centos-release-scl
