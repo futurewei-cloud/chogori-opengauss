@@ -31,7 +31,13 @@ make -sj
 make install
 ```
 The above command installs opengauss artifacts on the location that the environment variable GAUSSHOME is set to.
-For example, if GAUSSHOME is set to /tmp/opengauss, the artifact layout is as follows.
+For example, if GAUSSHOME is set to /tmp/opengauss with the following configuration,
+
+```bash
+# GAUSSHOME=/tmp/opengauss ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/tmp/openGauss-third_party_binarylibs --enable-thread-safety --without-readline --without-zlib
+```
+
+the artifact layout is as follows.
 
 ```bash
 # tree -L 1 /tmp/opengauss
