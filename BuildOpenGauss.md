@@ -18,7 +18,7 @@ docker build -t opengauss-server-builder  - < dockerfile
 docker run --privileged -it opengauss-server-builder bash
 ```
 - Go to /tmp/openGauss-server inside the docker
-- Configure the openGauss server, for example, with this command:
+- Configure the openGauss server, for example, with this command, where GAUSSHOME is the location to install opengauss artifacts:
 ```bash
 ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O0' --prefix=$GAUSSHOME --3rd=/tmp/openGauss-third_party_binarylibs
 ```
@@ -29,4 +29,17 @@ make -sj
 - Install openGauss-server:
 ```bash
 make install
+```
+The above command installs opengauss artifacts on the location that the environment variable GAUSSHOME is set to.
+For example, if GAUSSHOME is set to /tmp/opengauss, the artifact layout is as follows.
+
+```bash
+# tree -L 1 /tmp/opengauss
+/tmp/opengauss
+├── bin
+├── etc
+├── include
+├── jre
+├── lib
+└── share
 ```
