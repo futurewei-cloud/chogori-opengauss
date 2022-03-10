@@ -20,7 +20,7 @@ RUN yum -y install java-1.8.0-openjdk-devel
 RUN yum -y groupinstall "Development Tools"
 RUN yum -y install docker cmake clang openssl openssl-devel llvm llvm-devel llvm-libs cmake redhat-lsb-core
 RUN yum -y install glibc-langpack-en
-RUN yum -y installlibaio-devel ncurses-devel pam-devel libffi-devel python3 python3-devel libnsl
+RUN yum -y install libaio-devel ncurses-devel pam-devel libffi-devel python3 python3-devel libnsl
 RUN alternatives --set python /usr/bin/python3
 
 #RUN yum install -y centos-release-scl
