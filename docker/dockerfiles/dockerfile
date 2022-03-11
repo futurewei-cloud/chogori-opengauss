@@ -50,19 +50,16 @@ RUN cd /tmp && \
 RUN groupadd dbgrp && \
     useradd omm && \
     usermod -G dbgrp omm && \
-    echo "Test3456" | passwd --stdin omm && \
-    mkdir -p /opt/opengauss && \
-    chown omm.dbgrp -R /opt/opengauss
+    echo "Test3456" | passwd --stdin omm
 RUN cd /tmp && \
     git clone --branch v2.1.0 https://github.com/opengauss-mirror/openGauss-server.git && \
-    mkdir -p /tmp/opengauss && \
-    export GAUSSHOME=/tmp/opengauss && \
+    mkdir -p /opt/opengauss && \
+    export GAUSSHOME=/opt/opengauss && \
     cd /tmp/openGauss-server/ && \
     ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/tmp/openGauss-third_party_binarylibs --enable-thread-safety --without-readline --without-zlib && \
     make -sj && \
     make install && \
-    mv -f /tmp/opengauss/* /opt/opengauss/ && \
-    cp -r /tmp/openGauss-server/simpleInstall /opt/opengauss && \
+    cp -r /tmp/openGauss-server/simpleInstall /opt/opengauss/ && \
     mkdir -p /opt/opengauss/data && \
     chown omm.dbgrp -R /opt/opengauss && \
     cd
