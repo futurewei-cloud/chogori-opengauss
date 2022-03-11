@@ -2,7 +2,6 @@
 #FROM centos:latest
 FROM tgagor/centos:stream8
 
-#RUN yum install -y epel-release
 ENV container docker
 RUN yum -y update; yum clean all
 RUN yum -y install systemd; yum clean all; \
@@ -15,7 +14,6 @@ rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
 rm -f /lib/systemd/system/basic.target.wants/*;\
 rm -f /lib/systemd/system/anaconda.target.wants/*;
 RUN yum install -y bzip2 bzip2-devel curl libaio wget tree net-tools
-#RUN yum -y groupinstall java
 RUN yum -y install java-1.8.0-openjdk-devel
 RUN yum -y groupinstall "Development Tools"
 RUN yum -y install docker cmake clang openssl openssl-devel llvm llvm-devel llvm-libs cmake redhat-lsb-core
@@ -23,9 +21,6 @@ RUN yum -y install glibc-langpack-en
 RUN yum -y install libaio-devel ncurses-devel pam-devel libffi-devel python3 python3-devel libnsl
 RUN alternatives --set python /usr/bin/python3
 
-#RUN yum install -y centos-release-scl
-#RUN yum -y install devtoolset-7-gcc-c++
-#RUN scl enable devtoolset-7 bash
 #RUN cd /tmp && git clone https://github.com/opengauss-mirror/openGauss-third_party.git
 #RUN cd /tmp && wget https://opengauss.obs.cn-south-1.myhuaweicloud.com/1.1.0/x86/openGauss-1.1.0-CentOS-64bit-all.tar.gz
 RUN cd /tmp && \
@@ -62,6 +57,8 @@ RUN cd /tmp && \
     cp -r /tmp/openGauss-server/simpleInstall /opt/opengauss/ && \
     mkdir -p /opt/opengauss/data && \
     chown omm.dbgrp -R /opt/opengauss && \
+    rm -rf /tmp/openGauss-server && \
+    rm -rf /tmp/openGauss-third_party_binarylibs && \
     cd
 RUN su - omm -c 'echo "export GAUSSHOME=/opt/opengauss" >> .bashrc' && \
     su - omm -c 'echo "export PATH=$GAUSSHOME/bin:$PATH" >> .bashrc' && \
