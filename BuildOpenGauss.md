@@ -109,7 +109,66 @@ Type in "yes" when was asked for a demo database.
 Would you like to create a demo database (yes/no)? yes
 ```
 
+Some interesting log lines:
+
+```
+$ sh install.sh -w Test3456
+[step 1]: check parameter
+[step 2]: check install env and os setting
+[step 3]: change_gausshome_owner
+[step 4]: set environment variables
+
+[step 6]: init datanode
+
+creating directory /opt/opengauss/data/single_node ... ok
+creating subdirectories ... ok
+selecting default max_connections ... 100
+selecting default shared_buffers ... 32MB
+creating configuration files ... ok
+
+initializing pg_authid ... ok
+setting password ... ok
+initializing dependencies ... ok
+loading PL/pgSQL server-side language ... ok
+creating system views ... ok
+creating performance views ... ok
+loading system objects' descriptions ... ok
+creating collations ... ok
+creating conversions ... ok
+creating dictionaries ... ok
+setting privileges on built-in objects ... ok
+initialize global configure for bucketmap length ... ok
+creating information schema ... ok
+loading foreign-data wrapper for distfs access ... ok
+loading foreign-data wrapper for hdfs access ... ok
+loading foreign-data wrapper for log access ... ok
+loading hstore extension ... ok
+loading security plugin ... ok
+update system tables ... ok
+creating snapshots catalog ... ok
+vacuuming database template1 ... ok
+copying template1 to template0 ... ok
+copying template1 to postgres ... ok
+freezing database template0 ... ok
+freezing database template1 ... ok
+freezing database postgres ... ok
+
+[step 7]: start datanode
+[2022-03-11 19:59:43.681][252][][gs_ctl]: gs_ctl started,datadir is /opt/opengauss/data/single_node
+
+[2022-03-11 19:59:45.796][252][][gs_ctl]:  done
+[2022-03-11 19:59:45.796][252][][gs_ctl]: server started (/opt/opengauss/data/single_node)
+import sql file
+Would you like to create a demo database (yes/no)? yes
+Load demoDB [school,finance] success.
+[complete successfully]: You can start or stop the database server using:
+    gs_ctl start|stop|restart -D $GAUSSHOME/data/single_node -Z single_node
+
+```
+
 openGauss is running after the above script, then we could test with the demo database.
+
+## Test gsql for OpenGauss
 
 ```sql
 $ gsql -d finance
@@ -394,4 +453,109 @@ finance=# \dS+
  public     | insurance                         | table | omm   | 8192 bytes | {orientation=row,compression=no} |
  public     | property                          | table | omm   | 8192 bytes | {orientation=row,compression=no} |
 (232 rows)
+```
+
+To get help for gsql commands, run the following commands
+
+```sql
+finance=# \?
+General
+  \copyright             show openGauss usage and distribution terms
+  \g [FILE] or ;         execute query (and send results to file or |pipe)
+  \h(\help) [NAME]              help on syntax of SQL commands, * for all commands
+  \parallel [on [num]|off] toggle status of execute (currently off)
+  \q                     quit gsql
+
+Query Buffer
+  \e [FILE] [LINE]       edit the query buffer (or file) with external editor
+  \ef [FUNCNAME [LINE]]  edit function definition with external editor
+  \p                     show the contents of the query buffer
+  \r                     reset (clear) the query buffer
+  \w FILE                write query buffer to file
+
+Input/Output
+  \copy ...              perform SQL COPY with data stream to the client host
+  \echo [STRING]         write string to standard output
+  \i FILE                execute commands from file
+  \i+ FILE KEY           execute commands from encrypted file
+  \ir FILE               as \i, but relative to location of current script
+  \ir+ FILE KEY          as \i+, but relative to location of current script
+  \o [FILE]              send all query results to file or |pipe
+  \qecho [STRING]        write string to query output stream (see \o)
+
+Informational
+  (options: S = show system objects, + = additional detail)
+  \d[S+]                 list tables, views, and sequences
+  \d[S+]  NAME           describe table, view, sequence, or index
+  \da[S]  [PATTERN]      list aggregates
+  \db[+]  [PATTERN]      list tablespaces
+  \dc[S+] [PATTERN]      list conversions
+  \dC[+]  [PATTERN]      list casts
+  \dd[S]  [PATTERN]      show object descriptions not displayed elsewhere
+  \ddp    [PATTERN]      list default privileges
+  \dD[S+] [PATTERN]      list domains
+  \ded[+] [PATTERN]      list data sources
+  \det[+] [PATTERN]      list foreign tables
+  \des[+] [PATTERN]      list foreign servers
+  \deu[+] [PATTERN]      list user mappings
+  \dew[+] [PATTERN]      list foreign-data wrappers
+  \df[antw][S+] [PATRN]  list [only agg/normal/trigger/window] functions
+  \dF[+]  [PATTERN]      list text search configurations
+  \dFd[+] [PATTERN]      list text search dictionaries
+  \dFp[+] [PATTERN]      list text search parsers
+  \dFt[+] [PATTERN]      list text search templates
+  \dg[+]  [PATTERN]      list roles
+  \di[S+] [PATTERN]      list indexes
+  \dl                    list large objects, same as \lo_list
+  \dL[S+] [PATTERN]      list procedural languages
+  \dn[S+] [PATTERN]      list schemas
+  \do[S]  [PATTERN]      list operators
+  \dO[S+] [PATTERN]      list collations
+  \dp     [PATTERN]      list table, view, and sequence access privileges
+  \drds [PATRN1 [PATRN2]] list per-database role settings
+  \ds[S+] [PATTERN]      list sequences
+  \dt[S+] [PATTERN]      list tables
+  \dT[S+] [PATTERN]      list data types
+  \du[+]  [PATTERN]      list roles
+  \dv[S+] [PATTERN]      list views
+  \dE[S+] [PATTERN]      list foreign tables
+  \dx[+]  [PATTERN]      list extensions
+  \l[+]                  list all databases
+  \sf[+] FUNCNAME        show a function's definition
+  \z      [PATTERN]      same as \dp
+
+Formatting
+  \a                     toggle between unaligned and aligned output mode
+  \C [STRING]            set table title, or unset if none
+  \f [STRING]            show or set field separator for unaligned query output
+  \H                     toggle HTML output mode (currently off)
+  \pset NAME [VALUE]     set table output option
+                         (NAME := {format|border|expanded|fieldsep|fieldsep_zero|footer|null|
+                         numericlocale|recordsep|recordsep_zero|tuples_only|title|tableattr|pager})
+  \t [on|off]            show only rows (currently off)
+  \T [STRING]            set HTML <table> tag attributes, or unset if none
+  \x [on|off|auto]       toggle expanded output (currently off)
+
+Connection
+  \c[onnect] [DBNAME|- USER|- HOST|- PORT|-]
+                         connect to new database (currently "finance")
+  \encoding [ENCODING]   show or set client encoding
+  \conninfo              display information about current connection
+
+Operating System
+  \cd [DIR]              change the current working directory
+  \setenv NAME [VALUE]   set or unset environment variable
+  \timing [on|off]       toggle timing of commands (currently off)
+  \! [COMMAND]           execute command in shell or start interactive shell
+
+Variables
+  \prompt [TEXT] NAME    prompt user to set internal variable
+  \set [NAME [VALUE]]    set internal variable, or list all if no parameters
+  \unset NAME            unset (delete) internal variable
+
+Large Objects
+  \lo_export LOBOID FILE
+  \lo_import FILE [COMMENT]
+  \lo_list
+  \lo_unlink LOBOID      large object operations
 ```
