@@ -26,11 +26,13 @@ RUN alternatives --set python /usr/bin/python3
 #RUN yum install -y centos-release-scl
 #RUN yum -y install devtoolset-7-gcc-c++
 #RUN scl enable devtoolset-7 bash
-RUN cd /tmp && git clone --branch v2.1.0 https://github.com/opengauss-mirror/openGauss-server.git
-RUN cd /tmp && git clone https://github.com/opengauss-mirror/openGauss-third_party.git
+#RUN cd /tmp && git clone https://github.com/opengauss-mirror/openGauss-third_party.git
 #RUN cd /tmp && wget https://opengauss.obs.cn-south-1.myhuaweicloud.com/1.1.0/x86/openGauss-1.1.0-CentOS-64bit-all.tar.gz
-RUN cd /tmp && wget https://opengauss.obs.cn-south-1.myhuaweicloud.com/2.1.0/openGauss-third_party_binarylibs.tar.gz && tar zxvf openGauss-third_party_binarylibs.tar.gz && rm -f openGauss-third_party_binarylibs.tar.gz
-RUN cd /tmp/openGauss-third_party_binarylibs/buildtools/centos7.6_x86_64/ && ln -s gcc7.3 gcc8.5
+RUN cd /tmp && \
+    wget https://opengauss.obs.cn-south-1.myhuaweicloud.com/2.1.0/openGauss-third_party_binarylibs.tar.gz && \
+    tar zxvf openGauss-third_party_binarylibs.tar.gz && rm -f openGauss-third_party_binarylibs.tar.gz
+RUN cd /tmp/openGauss-third_party_binarylibs/buildtools/centos7.6_x86_64/ && \
+    ln -s gcc7.3 gcc8.5
 RUN mkdir -p /usr/lib64/huawei && \
     echo '/usr/lib64/huawei' > /etc/ld.so.conf.d/huawei-x86_64.conf && \
     cp /tmp/openGauss-third_party_binarylibs/platform/centos7.6_x86_64/Huawei_Secure_C/Dynamic_Lib/libsecurec.so /usr/lib64/huawei/
@@ -51,11 +53,22 @@ RUN groupadd dbgrp && \
     echo "Test3456" | passwd --stdin omm && \
     mkdir -p /opt/opengauss && \
     chown omm.dbgrp -R /opt/opengauss
-RUN su - omm && \
-    echo "export GAUSSHOME=/opt/opengauss" >> .bashrc && \
-    echo "export PATH=$GAUSSHOME/bin:$PATH" >> .bashrc && \
-    echo "export LD_LIBRARY_PATH=$GAUSSHOME/lib:$LD_LIBRARY_PATH" >> .bashrc && \
-    exit
+RUN cd /tmp && \
+    git clone --branch v2.1.0 https://github.com/opengauss-mirror/openGauss-server.git && \
+    mkdir -p /tmp/opengauss && \
+    export GAUSSHOME=/tmp/opengauss && \
+    cd /tmp/openGauss-server/ && \
+    ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/tmp/openGauss-third_party_binarylibs --enable-thread-safety --without-readline --without-zlib && \
+    make -sj && \
+    make install && \
+    mv -f /tmp/opengauss/* /opt/opengauss/ && \
+    cp -r /tmp/openGauss-server/simpleInstall /opt/opengauss && \
+    mkdir -p /opt/opengauss/data && \
+    chown omm.dbgrp -R /opt/opengauss && \
+    cd
+RUN su - omm -c 'echo "export GAUSSHOME=/opt/opengauss" >> .bashrc' && \
+    su - omm -c 'echo "export PATH=$GAUSSHOME/bin:$PATH" >> .bashrc' && \
+    su - omm -c 'echo "export LD_LIBRARY_PATH=$GAUSSHOME/lib:$LD_LIBRARY_PATH" >> .bashrc'
 
 VOLUME [ "/sys/fs/cgroup" ]
 CMD ["/usr/sbin/init"]
