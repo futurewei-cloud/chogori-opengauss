@@ -65,7 +65,10 @@ RUN cd /tmp && \
     cd
 RUN su - omm -c 'echo "export GAUSSHOME=/opt/opengauss" >> .bashrc' && \
     su - omm -c 'echo "export PATH=$GAUSSHOME/bin:$PATH" >> .bashrc' && \
-    su - omm -c 'echo "export LD_LIBRARY_PATH=$GAUSSHOME/lib:$LD_LIBRARY_PATH" >> .bashrc'
+    su - omm -c 'echo "export LD_LIBRARY_PATH=$GAUSSHOME/lib:$LD_LIBRARY_PATH" >> .bashrc' && \
+    su - omm -c 'echo "export GS_CLUSTER_NAME=dbCluster" >> .bashrc' && \
+    su - omm -c 'echo "export GAUSSLOG=/opt/opengauss/logs" >> .bashrc' && \
+    su - omm -c 'echo "export PGDATA=/opt/opengauss/data" >> .bashrc'
 
 VOLUME [ "/sys/fs/cgroup" ]
 CMD ["/usr/sbin/init"]
