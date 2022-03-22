@@ -15,7 +15,7 @@ cd docker/dockerfiles/
 ```bash
 docker build -t opengauss-server  - < dockerfile
 ```
-- During the docker image build process, we configure the openGauss server, for example, with this command, where GAUSSHOME is the location to install opengauss artifacts:
+- We configure the openGauss server, for example, with this command, where GAUSSHOME is the location to install opengauss artifacts:
 ```bash
 ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O0' --prefix=$GAUSSHOME --3rd=/tmp/openGauss-third_party_binarylibs
 ```
@@ -93,8 +93,10 @@ Once the above opengauss-server image was built from the dockerfile, we could co
 
 First, run the container and logon with bash
 ```bash
-docker run --privileged -it opengauss-server bash
+docker run --privileged -it -v /path/to/openGauss-server:/build:delegated -w /build opengauss-server bash
 ```
+
+Run build-install.sh to build opengauss and install it to $GAUSSHOME.
 
 Then change to user omm, configure and install the database
 
