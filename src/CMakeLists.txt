@@ -30,10 +30,11 @@ execute_process(
 
 INCLUDE_DIRECTORIES(${LIBTHRIFT_INCLUDE_PATH} ${SNAPPY_INCLUDE_PATH} ${CJSON_INCLUDE_PATH} ${BOOST_INCLUDE_PATH})
 
-set(CMAKE_MODULE_PATH 
+set(CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/bin
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/connector
     ${CMAKE_CURRENT_SOURCE_DIR}/gausskernel
     ${CMAKE_CURRENT_SOURCE_DIR}/test
 )
@@ -62,10 +63,10 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq DESTINATION include/
 if("${ENABLE_MULTIPLE_NODES}" STREQUAL "ON")
     install(FILES ${PROJECT_SRC_DIR}/include/libpq/libpq-fs.h DESTINATION include/libpq)
 endif()
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq/libpq-events.h 
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq/libpq-events.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq/libpq-fe.h
     DESTINATION include)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq/pqexpbuffer.h 
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq/pqexpbuffer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq/libpq-int.h
     DESTINATION include/postgresql/internal)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/libpq/pqcomm.h DESTINATION include/postgresql/internal/libpq)
@@ -76,7 +77,7 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/distributelayer DESTINATIO
     PATTERN "streamMain.h" EXCLUDE
 )
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/rewrite DESTINATION include/postgresql/server)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ssl DESTINATION include/postgresql/server 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ssl DESTINATION include/postgresql/server
     PATTERN "*.h" PATTERN "*.cnf" EXCLUDE)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/gtm DESTINATION include/postgresql/server PATTERN "utils" EXCLUDE)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/parser DESTINATION include/postgresql/server)
@@ -99,7 +100,7 @@ if("${ENABLE_MULTIPLE_NODES}" STREQUAL "ON")
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/access DESTINATION include/postgresql/server
         PATTERN "*.h")
 else("${ENABLE_MULTIPLE_NODES}" STREQUAL "OFF")
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/access DESTINATION include/postgresql/server  
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/access DESTINATION include/postgresql/server
     PATTERN "dfs" EXCLUDE
     PATTERN "carbondata_index_reader.h" EXCLUDE
     PATTERN "dfscache_mgr.h" EXCLUDE
@@ -107,8 +108,8 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/access DESTINATION include
     PATTERN "*.h")
 endif()
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/mb DESTINATION include/postgresql/server)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/catalog DESTINATION include/postgresql/server 
-    PATTERN "*.h" 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/catalog DESTINATION include/postgresql/server
+    PATTERN "*.h"
     PATTERN "upgrade_sql" EXCLUDE
     PATTERN "unused_oids" EXCLUDE
     PATTERN "pg_proc.h_for_llt" EXCLUDE
@@ -127,7 +128,7 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/bulkload DESTINATION inclu
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/gstrace DESTINATION include/postgresql/server)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/knl DESTINATION include/postgresql/server)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/optimizer DESTINATION include/postgresql/server)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/utils DESTINATION include/postgresql/server 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/utils DESTINATION include/postgresql/server
     PATTERN "errcodes.h" EXCLUDE
     PATTERN "fmgroids.h" EXCLUDE
     PATTERN "probes.h" EXCLUDE
@@ -241,7 +242,7 @@ install(CODE "execute_process(
 # fastcheck part
 install(FILES ${PROJECT_SRC_DIR}/test/regress/stub/roach_api_stub/roach_api_stub.control
     DESTINATION share/postgresql/extension/
-) 
+)
 install(FILES ${PROJECT_SRC_DIR}/test/regress/stub/roach_api_stub/roach_api_stub--1.0.sql
     DESTINATION share/postgresql/extension/
 )
