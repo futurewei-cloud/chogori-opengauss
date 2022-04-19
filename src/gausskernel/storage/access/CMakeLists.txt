@@ -5,7 +5,8 @@ set(CMAKE_RULE_MESSAGES OFF)
 set(CMAKE_SKIP_RPATH TRUE)
 
 set(CMAKE_MODULE_PATH
-    ${CMAKE_CURRENT_SOURCE_DIR}/cbtree 
+    ${CMAKE_CURRENT_SOURCE_DIR}/pggate
+    ${CMAKE_CURRENT_SOURCE_DIR}/cbtree
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/dfs
     ${CMAKE_CURRENT_SOURCE_DIR}/gin
@@ -14,18 +15,19 @@ set(CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/hbstore
     ${CMAKE_CURRENT_SOURCE_DIR}/heap
     ${CMAKE_CURRENT_SOURCE_DIR}/index
-    ${CMAKE_CURRENT_SOURCE_DIR}/nbtree 
+    ${CMAKE_CURRENT_SOURCE_DIR}/nbtree
     ${CMAKE_CURRENT_SOURCE_DIR}/obs
-    ${CMAKE_CURRENT_SOURCE_DIR}/psort 
+    ${CMAKE_CURRENT_SOURCE_DIR}/psort
     ${CMAKE_CURRENT_SOURCE_DIR}/redo
     ${CMAKE_CURRENT_SOURCE_DIR}/rmgrdesc
-    ${CMAKE_CURRENT_SOURCE_DIR}/spgist 
+    ${CMAKE_CURRENT_SOURCE_DIR}/spgist
     ${CMAKE_CURRENT_SOURCE_DIR}/table
-    ${CMAKE_CURRENT_SOURCE_DIR}/transam 
-    ${CMAKE_CURRENT_SOURCE_DIR}/ubtree 
-    ${CMAKE_CURRENT_SOURCE_DIR}/ustore 
+    ${CMAKE_CURRENT_SOURCE_DIR}/transam
+    ${CMAKE_CURRENT_SOURCE_DIR}/ubtree
+    ${CMAKE_CURRENT_SOURCE_DIR}/ustore
 )
 
+add_subdirectory(pggate)
 add_subdirectory(cbtree)
 add_subdirectory(common)
 add_subdirectory(dfs)
