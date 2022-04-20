@@ -541,6 +541,8 @@ static bool IsOrderingApplicable(PathKey* pathKey, RelOptInfo* rel, MOT::Index* 
  */
 static void MOTGetForeignPaths(PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid)
 {
+  k2GetForeignPaths(root, baserel, foreigntableid);
+  
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)baserel->fdw_private;
     List* usablePathkeys = NIL;
     List* bestClause = nullptr;
@@ -729,6 +731,8 @@ static void MOTGetForeignPaths(PlannerInfo* root, RelOptInfo* baserel, Oid forei
 static ForeignScan* MOTGetForeignPlan(
     PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid, ForeignPath* best_path, List* tlist, List* scan_clauses)
 {
+  (void)k2GetForeignPlan(root, baserel, foreigntableid, best_path, tlist, scan_clauses);
+  
     ListCell* lc = nullptr;
     ::Index scanRelid = baserel->relid;
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)baserel->fdw_private;

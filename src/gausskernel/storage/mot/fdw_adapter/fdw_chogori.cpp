@@ -1,5 +1,4 @@
-#include <ostream>
-#include <istream>
+#include <iostream>
 #include "funcapi.h"
 #include "access/reloptions.h"
 #include "access/transam.h"
@@ -197,7 +196,8 @@ typedef struct foreign_expr_cxt {
    List *opr_conds;          /* opr conditions */
 } foreign_expr_cxt;
 
-class K2PgStatement;
+class PgStatement;
+typedef PgStatement *K2PgStatement;
 
 /*
  * FDW-specific information for ForeignScanState.fdw_state.
@@ -206,7 +206,7 @@ class K2PgStatement;
 typedef struct K2FdwExecState
 {
    /* The handle for the internal K2PG Select statement. */
-   K2PgStatement*   handle;
+   K2PgStatement   handle;
    ResourceOwner   stmt_owner;
 
    Relation index;
@@ -748,6 +748,14 @@ foreign_expr_walker(Node *node,
    return true;
 }
 
+static K2FdwPlanState* saved_state = nullptr;
+
+static void swapPlanState(RelOptInfo* rel) {
+  void* tmp = rel->fdw_private;
+  rel->fdw_private = (void*) saved_state;
+  saved_state = (K2FdwPlanState*) tmp;
+}
+
 /*
  * k2GetForeignRelSize
  *      Obtain relation size estimates for a foreign table
@@ -771,12 +779,14 @@ k2GetForeignRelSize(PlannerInfo *root,
     */
    baserel->rows = baserel->tuples;
 
+   swapPlanState(baserel);
    baserel->fdw_private = (void *) fdw_plan;
    fdw_plan->remote_conds = NIL;
    fdw_plan->local_conds = NIL;
 
    ListCell   *lc;
-   elog(WARNING, "K2FDW: k2GetForeignRelSize %d base restrictinfos for relation %d", list_length(baserel->baserestrictinfo), baserel->relid);
+   std::cout << "K2FDW: k2GetForeignRelSizebase restrictinfos: " << list_length(baserel->baserestrictinfo) << std::endl;
+   std::cerr << "K2FDW: k2GetForeignRelSizebase restrictinfos: " << list_length(baserel->baserestrictinfo) << std::endl;
 
    foreach(lc, baserel->baserestrictinfo)
    {
@@ -787,7 +797,8 @@ k2GetForeignRelSize(PlannerInfo *root,
       else
          fdw_plan->local_conds = lappend(fdw_plan->local_conds, ri);
    }
-   elog(WARNING, "K2FDW: classified %d remote_conds, %d local_conds", list_length(fdw_plan->remote_conds), list_length(fdw_plan->local_conds));
+   std::cout << "K2FDW: classified remote_conds: " << list_length(fdw_plan->remote_conds) << std::endl;
+   std::cerr << "K2FDW: classified remote_conds: " << list_length(fdw_plan->remote_conds) << std::endl;
 
    /*
     * Test any indexes of rel for applicability also.
@@ -795,4 +806,168 @@ k2GetForeignRelSize(PlannerInfo *root,
 
    //check_index_predicates(root, baserel);
    check_partial_indexes(root, baserel);
+   swapPlanState(baserel);
+}
+
+/*
+ * k2GetForeignPaths
+ *		Create possible access paths for a scan on the foreign table, which is
+ *      the full table scan plus available index paths (including the  primary key
+ *      scan path if any).
+ */
+void
+k2GetForeignPaths(PlannerInfo *root,
+				   RelOptInfo *baserel,
+				   Oid foreigntableid)
+{
+   swapPlanState(baserel);
+	/* Create a ForeignPath node and it as the scan path */
+   add_path(root, baserel,
+	         (Path *) create_foreignscan_path(root,
+	                                          baserel,
+	                                          0.001, // From MOT
+	                                          0.0, // TODO cost
+	                                          NIL,  /* no pathkeys */
+	                                          NULL, /* no outer rel either */
+	                                          NULL, /* no extra plan */
+	                                          0  /* no options yet */ ));
+
+	/* Add primary key and secondary index paths also */
+	create_index_paths(root, baserel);
+   swapPlanState(baserel);
+}
+
+/*
+ * k2GetForeignPlan
+ *		Create a ForeignScan plan node for scanning the foreign table
+ */
+ForeignScan *
+k2GetForeignPlan(PlannerInfo *root,
+				  RelOptInfo *baserel,
+				  Oid foreigntableid,
+				  ForeignPath *best_path,
+				  List *tlist,
+		 List *scan_clauses)
+{
+  swapPlanState(baserel);
+	K2FdwPlanState *fdw_plan_state = (K2FdwPlanState *) baserel->fdw_private;
+	Index          scan_relid;
+	ListCell       *lc;
+	List	   *local_exprs = NIL;
+	List	   *remote_exprs = NIL;
+
+	elog(DEBUG4, "FDW: fdw_private %d remote_conds and %d local_conds for foreign relation %d",
+			list_length(fdw_plan_state->remote_conds), list_length(fdw_plan_state->local_conds), foreigntableid);
+
+	if (IS_SIMPLE_REL(baserel))
+	{
+		scan_relid     = baserel->relid;
+		/*
+		* Separate the restrictionClauses into those that can be executed remotely
+		* and those that can't.  baserestrictinfo clauses that were previously
+		* determined to be safe or unsafe are shown in fpinfo->remote_conds and
+		* fpinfo->local_conds.  Anything else in the restrictionClauses list will
+		* be a join clause, which we have to check for remote-safety.
+		*/
+		elog(DEBUG4, "FDW: GetForeignPlan with %d scan_clauses for simple relation %d", list_length(scan_clauses), scan_relid);
+		foreach(lc, scan_clauses)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
+			elog(DEBUG4, "FDW: classifying scan_clause: %s", nodeToString(rinfo));
+
+			/* Ignore pseudoconstants, they are dealt with elsewhere */
+			if (rinfo->pseudoconstant)
+				continue;
+
+			if (list_member_ptr(fdw_plan_state->remote_conds, rinfo))
+				remote_exprs = lappend(remote_exprs, rinfo->clause);
+			else if (list_member_ptr(fdw_plan_state->local_conds, rinfo))
+				local_exprs = lappend(local_exprs, rinfo->clause);
+			else if (is_foreign_expr(root, baserel, rinfo->clause))
+				remote_exprs = lappend(remote_exprs, rinfo->clause);
+			else
+				local_exprs = lappend(local_exprs, rinfo->clause);
+		}
+		elog(DEBUG4, "FDW: classified %d scan_clauses for relation %d: remote_exprs: %d, local_exprs: %d",
+				list_length(scan_clauses), scan_relid, list_length(remote_exprs), list_length(local_exprs));
+	}
+	else
+	{
+		/*
+		 * Join relation or upper relation - set scan_relid to 0.
+		 */
+		scan_relid = 0;
+		/*
+		 * For a join rel, baserestrictinfo is NIL and we are not considering
+		 * parameterization right now, so there should be no scan_clauses for
+		 * a joinrel or an upper rel either.
+		 */
+		Assert(!scan_clauses);
+
+		/*
+		 * Instead we get the conditions to apply from the fdw_private
+		 * structure.
+		 */
+		remote_exprs = extract_actual_clauses(fdw_plan_state->remote_conds, false);
+		local_exprs = extract_actual_clauses(fdw_plan_state->local_conds, false);
+	}
+
+	scan_clauses = extract_actual_clauses(scan_clauses, false);
+
+	/* Get the target columns that need to be retrieved from K2 platform */
+	// TODO taken from MOT, does it work?
+	pull_varattnos((Node*)baserel->reltargetlist, baserel->relid, &fdw_plan_state->target_attrs);
+	//pull_varattnos(scan_clauses, baserel->relid, &fdw_plan_state->target_attrs);
+
+	/* Set scan targets. */
+	List *target_attrs = NULL;
+	bool wholerow = false;
+	for (AttrNumber attnum = baserel->min_attr; attnum <= baserel->max_attr; attnum++)
+	{
+		int bms_idx = attnum - baserel->min_attr + 1;
+		if (wholerow || bms_is_member(bms_idx, fdw_plan_state->target_attrs))
+		{
+			switch (attnum)
+			{
+				case InvalidAttrNumber:
+					/*
+					 * Postgres repurposes InvalidAttrNumber to represent the "wholerow"
+					 * junk attribute.
+					 */
+					wholerow = true;
+					break;
+				case SelfItemPointerAttributeNumber:
+				case MinTransactionIdAttributeNumber:
+				case MinCommandIdAttributeNumber:
+				case MaxTransactionIdAttributeNumber:
+				case MaxCommandIdAttributeNumber:
+					ereport(ERROR,
+					        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
+							        "System column with id %d is not supported yet",
+							        attnum)));
+					break;
+				case TableOidAttributeNumber:
+					/* Nothing to do in K2PG: Postgres will handle this. */
+					break;
+				case ObjectIdAttributeNumber:
+				default: /* Regular column: attrNum > 0*/
+				{
+					TargetEntry *target = makeNode(TargetEntry);
+					target->resno = attnum;
+					target_attrs = lappend(target_attrs, target);
+				}
+			}
+		}
+	}
+
+  swapPlanState(baserel);
+	/* Create the ForeignScan node */
+	return make_foreignscan(tlist,  /* target list */
+	                        scan_clauses,  /* ideally we should use local_exprs here, still use the whole list in case the FDW cannot process some remote exprs*/
+	                        scan_relid,
+	                        remote_exprs,    /* expressions K2 may evaluate */
+	                        target_attrs);  /* fdw_private data for K2 */
+				//nullptr,
+				//nullptr,
+	                        //nullptr);
 }
