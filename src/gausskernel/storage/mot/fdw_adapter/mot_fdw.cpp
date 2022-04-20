@@ -25,6 +25,7 @@
 
 #include <ostream>
 #include <istream>
+
 #include "global.h"
 #include "mot_error.h"
 #include "funcapi.h"
@@ -82,6 +83,8 @@
 #include "redo_log_handler_type.h"
 #include "ext_config_loader.h"
 #include "utilities.h"
+
+#include "fdw_chogori.h"
 
 // allow MOT Engine logging facilities
 DECLARE_LOGGER(ExternalWrapper, FDW);
@@ -421,6 +424,8 @@ static void MemoryEreportError()
  */
 static void MOTGetForeignRelSize(PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid)
 {
+  k2GetForeignRelSize(root, baserel, foreigntableid);
+  
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)palloc0(sizeof(MOTFdwStateSt));
     ForeignTable* ftable = GetForeignTable(foreigntableid);
     MOT::TxnManager* currTxn = GetSafeTxn(__FUNCTION__);
