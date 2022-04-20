@@ -268,6 +268,7 @@ declare app=$(dirname $shell_path)
 declare mode="single"
 declare -i port
 declare -i slave_port=0
+declare demo_log_file=${GAUSSHOME}/demo.log
 
 function get_param() {
     ARGS=$(getopt -a -o w:p:h -l multinode,help -- "$@")
@@ -324,16 +325,16 @@ function fn_load_demoDB()
 function fn_check_demoDB()
 {
     cd $shell_path
-    if [ "`cat load.log | grep ROLLBACK`" != "" ]
+    if [ "`cat ${demo_log_file} | grep ROLLBACK`" != "" ]
     then
         return 1
-    elif [ "`cat load.log | grep '\[GAUSS-[0-9]*\]'`" != "" ]
+    elif [ "`cat ${demo_log_file} | grep '\[GAUSS-[0-9]*\]'`" != "" ]
     then
         return 1
-    elif [ "`cat load.log | grep ERROR`" != "" ]
+    elif [ "`cat ${demo_log_file} | grep ERROR`" != "" ]
     then
         return 1
-    elif [ "`cat load.log | grep Unknown`" != "" ]
+    elif [ "`cat ${demo_log_file} | grep Unknown`" != "" ]
     then
         return 1
     fi
@@ -349,7 +350,7 @@ function fn_install_demoDB()
     fi
     if [ $input == "yes" ]
     then
-        fn_load_demoDB 1>load.log 2>&1
+        fn_load_demoDB 1>${demo_log_file} 2>&1
         fn_check_demoDB
     elif [ $input == "no" ]
     then
@@ -370,7 +371,7 @@ function import_sql() {
         return 0
     elif [ $returnFlag -eq 1 ]
     then
-        error "Load demoDB failed, you can check load.log for more details."
+        error "Load demoDB failed, you can check ${demo_log_file} for more details."
     else
         info "Input no, operation skip."
     fi

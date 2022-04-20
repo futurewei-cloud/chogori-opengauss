@@ -19,3 +19,8 @@ objfiles.txt
 
 /build/script/version.cfg
 /src/Makefile.global
+install/
+src/gausskernel/storage/mot/core/obj/
+src/gausskernel/storage/mot/fdw_adapter/obj/
+src/gausskernel/storage/mot/jit_exec/obj/
+src/gausskernel/storage/tcap/errmsg_bak.h
