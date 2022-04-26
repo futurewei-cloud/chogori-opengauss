@@ -15,3 +15,5 @@ k2GetForeignPlan(PlannerInfo *root,
 				  ForeignPath *best_path,
 				  List *tlist,
 		 List *scan_clauses);
+
+void k2CreateTable(CreateForeignTableStmt* obj);

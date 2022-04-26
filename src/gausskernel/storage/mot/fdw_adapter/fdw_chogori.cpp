@@ -37,6 +37,9 @@
 #include "parser/parsetree.h"
 #include "access/sysattr.h"
 
+#include "Schema.h"
+#include "FieldTypes.h"
+
 #define K2PG_MAX_SCAN_KEYS (INDEX_MAX_KEYS * 2) /* A pair of lower/upper bounds per column max */
 #define FirstBootstrapObjectId 10000            // TODO check if true for og
 
@@ -970,4 +973,82 @@ k2GetForeignPlan(PlannerInfo *root,
 				//nullptr,
 				//nullptr,
 	                        //nullptr);
+}
+
+std::unordered_map<std::string, k2::dto::Schema> schemas;
+
+void k2CreateTable(CreateForeignTableStmt* obj) {
+    char* dbname = NULL;
+    bool failure = false;
+    dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
+    if (dbname == nullptr) {
+	delete table;
+	table = nullptr;
+	ereport(ERROR,
+	    (errmodule(MOD_MOT),
+		errcode(ERRCODE_UNDEFINED_DATABASE),
+		errmsg("database with OID %u does not exist", u_sess->proc_cxt.MyDatabaseId)));
+	break;
+    }
+    //dbname will be k2 collection name
+
+    // schema is like a namespace in pg, so it should be part of the k2 schema name to allow duplicate table names
+    k2::dto::Schema schema;
+    if (stmt->base.relation->schemaname != nullptr) {
+	schema.name.append(stmt->base.relation->schemaname);
+	schema.name.append("_");
+    } 
+
+    schema.name.append(stmt->base.relation->relname);
+
+    schema.version = 0;
+    schema.fields.resize(list_length(stmt->base.tableElts + 2));
+    schema.fields[0].name = "__K2_TABLE_NAME__";
+    schema.fields[0].type = k2::dto::FieldType::STRING;
+    // TODO null ordering?
+    schema.fields[1].name = "__K2_INDEX_ID__";
+    schema.fields[1].type = k2::dto::FieldType::INT32T;
+
+    ListCell* cell = nullptr;
+    int fieldIdx = 2;
+    foreach(cell, stmt->base.tableElts) {
+      ColumnDef* colDef = (ColumnDef*)lfirst(cell);
+      if (colDef == nullptr || colDef->typname == nullptr) {
+	ereport(ERROR,
+	    (errmodule(MOD_MOT),
+		errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
+		errmsg("Column definition is not complete"),
+		errdetail("target table is a foreign table")));
+	failure = true;
+	break;
+      }
+
+      // TODO type oid to k2 type table
+      int32_t colLen;
+      Type tup;
+      Form_pg_type typeDesc;
+      tup = typenameType(nullptr, colDef->typname, &colLen);
+      typeDesc = ((Form_pg_type)GETSTRUCT(tup));
+      typoid = HeapTupleGetOid(tup);
+      if (typoid == INT4OID) {
+	schema.fields[fieldIdx].name = colDef->colname;
+	schema.fields[fieldIdx].type = k2::dto::FieldType::INT32T;
+      } else {
+	ereport(ERROR,
+	    (errmodule(MOD_MOT),
+		errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
+		errmsg("Column type is not supported"),
+		errdetail("target table is a foreign table")));
+	failure = true;
+	break;
+      }
+
+      ++fieldIdx;
+    }
+
+    if (!failure) {
+      schemas[schema.name] = schema;
+    }
+
+    // Primary key fields come in separate create index statement
 }

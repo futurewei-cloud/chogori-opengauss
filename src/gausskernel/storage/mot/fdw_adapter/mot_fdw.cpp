@@ -541,7 +541,7 @@ static bool IsOrderingApplicable(PathKey* pathKey, RelOptInfo* rel, MOT::Index* 
  */
 static void MOTGetForeignPaths(PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid)
 {
-  k2GetForeignPaths(root, baserel, foreigntableid);
+  //k2GetForeignPaths(root, baserel, foreigntableid);
   
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)baserel->fdw_private;
     List* usablePathkeys = NIL;
@@ -731,7 +731,7 @@ static void MOTGetForeignPaths(PlannerInfo* root, RelOptInfo* baserel, Oid forei
 static ForeignScan* MOTGetForeignPlan(
     PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid, ForeignPath* best_path, List* tlist, List* scan_clauses)
 {
-  (void)k2GetForeignPlan(root, baserel, foreigntableid, best_path, tlist, scan_clauses);
+  //(void)k2GetForeignPlan(root, baserel, foreigntableid, best_path, tlist, scan_clauses);
   
     ListCell* lc = nullptr;
     ::Index scanRelid = baserel->relid;
@@ -1800,7 +1800,8 @@ static void MOTValidateTableDef(Node* obj)
                         errmsg("Cannot create MOT tables while incremental checkpoint is enabled.")));
             }
 
-            MOTAdaptor::CreateTable((CreateForeignTableStmt*)obj, tid);
+	    k2CreateTable((CreateForeignTableStmt*)obj);
+            //MOTAdaptor::CreateTable((CreateForeignTableStmt*)obj, tid);
             break;
         }
         case T_IndexStmt: {
