@@ -25,7 +25,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include <iostream>
 
-#include <k2/dto/shared/Shared.h>
+#include "Shared.h"
 
 #ifdef K2_PLATFORM_COMPILE
 #include <k2/common/Log.h>

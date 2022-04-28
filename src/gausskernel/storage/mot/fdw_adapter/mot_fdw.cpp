@@ -424,7 +424,7 @@ static void MemoryEreportError()
  */
 static void MOTGetForeignRelSize(PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid)
 {
-  k2GetForeignRelSize(root, baserel, foreigntableid);
+  //k2GetForeignRelSize(root, baserel, foreigntableid);
   
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)palloc0(sizeof(MOTFdwStateSt));
     ForeignTable* ftable = GetForeignTable(foreigntableid);
@@ -1806,7 +1806,8 @@ static void MOTValidateTableDef(Node* obj)
         }
         case T_IndexStmt: {
             isMemoryLimitReached();
-            MOTAdaptor::CreateIndex((IndexStmt*)obj, tid);
+	    k2CreateIndex((IndexStmt*) obj);
+            //MOTAdaptor::CreateIndex((IndexStmt*)obj, tid);
             break;
         }
         case T_ReindexStmt: {

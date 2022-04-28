@@ -28,7 +28,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <decimal/decimal>
 #include <ostream>
 
-#include <k2/dto/shared/Shared.h>
+#include "Shared.h"
 #ifdef K2_PLATFORM_COMPILE
 #include <k2/common/Common.h>
 #endif
@@ -79,30 +79,6 @@ enum class FieldType : uint8_t {
 
 template <typename T>
 FieldType TToFieldType();
-
-// To prevent NaN in fields
-template <typename T>
-bool isNan(const T& field){
-    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double> )  { // handle NaN float and double
-        if (std::isnan(field)) {
-            return true;
-        }
-    }
-
-    if constexpr (std::is_same_v<T, std::decimal::decimal64>)  { // handle NaN decimal
-        if (std::isnan(std::decimal::decimal64_to_float(field))) {
-            return true;
-        }
-    }
-
-    if constexpr (std::is_same_v<T, std::decimal::decimal128> )  { // handle NaN decimal
-        if (std::isnan(std::decimal::decimal128_to_float(field))) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 template <> inline FieldType TToFieldType<String>() { return FieldType::STRING; }
 template <> inline FieldType TToFieldType<int16_t>() { return FieldType::INT16T; }

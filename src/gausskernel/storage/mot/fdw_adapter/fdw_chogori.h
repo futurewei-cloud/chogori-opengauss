@@ -17,3 +17,8 @@ k2GetForeignPlan(PlannerInfo *root,
 		 List *scan_clauses);
 
 void k2CreateTable(CreateForeignTableStmt* obj);
+
+void k2CreateIndex(IndexStmt *stmt);
+
+TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo, TupleTableSlot* slot, TupleTableSlot* planSlot);
+

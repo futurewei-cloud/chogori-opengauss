@@ -1,9 +1,12 @@
 #include <iostream>
+#include <unordered_map>
+
 #include "funcapi.h"
 #include "access/reloptions.h"
 #include "access/transam.h"
 #include "postgres.h"
 
+#include "commands/dbcommands.h"
 #include "catalog/pg_foreign_table.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
@@ -975,40 +978,49 @@ k2GetForeignPlan(PlannerInfo *root,
 	                        //nullptr);
 }
 
+std::string getK2SchemaName(RangeVar* relation) {
+    std::string name;
+    if (relation->schemaname != nullptr) {
+	name.append(relation->schemaname);
+	name.append("_");
+    } 
+
+    name.append(relation->relname);
+
+    return name;
+}
+// TODO switch to oid
 std::unordered_map<std::string, k2::dto::Schema> schemas;
 
-void k2CreateTable(CreateForeignTableStmt* obj) {
+void k2CreateTable(CreateForeignTableStmt* stmt) {
+  std::cout << "Start create table" << std::endl;
     char* dbname = NULL;
     bool failure = false;
     dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
     if (dbname == nullptr) {
-	delete table;
-	table = nullptr;
 	ereport(ERROR,
 	    (errmodule(MOD_MOT),
 		errcode(ERRCODE_UNDEFINED_DATABASE),
 		errmsg("database with OID %u does not exist", u_sess->proc_cxt.MyDatabaseId)));
-	break;
+	return;
     }
+  std::cout << "got db name" << std::endl;
     //dbname will be k2 collection name
 
     // schema is like a namespace in pg, so it should be part of the k2 schema name to allow duplicate table names
     k2::dto::Schema schema;
-    if (stmt->base.relation->schemaname != nullptr) {
-	schema.name.append(stmt->base.relation->schemaname);
-	schema.name.append("_");
-    } 
-
-    schema.name.append(stmt->base.relation->relname);
+    schema.name = getK2SchemaName(stmt->base.relation);
+  std::cout << "got schema name" << std::endl;
 
     schema.version = 0;
-    schema.fields.resize(list_length(stmt->base.tableElts + 2));
+    schema.fields.resize(list_length(stmt->base.tableElts) + 2);
     schema.fields[0].name = "__K2_TABLE_NAME__";
     schema.fields[0].type = k2::dto::FieldType::STRING;
     // TODO null ordering?
     schema.fields[1].name = "__K2_INDEX_ID__";
     schema.fields[1].type = k2::dto::FieldType::INT32T;
 
+  std::cout << "start column iteration" << std::endl;
     ListCell* cell = nullptr;
     int fieldIdx = 2;
     foreach(cell, stmt->base.tableElts) {
@@ -1027,6 +1039,7 @@ void k2CreateTable(CreateForeignTableStmt* obj) {
       int32_t colLen;
       Type tup;
       Form_pg_type typeDesc;
+      Oid typoid;
       tup = typenameType(nullptr, colDef->typname, &colLen);
       typeDesc = ((Form_pg_type)GETSTRUCT(tup));
       typoid = HeapTupleGetOid(tup);
@@ -1046,9 +1059,51 @@ void k2CreateTable(CreateForeignTableStmt* obj) {
       ++fieldIdx;
     }
 
+  std::cout << "create table finishing" << std::endl;
     if (!failure) {
       schemas[schema.name] = schema;
     }
 
     // Primary key fields come in separate create index statement
+}
+
+void k2CreateIndex(IndexStmt* stmt) {
+  std::cout << "create index start" << std::endl;
+  std::string name = getK2SchemaName(stmt->relation);
+  auto it = schemas.find(name);
+  if (it == schemas.end()) {
+        ereport(ERROR,
+            (errmodule(MOD_MOT),
+                errcode(ERRCODE_UNDEFINED_TABLE),
+                errmsg("Table not found for oid %u", stmt->relation->foreignOid)));
+	return;
+  }
+
+  if (!stmt->primary) {
+    // TODO
+    return;
+  }
+
+
+  // TODO check for index expression and error
+
+  std::cout << "create index start column iteration" << std::endl;
+  it->second.partitionKeyFields.push_back(0);
+  it->second.partitionKeyFields.push_back(1);
+    ListCell* lc = nullptr;
+    foreach (lc, stmt->indexParams) {
+        IndexElem* ielem = (IndexElem*)lfirst(lc);
+
+	for (int i=2; i<it->second.fields.size(); ++i) {
+	  if (it->second.fields[i].name == ielem->name) {
+	    it->second.partitionKeyFields.push_back(i);
+	    if (ielem->nulls_ordering == SORTBY_NULLS_LAST) {
+	      it->second.fields[i].nullLast = true;
+	    }
+	  }
+	}
+    }
+
+    // TODO Create K2 Schema here
+    std::cout << "Made a K2 Schema for table: " << it->first << "with " << it->second.fields.size()-2 << " fields and " << it->second.partitionKeyFields.size() - 2 << " key fields" << std::endl;
 }
