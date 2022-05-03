@@ -1,9 +1,12 @@
+#include <cstdint>
 #include <iostream>
 #include <unordered_map>
 
+#include "global.h"
 #include "funcapi.h"
 #include "access/reloptions.h"
 #include "access/transam.h"
+#include "mot_fdw_error.h"
 #include "postgres.h"
 
 #include "commands/dbcommands.h"
@@ -989,8 +992,9 @@ std::string getK2SchemaName(RangeVar* relation) {
 
     return name;
 }
-// TODO switch to oid
-std::unordered_map<std::string, k2::dto::Schema> schemas;
+
+// Foreign Oid -> Schema
+std::unordered_map<uint64_t, k2::dto::Schema> schemas;
 
 void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "Start create table" << std::endl;
@@ -1061,7 +1065,8 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
 
   std::cout << "create table finishing" << std::endl;
     if (!failure) {
-      schemas[schema.name] = schema;
+      std::cout << "creating table for foid: " << stmt->base.relation->foreignOid << std::endl;
+      schemas[stmt->base.relation->foreignOid] = schema;
     }
 
     // Primary key fields come in separate create index statement
@@ -1069,8 +1074,8 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
 
 void k2CreateIndex(IndexStmt* stmt) {
   std::cout << "create index start" << std::endl;
-  std::string name = getK2SchemaName(stmt->relation);
-  auto it = schemas.find(name);
+  auto it = schemas.find(stmt->relation->foreignOid);
+  std::cout << "creating index for foid: " << stmt->relation->foreignOid << std::endl;
   if (it == schemas.end()) {
         ereport(ERROR,
             (errmodule(MOD_MOT),
@@ -1106,4 +1111,43 @@ void k2CreateIndex(IndexStmt* stmt) {
 
     // TODO Create K2 Schema here
     std::cout << "Made a K2 Schema for table: " << it->first << "with " << it->second.fields.size()-2 << " fields and " << it->second.partitionKeyFields.size() - 2 << " key fields" << std::endl;
+}
+
+TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo, TupleTableSlot* slot, TupleTableSlot* planSlot) {
+  auto it = schemas.find(RelationGetRelid(resultRelInfo->ri_RelationDesc));
+  std::cout << "trying to insert into foid: " << RelationGetRelid(resultRelInfo->ri_RelationDesc) << std::endl;
+  if (it == schemas.end()) {
+    report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+    return nullptr;
+  }
+
+  std::cout << "Insert row, got schema: " << it->second.name << std::endl;
+  // TODO how does a secondary index update happen?
+  
+    HeapTuple srcData = (HeapTuple)slot->tts_tuple;
+    TupleDesc tupdesc = slot->tts_tupleDescriptor;
+    uint64_t i = 0;
+    uint64_t j = 1;
+    uint64_t cols = it->second.fields.size() - 2;
+
+    for (; i < cols; i++, j++) {
+	bool isnull = false;
+	std::cout << "trying to get datum for colid: " << j << std::endl;
+	Datum value = heap_slot_getattr(slot, j, &isnull);
+
+	if (!isnull) {
+	  Oid type = tupdesc->attrs[i]->atttypid;
+	    switch (type) {
+	    case INT4OID:
+	      if (it->second.fields[i+2].type != k2::dto::FieldType::INT32T) {
+		std::cout << "Types do not match" << std::endl;
+	      }
+	      int32_t k2val = (int32_t)(value & 0xffffffff);
+	      std::cout << "col: " << j << " val: " << k2val << std::endl;
+	      break;
+	    }
+	}
+    }
+
+  return slot;
 }

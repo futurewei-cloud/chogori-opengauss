@@ -295,7 +295,7 @@ Datum mot_fdw_handler(PG_FUNCTION_ARGS)
     fdwroutine->GetForeignRelSize = MOTGetForeignRelSize;
     fdwroutine->GetForeignPaths = MOTGetForeignPaths;
     fdwroutine->GetForeignPlan = MOTGetForeignPlan;
-    fdwroutine->PlanForeignModify = MOTPlanForeignModify;
+    fdwroutine->PlanForeignModify = NULL;
     fdwroutine->ExplainForeignScan = MOTExplainForeignScan;
     fdwroutine->BeginForeignScan = MOTBeginForeignScan;
     fdwroutine->IterateForeignScan = MOTIterateForeignScan;
@@ -306,11 +306,11 @@ Datum mot_fdw_handler(PG_FUNCTION_ARGS)
     fdwroutine->ValidateTableDef = MOTValidateTableDef;
     fdwroutine->PartitionTblProcess = NULL;
     fdwroutine->BuildRuntimePredicate = NULL;
-    fdwroutine->BeginForeignModify = MOTBeginForeignModify;
-    fdwroutine->ExecForeignInsert = MOTExecForeignInsert;
+    fdwroutine->BeginForeignModify = NULL;
+    fdwroutine->ExecForeignInsert = k2ExecForeignInsert;
     fdwroutine->ExecForeignUpdate = MOTExecForeignUpdate;
     fdwroutine->ExecForeignDelete = MOTExecForeignDelete;
-    fdwroutine->EndForeignModify = MOTEndForeignModify;
+    fdwroutine->EndForeignModify = NULL;
     fdwroutine->IsForeignRelUpdatable = MOTIsForeignRelationUpdatable;
     fdwroutine->GetFdwType = MOTGetFdwType;
     fdwroutine->TruncateForeignTable = MOTTruncateForeignTable;
