@@ -77,7 +77,7 @@ buildrepo:
 	@$(call make-repo)
 
 $(OBJ_DIR)/%.o: %.cpp
-	$(COMPILE.cpp) -std=c++11 -MMD -MP -MF"$(patsubst %.o,%.d,$@)" -MT"$@" -o $@ $<
+	$(COMPILE.cpp) -MMD -MP -MF"$(patsubst %.o,%.d,$@)" -MT"$@" -o $@ $<
 
 show:
 	@echo "CC_VERSION=${CC_VERSION}"

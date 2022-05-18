@@ -1084,9 +1084,10 @@ extern Datum ascii(PG_FUNCTION_ARGS);
 /* inet_cidr_ntop.c */
 extern char* inet_cidr_ntop(int af, const void* src, int bits, char* dst, size_t size);
 
+extern "C" {
 /* inet_net_pton.c */
-extern int inet_net_pton(int af, const char* src, void* dst, size_t size);
-
+extern int inet_net_pton(int af, const char* src, void* dst, size_t size) noexcept;
+}
 /* network.c */
 extern Datum inet_in(PG_FUNCTION_ARGS);
 extern Datum inet_out(PG_FUNCTION_ARGS);

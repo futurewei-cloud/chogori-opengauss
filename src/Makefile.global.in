@@ -789,7 +789,6 @@ endif
 
 CXXFLAGS += -Wl,-z,relro,-z,now
 CXXFLAGS += -Wl,-z,noexecstack
-CXXFLAGS += -std=c++14
 override CXXFLAGS += $(PTHREAD_CFLAGS)
 # Kind-of compilers
 

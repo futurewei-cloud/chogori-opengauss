@@ -46,6 +46,8 @@
 #include "Schema.h"
 #include "FieldTypes.h"
 
+#include <skv/client/SKVClient.h>
+
 #define K2PG_MAX_SCAN_KEYS (INDEX_MAX_KEYS * 2) /* A pair of lower/upper bounds per column max */
 #define FirstBootstrapObjectId 10000            // TODO check if true for og
 
@@ -1114,6 +1116,8 @@ void k2CreateIndex(IndexStmt* stmt) {
 }
 
 TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo, TupleTableSlot* slot, TupleTableSlot* planSlot) {
+  skv::http::dto::SKVRecord test{};
+
   auto it = schemas.find(RelationGetRelid(resultRelInfo->ri_RelationDesc));
   std::cout << "trying to insert into foid: " << RelationGetRelid(resultRelInfo->ri_RelationDesc) << std::endl;
   if (it == schemas.end()) {
