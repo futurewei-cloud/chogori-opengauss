@@ -43,9 +43,6 @@
 #include "parser/parsetree.h"
 #include "access/sysattr.h"
 
-#include "Schema.h"
-#include "FieldTypes.h"
-
 #include <skv/client/SKVClient.h>
 
 #define K2PG_MAX_SCAN_KEYS (INDEX_MAX_KEYS * 2) /* A pair of lower/upper bounds per column max */
@@ -996,7 +993,7 @@ std::string getK2SchemaName(RangeVar* relation) {
 }
 
 // Foreign Oid -> Schema
-std::unordered_map<uint64_t, k2::dto::Schema> schemas;
+std::unordered_map<uint64_t, std::shared_ptr<skv::http::dto::Schema>> schemas;
 
 void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "Start create table" << std::endl;
@@ -1014,17 +1011,17 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
     //dbname will be k2 collection name
 
     // schema is like a namespace in pg, so it should be part of the k2 schema name to allow duplicate table names
-    k2::dto::Schema schema;
+    skv::http::dto::Schema schema;
     schema.name = getK2SchemaName(stmt->base.relation);
   std::cout << "got schema name" << std::endl;
 
     schema.version = 0;
     schema.fields.resize(list_length(stmt->base.tableElts) + 2);
     schema.fields[0].name = "__K2_TABLE_NAME__";
-    schema.fields[0].type = k2::dto::FieldType::STRING;
+    schema.fields[0].type = skv::http::dto::FieldType::STRING;
     // TODO null ordering?
     schema.fields[1].name = "__K2_INDEX_ID__";
-    schema.fields[1].type = k2::dto::FieldType::INT32T;
+    schema.fields[1].type = skv::http::dto::FieldType::INT32T;
 
   std::cout << "start column iteration" << std::endl;
     ListCell* cell = nullptr;
@@ -1051,7 +1048,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
       typoid = HeapTupleGetOid(tup);
       if (typoid == INT4OID) {
 	schema.fields[fieldIdx].name = colDef->colname;
-	schema.fields[fieldIdx].type = k2::dto::FieldType::INT32T;
+	schema.fields[fieldIdx].type = skv::http::dto::FieldType::INT32T;
       } else {
 	ereport(ERROR,
 	    (errmodule(MOD_MOT),
@@ -1068,7 +1065,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "create table finishing" << std::endl;
     if (!failure) {
       std::cout << "creating table for foid: " << stmt->base.relation->foreignOid << std::endl;
-      schemas[stmt->base.relation->foreignOid] = schema;
+      schemas[stmt->base.relation->foreignOid] = std::make_shared<skv::http::dto::Schema>(std::move(schema));
     }
 
     // Primary key fields come in separate create index statement
@@ -1095,28 +1092,27 @@ void k2CreateIndex(IndexStmt* stmt) {
   // TODO check for index expression and error
 
   std::cout << "create index start column iteration" << std::endl;
-  it->second.partitionKeyFields.push_back(0);
-  it->second.partitionKeyFields.push_back(1);
+  it->second->partitionKeyFields.push_back(0);
+  it->second->partitionKeyFields.push_back(1);
     ListCell* lc = nullptr;
     foreach (lc, stmt->indexParams) {
         IndexElem* ielem = (IndexElem*)lfirst(lc);
 
-	for (int i=2; i<it->second.fields.size(); ++i) {
-	  if (it->second.fields[i].name == ielem->name) {
-	    it->second.partitionKeyFields.push_back(i);
+	for (int i=2; i<it->second->fields.size(); ++i) {
+	  if (it->second->fields[i].name == ielem->name) {
+	    it->second->partitionKeyFields.push_back(i);
 	    if (ielem->nulls_ordering == SORTBY_NULLS_LAST) {
-	      it->second.fields[i].nullLast = true;
+	      it->second->fields[i].nullLast = true;
 	    }
 	  }
 	}
     }
 
     // TODO Create K2 Schema here
-    std::cout << "Made a K2 Schema for table: " << it->first << "with " << it->second.fields.size()-2 << " fields and " << it->second.partitionKeyFields.size() - 2 << " key fields" << std::endl;
+    std::cout << "Made a K2 Schema for table: " << it->first << "with " << it->second->fields.size()-2 << " fields and " << it->second->partitionKeyFields.size() - 2 << " key fields" << std::endl;
 }
 
 TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo, TupleTableSlot* slot, TupleTableSlot* planSlot) {
-  skv::http::dto::SKVRecord test{};
 
   auto it = schemas.find(RelationGetRelid(resultRelInfo->ri_RelationDesc));
   std::cout << "trying to insert into foid: " << RelationGetRelid(resultRelInfo->ri_RelationDesc) << std::endl;
@@ -1125,14 +1121,18 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
     return nullptr;
   }
 
-  std::cout << "Insert row, got schema: " << it->second.name << std::endl;
+  std::cout << "Insert row, got schema: " << it->second->name << std::endl;
+  skv::http::dto::SKVRecordBuilder build("my collection", it->second);;
   // TODO how does a secondary index update happen?
   
     HeapTuple srcData = (HeapTuple)slot->tts_tuple;
     TupleDesc tupdesc = slot->tts_tupleDescriptor;
     uint64_t i = 0;
     uint64_t j = 1;
-    uint64_t cols = it->second.fields.size() - 2;
+    uint64_t cols = it->second->fields.size() - 2;
+
+    build.serializeNext<std::string>("table");
+    build.serializeNext<int32_t>(0);
 
     for (; i < cols; i++, j++) {
 	bool isnull = false;
@@ -1143,15 +1143,19 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
 	  Oid type = tupdesc->attrs[i]->atttypid;
 	    switch (type) {
 	    case INT4OID:
-	      if (it->second.fields[i+2].type != k2::dto::FieldType::INT32T) {
+	      if (it->second->fields[i+2].type != skv::http::dto::FieldType::INT32T) {
 		std::cout << "Types do not match" << std::endl;
 	      }
 	      int32_t k2val = (int32_t)(value & 0xffffffff);
 	      std::cout << "col: " << j << " val: " << k2val << std::endl;
+	      build.serializeNext<int32_t>(k2val);
 	      break;
 	    }
 	}
     }
+
+  skv::http::dto::SKVRecord record = build.build();
+  std::cout << "my record: " << record << std::endl;
 
   return slot;
 }

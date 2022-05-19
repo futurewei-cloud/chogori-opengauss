@@ -257,7 +257,7 @@ LIBS += -lcom_err_gauss -lgssapi_krb5_gauss -lkrb5_gauss -lgssrpc_gauss -lk5cryp
 #Chogori
 ###############################################################################
 LDFLAGS += -L/usr/local/lib/skv/
-LIBS += -ldto
+LIBS += -ldto -lfmt -lmpack
 
 
 ##################################################################################
