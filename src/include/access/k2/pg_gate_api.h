@@ -1,5 +1,4 @@
-// Copyright (c) YugaByte, Inc.
-// Portions Copyright (c) 2021 Futurewei Cloud
+// Copyright (c) Copyright (c) 2022 Futurewei Cloud
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.  You may obtain a copy of the License at
@@ -17,8 +16,8 @@
 
 #include <stdint.h>
 
-#include "k2pg_util.h"
-#include "pg_gate_typedefs.h"
+#include "access/k2/k2pg_util.h"
+#include "access/k2/pg_gate_typedefs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -446,7 +445,7 @@ void PgGate_SetTimeout(int timeout_ms, void* extra);
 //--------------------------------------------------------------------------------------------------
 // Thread-Local variables.
 
-/* void* PgGate_GetThreadLocalCurrentMemoryContext();
+void* PgGate_GetThreadLocalCurrentMemoryContext();
 
 void* PgGate_SetThreadLocalCurrentMemoryContext(void *memctx);
 
@@ -463,7 +462,7 @@ void* PgGate_GetThreadLocalJumpBuffer();
 void PgGate_SetThreadLocalErrMsg(const void* new_msg);
 
 const void* PgGate_GetThreadLocalErrMsg();
- */
+
 // APIs called by pg_dump.c only
 void PgGate_ShutdownPgGateBackend();
 

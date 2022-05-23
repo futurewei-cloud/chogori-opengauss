@@ -359,7 +359,7 @@ extern bool CheckExecDirectPrivilege(const char* query); /* check user have priv
 #define SetProcessingMode(mode)                                                                              \
     do {                                                                                                     \
         AssertArg((mode) == BootstrapProcessing || (mode) == InitProcessing || (mode) == NormalProcessing || \
-                  (mode) == PostUpgradeProcessing ||  (mode) == FencedProcessing) ||  (mode) == K2Processing);                                                          \
+                  (mode) == PostUpgradeProcessing ||  (mode) == FencedProcessing ||  (mode) == K2Processing);                                                          \
         u_sess->misc_cxt.Mode = (mode);                                                                      \
     } while (0)
 

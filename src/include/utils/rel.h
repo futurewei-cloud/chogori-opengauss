@@ -102,9 +102,9 @@ typedef struct ObjectCSN
 }ObjectCSN;
 
 typedef struct PgObjectOption {
-    bool hasCtime; 
+    bool hasCtime;
     bool hasMtime;
-    bool hasCreatecsn; 
+    bool hasCreatecsn;
     bool hasChangecsn;
 } PgObjectOption;
 
@@ -153,6 +153,7 @@ typedef struct RelationData {
     /* data managed by RelationGetIndexList: */
     List* rd_indexlist; /* list of OIDs of indexes on relation */
     Oid rd_oidindex;    /* OID of unique index on OID, if any */
+    Oid	rd_pkindex;		/* OID of primary key, if any */
     Oid rd_refSynOid;   /* OID of referenced synonym Oid, if mapping indeed. */
 
     /* data managed by RelationGetIndexAttrBitmap: */
@@ -244,7 +245,7 @@ typedef struct RelationData {
     /* bucket key info, indicating which keys are used to comoute hash value */
     int rd_bucketmapsize; /* Size of bucket map */
     StorageType storage_type; /* storage type */
-    
+
     /*bucket key info, indicating which keys are used to comoute hash value */
     RelationBucketKey *rd_bucketkey;
 
@@ -766,4 +767,3 @@ extern void RelationDecrementReferenceCount(Oid relationId);
 extern void GetTdeInfoFromRel(Relation rel, TdeInfo *tde_info);
 
 #endif /* REL_H */
-

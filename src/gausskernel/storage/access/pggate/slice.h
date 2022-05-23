@@ -37,7 +37,7 @@
 #include <map>
 #include <string>
 
-#include "k2pg_comdefs.h"
+#include "access/k2/k2pg_comdefs.h"
 
 namespace k2pg {
 

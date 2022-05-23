@@ -34,6 +34,8 @@
 #include "workload/workload.h"
 #include "pgstat.h"
 
+#include "access/k2/pg_gate_api.h"
+
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
  *****************************************************************************/
@@ -42,6 +44,34 @@
  *		Default memory context for allocations.
  */
 THR_LOCAL MemoryContext CurrentMemoryContext = NULL;
+
+MemoryContext GetThreadLocalCurrentMemoryContext()
+{
+	return (MemoryContext) PgGate_GetThreadLocalCurrentMemoryContext();
+}
+
+MemoryContext SetThreadLocalCurrentMemoryContext(MemoryContext memctx)
+{
+	return (MemoryContext) PgGate_SetThreadLocalCurrentMemoryContext(memctx);
+}
+
+void PrepareThreadLocalCurrentMemoryContext()
+{
+	if (PgGate_GetThreadLocalCurrentMemoryContext() == NULL)
+	{
+		MemoryContext memctx = AllocSetContextCreate((MemoryContext) NULL,
+		                                             "K2PGExprMemoryContext",
+		                                             ALLOCSET_SMALL_SIZES);
+		PgGate_SetThreadLocalCurrentMemoryContext(memctx);
+	}
+}
+
+void ResetThreadLocalCurrentMemoryContext()
+{
+	MemoryContext memctx = (MemoryContext) PgGate_GetThreadLocalCurrentMemoryContext();
+	PgGate_ResetCurrentMemCtxThreadLocalVars();
+	MemoryContextReset(memctx);
+}
 
 /* This memory context is at process level. So any allocation without free
  * against this memory context will stay as far as the process lives. So be
@@ -115,7 +145,7 @@ static inline void RemoveMemoryContextInfo(MemoryContext context)
         }
     }
 }
-    
+
 
 /*
  * MemoryContextInit
@@ -433,7 +463,7 @@ void MemoryContextResetAndDeleteChildren(MemoryContext context)
     }
 
     List context_list = {T_List, 0, NULL, NULL};
-    
+
     MemoryContextDeleteChildren(context, &context_list);
 
     FreeMemoryContextList(&context_list);
@@ -952,7 +982,7 @@ void MemoryContextCheckSessionMemory(MemoryContext context, Size size, const cha
     if (STATEMENT_MAX_MEM && (t_thrd.shemem_ptr_cxt.mySessionMemoryEntry != NULL) &&
         (t_thrd.comm_cxt.LibcommThreadType == LIBCOMM_NONE) && (context->level >= MEMORY_CONTEXT_CONTROL_LEVEL) &&
         !t_thrd.int_cxt.CritSectionCount && !(AmPostmasterProcess()) && IsNormalProcessingMode()) {
-        int used = (t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->queryMemInChunks << (chunkSizeInBits - BITS_IN_MB)) 
+        int used = (t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->queryMemInChunks << (chunkSizeInBits - BITS_IN_MB))
             << BITS_IN_KB;
         if (STATEMENT_MAX_MEM < used)
             ereport(ERROR,
@@ -1672,4 +1702,20 @@ static void FreeMemoryContextList(List* context_list)
         cell = cell->next;
         pfree_ext(context);
     }
+}
+
+/*
+ * Get the K2PG current memory context.
+ */
+K2PgMemctx GetCurrentK2Memctx() {
+	MemoryContext context = GetCurrentMemoryContext();
+	AssertArg(MemoryContextIsValid(context));
+	AssertNotInCriticalSection(context);
+
+	if (context->k2pg_memctx == NULL) {
+		// Create the K2PG context if this is the first time it is used.
+		context->k2pg_memctx = PgGate_CreateMemctx();
+	}
+
+	return context->k2pg_memctx;
 }

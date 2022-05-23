@@ -63,6 +63,7 @@ extern List* RelationGetLocalCbiList(Relation relation);
 extern List* RelationGetIndexInfoList(Relation relation);
 extern int RelationGetIndexNum(Relation relation);
 extern Oid RelationGetOidIndex(Relation relation);
+extern Oid RelationGetPrimaryKeyIndex(Relation relation);
 extern Oid RelationGetReplicaIndex(Relation relation);
 extern List* RelationGetIndexExpressions(Relation relation);
 extern List* RelationGetIndexExpressions(Relation relation);

@@ -30,8 +30,8 @@ extern K2PgStatus K2PgStatusOK();
 bool K2PgStatusIsOK(K2PgStatus s);
 bool K2PgStatusIsNotFound(K2PgStatus s);
 bool K2PgStatusIsDuplicateKey(K2PgStatus s);
-//uint32_t K2PgStatusPgsqlError(K2PgStatus s);
-//uint16_t K2PgStatusTransactionError(K2PgStatus s);
+uint32_t K2PgStatusPgsqlError(K2PgStatus s);
+uint16_t K2PgStatusTransactionError(K2PgStatus s);
 void K2PgFreeStatus(K2PgStatus s);
 
 size_t K2PgStatusMessageLen(K2PgStatus s);

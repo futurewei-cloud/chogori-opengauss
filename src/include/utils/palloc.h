@@ -30,6 +30,7 @@
 #ifndef FRONTEND_PARSER
 #include "postgres.h"
 #include "c.h"
+#include "access/k2/pg_gate_typedefs.h"
 
 /*
  * Type MemoryContextData is declared in nodes/memnodes.h.	Most users
@@ -52,6 +53,40 @@ extern THR_LOCAL PGDLLIMPORT MemoryContext CurrentMemoryContext;
 extern THR_LOCAL PGDLLIMPORT MemoryContext SelfMemoryContext;
 extern THR_LOCAL PGDLLIMPORT MemoryContext TopMemoryContext;
 #endif /* WIN32 */
+
+/*
+ * This enables running query-layer code in a multi-threaded constext by using
+ * thread-local variables instead of globals.
+ * Currently only used for expression evaluation in K2 PG (i.e. for pushdown).
+ */
+static inline bool IsMultiThreadedMode() {
+	/*
+	 * Just checking if the memory infrastructure is initialized.
+	 * TODO Consider using a specific global variable or compiler flag
+	 * for this.
+	 */
+	return CurrentMemoryContext == NULL;
+}
+
+extern MemoryContext GetThreadLocalCurrentMemoryContext();
+extern MemoryContext SetThreadLocalCurrentMemoryContext(MemoryContext memctx);
+
+static inline MemoryContext GetCurrentMemoryContext() {
+	if (IsMultiThreadedMode())
+	{
+		return (MemoryContext) GetThreadLocalCurrentMemoryContext();
+	}
+	else
+	{
+		return CurrentMemoryContext;
+	}
+}
+
+extern void PrepareThreadLocalCurrentMemoryContext();
+
+extern void ResetThreadLocalCurrentMemoryContext();
+
+extern K2PgMemctx GetCurrentK2Memctx();
 
 /*
  * Flags for MemoryContextAllocExtended.

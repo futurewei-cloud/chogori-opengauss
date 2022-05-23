@@ -22,7 +22,7 @@
 #include <cstddef>
 #include <string>
 
-#include "k2pg_util.h"
+#include "access/k2/k2pg_util.h"
 #include "status.h"
 
 namespace k2pg {

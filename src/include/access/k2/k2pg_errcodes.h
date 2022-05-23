@@ -19,6 +19,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <type_traits>
 
 /* These macro definitions have been taken from elog.h */
 #define K2PG_PGSIXBIT(ch) (((ch) - '0') & 0x3F)
@@ -397,5 +398,13 @@ enum class TransactionErrorCode: uint32_t {
     kConflict,
     kSnapshotTooOld
 };
+
+typedef std::underlying_type<TransactionErrorCode>::type TransactionError;
+
+// seems included in c++ 23
+template <typename E>
+constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
+    return static_cast<typename std::underlying_type<E>::type>(e);
+}
 
 } // namespace k2pg

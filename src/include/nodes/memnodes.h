@@ -16,6 +16,7 @@
 
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
+#include "access/k2/pg_gate_typedefs.h"
 
 /*
  * MemoryContext
@@ -61,7 +62,7 @@ typedef struct MemoryTrackData {
     Size allBytesPeak;      /* the peak bytes allocated by this and its children's context */
     Size allBytesAlloc;     /* all bytes allocated by this and its children's context */
     Size allBytesFreed;     /* all bytes freed by this and its children's context */
-    int sequentCount;       /* the sequent count when creating in the thread */   
+    int sequentCount;       /* the sequent count when creating in the thread */
 #ifdef MEMORY_CONTEXT_CHECKING
     bool isTracking; /* flag to indicate which is tracked by memory_detail_tracking setting */
 #endif
@@ -82,8 +83,10 @@ typedef struct MemoryContextData {
     bool isReset;                  /* T = no space alloced since last reset */
     int level;                     /* context level */
     uint64 session_id;             /* session id of context owner */
-    ThreadId thread_id;            /* thread id of context owner */   
+    ThreadId thread_id;            /* thread id of context owner */
     ListCell cell;                 /* cell to pointer to this context*/
+
+	K2PgMemctx k2pg_memctx;        /* Memory context for objects in k2 */
 } MemoryContextData;
 
 #define MemoryContextIsShared(context) (((MemoryContextData*)(context))->is_shared)
@@ -266,4 +269,3 @@ extern MemoryProtectFuncDef SharedFunctions;
 
 #define AllocSetContextUsedSpace(aset) ((aset)->totalSpace - (aset)->freeSpace)
 #endif /* MEMNODES_H */
-

@@ -21,14 +21,15 @@ Copyright(c) 2021 Futurewei Cloud
     SOFTWARE.
 */
 
-#include "pg_gate_api.h"
+#include "access/k2/pg_gate_api.h"
 
 #include "k2pg-internal.h"
-#include "k2pg_util.h"
+#include "access/k2/k2pg_util.h"
 #include "result.h"
 
 #include "utils/elog.h"
 #include "pg_gate_defaults.h"
+#include "pg_gate_thread_local.h"
 
 namespace k2pg {
 namespace gate {
@@ -872,7 +873,7 @@ void PgGate_SetTimeout(int timeout_ms, void* extra) {
 //--------------------------------------------------------------------------------------------------
 // Thread-Local variables.
 
-/* void* PgGate_GetThreadLocalCurrentMemoryContext() {
+void* PgGate_GetThreadLocalCurrentMemoryContext() {
   elog(DEBUG5, "PgGateAPI: PgGate_GetThreadLocalCurrentMemoryContext");
   return PgGetThreadLocalCurrentMemoryContext();
 }
@@ -915,7 +916,7 @@ void PgGate_SetThreadLocalErrMsg(const void* new_msg) {
 const void* PgGate_GetThreadLocalErrMsg() {
   elog(DEBUG5, "PgGateAPI: PgGate_GetThreadLocalErrMsg");
   return PgGetThreadLocalErrMsg();
-} */
+}
 
 const K2PgTypeEntity *K2PgFindTypeEntity(int type_oid) {
   elog(DEBUG5, "PgGateAPI: K2PgFindTypeEntity %d", type_oid);

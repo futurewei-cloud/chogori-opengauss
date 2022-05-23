@@ -11,11 +11,13 @@
 // or implied.  See the License for the specific language governing permissions and limitations
 // under the License.
 
-#include "k2pg_util.h"
+#include "access/k2/k2pg_util.h"
 
 #include <stdarg.h>
 #include <fstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -26,10 +28,11 @@
 #endif  // defined(__APPLE__)
 
 #include "k2pg-internal.h"
+#include "access/k2/k2pg_errcodes.h"
 #include "status.h"
-#include "k2pg_errcodes.h"
 
 using k2pg::Status;
+using k2pg::K2PgErrorCode;
 
 K2PgStatus K2PgStatusOK() {
   return nullptr;
@@ -70,6 +73,46 @@ bool K2PgStatusIsNotFound(K2PgStatus s) {
 
 bool K2PgStatusIsDuplicateKey(K2PgStatus s) {
   return StatusWrapper(s)->IsAlreadyPresent();
+}
+
+uint32_t K2PgStatusPgsqlError(K2PgStatus s) {
+/*   StatusWrapper wrapper(s);
+  const uint8_t* pg_err_ptr = wrapper->ErrorData(PgsqlErrorTag::kCategory);
+  // If we have PgsqlError explicitly set, we decode it
+  K2PgErrorCode result = pg_err_ptr != nullptr ? PgsqlErrorTag::Decode(pg_err_ptr)
+                                               : K2PgErrorCode::K2PG_INTERNAL_ERROR;
+  // If the error is the default generic K2PG_INTERNAL_ERROR (as we also set in AsyncRpc::Failed)
+  // then we try to deduce it from a transaction error.
+  if (result == K2PgErrorCode::K2PG_INTERNAL_ERROR) {
+    const uint8_t* txn_err_ptr = wrapper->ErrorData(TransactionErrorTag::kCategory);
+    if (txn_err_ptr != nullptr) {
+      switch (TransactionErrorTag::Decode(txn_err_ptr)) {
+        case TransactionErrorCode::kAborted: [[fallthrough]];
+        case TransactionErrorCode::kReadRestartRequired: [[fallthrough]];
+        case TransactionErrorCode::kConflict:
+          result = K2PgErrorCode::K2PG_T_R_SERIALIZATION_FAILURE;
+          break;
+        case TransactionErrorCode::kSnapshotTooOld:
+          result = K2PgErrorCode::K2PG_SNAPSHOT_TOO_OLD;
+          break;
+        case TransactionErrorCode::kNone: [[fallthrough]];
+        default:
+          result = K2PgErrorCode::K2PG_INTERNAL_ERROR;
+      }
+    }
+  }
+*/
+
+// TODO: FIXME
+K2PgErrorCode result = K2PgErrorCode::K2PG_INTERNAL_ERROR;
+  return static_cast<uint32_t>(result);
+}
+
+uint16_t K2PgStatusTransactionError(K2PgStatus s) {
+//  const TransactionError txn_err(*StatusWrapper(s));
+//  return static_cast<uint16_t>(txn_err.value());
+// TODO: FIXME
+  return k2pg::to_underlying(k2pg::TransactionErrorCode::kConflict);
 }
 
 void K2PgFreeStatus(K2PgStatus s) {

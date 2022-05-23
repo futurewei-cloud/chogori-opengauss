@@ -70,7 +70,7 @@ typedef struct ResourceOwnerData {
     /* We have built-in support for remembering  references */
     int nfakerelrefs;      /* number of owned relcache pins */
     dlist_head fakerelrefs_list; /* a list of fakeRelation */
-    
+
     /* We have built-in support for remembering  references */
     int nfakepartrefs;       /* number of owned partcache pins */
     Partition* fakepartrefs; /* dynamically allocated array */
@@ -121,6 +121,8 @@ typedef struct ResourceOwnerData {
     int maxGlobalMemContexts;
 
     MemoryContext memCxt;
+
+    ResourceArray k2stmtarr;    /* K2PG statement handles */
 } ResourceOwnerData;
 
 THR_LOCAL ResourceOwner IsolatedResourceOwner = NULL;
@@ -396,7 +398,7 @@ static void ResourceOwnerReleaseInternal(
             if (isCommit)
                 PrintFileLeakWarning(owner->files[owner->nfiles - 1]);
             FileClose(owner->files[owner->nfiles - 1]);
-        }        
+        }
         /* Ditto for global memory context */
         while (owner->nglobalMemContext > 0) {
             MemoryContext memContext = owner->globalMemContexts[owner->nglobalMemContext - 1];
@@ -1101,7 +1103,7 @@ void ResourceOwnerRememberFakerelRef(ResourceOwner owner, Relation fakerel)
 }
 
 void ResourceOwnerForgetFakerelRef(ResourceOwner owner, Relation fakerel)
-{    
+{
     if (fakerel->node.next != NULL && fakerel->node.prev != NULL) {
         dlist_delete(&(fakerel->node));
         DListNodeInit(&(fakerel->node));
@@ -1402,7 +1404,7 @@ void ResourceOwnerDecrementNsnapshots(ResourceOwner owner, void *queryDesc)
             if(owner->snapshots[owner->nsnapshots - 1] == queryDesc_temp->estate->es_snapshot) {
                 queryDesc_temp->estate->es_snapshot = NULL;
             }
-               
+
             if(owner->snapshots[owner->nsnapshots - 1] == queryDesc_temp->estate->es_crosscheck_snapshot) {
                 queryDesc_temp->estate->es_crosscheck_snapshot = NULL;
             }
@@ -1428,7 +1430,7 @@ void ResourceOwnerDecrementNPlanRefs(ResourceOwner owner, bool useResOwner)
     if(!owner) {
         return;
     }
-       
+
     while(owner->nplanrefs > 0) {
        ReleaseCachedPlan(owner->planrefs[owner->nplanrefs - 1], useResOwner);
     }
@@ -1705,12 +1707,57 @@ void ResourceOwnerEnlargeGMemContext(ResourceOwner owner)
     } else {
         newmax = owner->maxGlobalMemContexts * 2;
         owner->globalMemContexts = (MemoryContext*)repalloc(owner->globalMemContexts, newmax * sizeof(MemoryContext));
-    }    
+    }
     owner->maxGlobalMemContexts = newmax;
 }
 
 void PrintGMemContextLeakWarning(MemoryContext memcontext)
-{   
+{
     char *name = memcontext->name;
     ereport(WARNING, (errmsg("global memory context: %s leak", name)));
+}
+
+/*
+ * Make sure there is room for at least one more entry in a ResourceOwner's
+ * dynamic shmem segment reference array.
+ *
+ * This is separate from actually inserting an entry because if we run out
+ * of memory, it's critical to do so *before* acquiring the resource.
+ */
+void
+ResourceOwnerEnlargeK2PgStmts(ResourceOwner owner)
+{
+	ResourceArrayEnlarge(&(owner->k2stmtarr));
+}
+
+/*
+ * Remember that a K2PG statement is owned by a ResourceOwner
+ *
+ * Caller must have previously done ResourceOwnerEnlargeK2PgStmts()
+ */
+void
+ResourceOwnerRememberK2PgStmt(ResourceOwner owner, K2PgStatement k2pg_stmt)
+{
+	ResourceArrayAdd(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt));
+}
+
+/*
+ * Forget that a K2PG statement is owned by a ResourceOwner
+ */
+void
+ResourceOwnerForgetK2PgStmt(ResourceOwner owner, K2PgStatement k2pg_stmt)
+{
+	if (!ResourceArrayRemove(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt)))
+		elog(ERROR, "K2PG statement %p is not owned by resource owner %s",
+			 k2pg_stmt, owner->name);
+}
+
+/*
+ * Debugging subroutine
+ */
+static void
+PrintK2PgStmtLeakWarning(K2PgStatement k2pg_stmt)
+{
+	elog(WARNING, "K2PG statement leak: statement %p still referenced",
+		 k2pg_stmt);
 }
