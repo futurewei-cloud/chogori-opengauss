@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <unordered_map>
 
 #include "global.h"
@@ -40,12 +41,18 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_proc.h"
 #include "utils/lsyscache.h"
+
+#include "utils/selfuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/print.h"
 #include "parser/parsetree.h"
-#include "access/sysattr.h"
+#include "parser/parse_coerce.h"
+#include "utils/extended_statistics.h"
+#include "utils/syscache.h"
+
 
 #include <skv/client/SKVClient.h>
 
-#define K2PG_MAX_SCAN_KEYS (INDEX_MAX_KEYS * 2) /* A pair of lower/upper bounds per column max */
 #define FirstBootstrapObjectId 10000            // TODO check if true for og
 
 /*
@@ -236,12 +243,6 @@ typedef struct K2FdwScanPlanData
    /* The relation where to read data from */
    Relation target_relation;
 
-   int nkeys; // number of keys
-   int nNonKeys; // number of non-keys
-
-   /* Primary and hash key columns of the referenced table/relation. */
-   Bitmapset *primary_key;
-
    /* Set of key columns whose values will be used for scanning. */
    Bitmapset *sk_cols;
 
@@ -250,11 +251,93 @@ typedef struct K2FdwScanPlanData
 
    /* Description and attnums of the columns to bind */
    TupleDesc bind_desc;
-   AttrNumber bind_key_attnums[K2PG_MAX_SCAN_KEYS];
-   AttrNumber bind_nonkey_attnums[K2PG_MAX_SCAN_KEYS];
+
+  std::shared_ptr<skv::http::dto::Schema> schema;
 } K2FdwScanPlanData;
 
 typedef K2FdwScanPlanData *K2FdwScanPlan;
+
+/*
+ * Functions to determine whether an expression can be evaluated safely on
+ * remote server.
+ */
+static bool foreign_expr_walker(Node *node,
+					foreign_glob_cxt *glob_cxt,
+					foreign_loc_cxt *outer_cxt);
+
+static bool is_foreign_expr(PlannerInfo *root,
+				RelOptInfo *baserel,
+				Expr *expr);
+
+static void parse_conditions(List *exprs, ParamListInfo paramLI, foreign_expr_cxt *expr_cxt);
+
+static void parse_expr(Expr *node, FDWExprRefValues *ref_values);
+
+static void parse_op_expr(OpExpr *node, FDWExprRefValues *ref_values);
+
+static void parse_var(Var *node, FDWExprRefValues *ref_values);
+
+static void parse_const(Const *node, FDWExprRefValues *ref_values);
+
+static void parse_param(Param *node, FDWExprRefValues *ref_values);
+
+
+using skv::http::String;
+// Foreign Oid -> Schema
+static std::unordered_map<uint64_t, std::shared_ptr<skv::http::dto::Schema>> schemaCache;
+static skv::http::Client client;
+static bool initialized=false;
+
+std::shared_ptr<skv::http::dto::Schema> getSchema(Oid foid) {
+  auto it = schemaCache.find(foid);
+  std::cout << "trying to get schema for foid: " << foid << std::endl;
+  if (it == schemaCache.end()) {
+    String schemaName = std::to_string(foid);
+    
+    auto&&[status, schemaResp] = client.getSchema("postgres", schemaName).get();
+    if (!status.is2xxOK()) {    
+      return nullptr;
+    }
+
+    schemaCache[foid] = std::make_shared<skv::http::dto::Schema>(schemaResp);
+    it = schemaCache.find(foid);
+  }
+
+  return it->second;
+}
+
+/*
+ * Get k2Sql-specific table metadata and load it into the scan_plan.
+ * Currently only the hash and primary key info.
+ */
+static void LoadTableInfo(Oid foid, K2FdwScanPlan scan_plan)
+{
+  //Oid            dboid          = K2PgGetDatabaseOid(relation);
+  //Oid            relid          = relation->foreignOid;
+
+  scan_plan->schema = getSchema(foid);
+  
+    /*
+	K2PgTableDesc k2pg_table_desc = NULL;
+
+    // TODO catalog integration
+	HandleK2PgStatus(PgGate_GetTableDesc(dboid, relid, &k2pg_table_desc));
+
+	scan_plan->nkeys = 0;
+	scan_plan->nNonKeys = 0;
+	// number of attributes in the relation tuple
+	for (AttrNumber attnum = 1; attnum <= relation->rd_att->natts; attnum++)
+	{
+		K2CheckPrimaryKeyAttribute(scan_plan, k2pg_table_desc, attnum);
+	}
+	// we generate OIDs for rows of relation
+	if (relation->rd_rel->relhasoids)
+	{
+		K2CheckPrimaryKeyAttribute(scan_plan, k2pg_table_desc, ObjectIdAttributeNumber);
+	}
+    */
+
+}
 
 /*
  * Functions to determine whether an expression can be evaluated safely on
@@ -755,13 +838,174 @@ foreign_expr_walker(Node *node,
    /* It looks OK */
    return true;
 }
+static void parse_conditions(List *exprs, ParamListInfo paramLI, foreign_expr_cxt *expr_cxt) {
+	elog(DEBUG4, "FDW: parsing %d remote expressions", list_length(exprs));
+	ListCell   *lc;
+	foreach(lc, exprs)
+	{
+		Expr	   *expr = (Expr *) lfirst(lc);
 
-static K2FdwPlanState* saved_state = nullptr;
+		/* Extract clause from RestrictInfo, if required */
+		if (IsA(expr, RestrictInfo)) {
+			expr = ((RestrictInfo *) expr)->clause;
+		}
+		elog(DEBUG4, "FDW: parsing expression: %s", nodeToString(expr));
+		// parse a single clause
+		FDWExprRefValues ref_values;
+		ref_values.column_refs = NIL;
+		ref_values.const_values = NIL;
+		ref_values.paramLI = paramLI;
+		parse_expr(expr, &ref_values);
+		if (list_length(ref_values.column_refs) == 1 && list_length(ref_values.const_values) == 1) {
+			FDWOprCond *opr_cond = (FDWOprCond *)palloc0(sizeof(FDWOprCond));
+			opr_cond->opno = ref_values.opno;
+			// found a binary condition
+			ListCell   *rlc;
+			foreach(rlc, ref_values.column_refs) {
+				opr_cond->ref = (FDWColumnRef *)lfirst(rlc);
+			}
 
-static void swapPlanState(RelOptInfo* rel) {
-  void* tmp = rel->fdw_private;
-  rel->fdw_private = (void*) saved_state;
-  saved_state = (K2FdwPlanState*) tmp;
+			foreach(rlc, ref_values.const_values) {
+				opr_cond->val = (FDWConstValue *)lfirst(rlc);
+			}
+
+            opr_cond->column_ref_first = ref_values.column_ref_first;
+
+			expr_cxt->opr_conds = lappend(expr_cxt->opr_conds, opr_cond);
+		}
+	}
+}
+
+static void parse_expr(Expr *node, FDWExprRefValues *ref_values) {
+	if (node == NULL)
+		return;
+
+	switch (nodeTag(node))
+	{
+		case T_Var:
+			parse_var((Var *) node, ref_values);
+			break;
+		case T_Const:
+			parse_const((Const *) node, ref_values);
+			break;
+		case T_OpExpr:
+			parse_op_expr((OpExpr *) node, ref_values);
+			break;
+		case T_Param:
+			parse_param((Param *) node, ref_values);
+			break;
+		default:
+			elog(DEBUG4, "FDW: unsupported expression type for expr: %s", nodeToString(node));
+			break;
+	}
+}
+
+static void parse_op_expr(OpExpr *node, FDWExprRefValues *ref_values) {
+	if (list_length(node->args) != 2) {
+		elog(DEBUG4, "FDW: we only handle binary opclause, actual args length: %d for node %s", list_length(node->args), nodeToString(node));
+		return;
+	} else {
+		elog(DEBUG4, "FDW: handing binary opclause for node %s", nodeToString(node));
+	}
+
+	ListCell *lc;
+    bool checkOrder;
+	switch (get_oprrest(node->opno))
+	{
+		case F_EQSEL: //  equal =
+		case F_SCALARLTSEL: // Less than <
+          // TODO not supported by OG?
+          //case F_SCALARLESEL: // Less Equal <=
+		case F_SCALARGTSEL: // Greater than >
+          //case F_SCALARGESEL: // Greater Equal >=
+			elog(DEBUG4, "FDW: parsing OpExpr: %d", get_oprrest(node->opno));
+
+            // Creating the FDWExprRefValues loses the tree structure of the original expression
+            // so we need to keep track if the column reference or the constant was first
+            checkOrder = true;
+
+			ref_values->opno = node->opno;
+			foreach(lc, node->args)
+			{
+				Expr *arg = (Expr *) lfirst(lc);
+				parse_expr(arg, ref_values);
+
+                if (checkOrder && list_length(ref_values->column_refs) == 1) {
+                    ref_values->column_ref_first = true;
+                } else if (checkOrder) {
+                    ref_values->column_ref_first = false;
+                }
+                checkOrder = false;
+			}
+
+			break;
+		default:
+			elog(DEBUG4, "FDW: unsupported OpExpr type: %d", get_oprrest(node->opno));
+			break;
+	}
+}
+
+static void parse_var(Var *node, FDWExprRefValues *ref_values) {
+	elog(DEBUG4, "FDW: parsing Var %s", nodeToString(node));
+	// the condition is at the current level
+	if (node->varlevelsup == 0) {
+		FDWColumnRef *col_ref = (FDWColumnRef *)palloc0(sizeof(FDWColumnRef));
+		col_ref->attno = node->varno;
+		col_ref->attr_num = node->varattno;
+		col_ref->attr_typid = node->vartype;
+		col_ref->atttypmod = node->vartypmod;
+		ref_values->column_refs = lappend(ref_values->column_refs, col_ref);
+	}
+}
+
+static void parse_const(Const *node, FDWExprRefValues *ref_values) {
+	elog(DEBUG4, "FDW: parsing Const %s", nodeToString(node));
+	FDWConstValue *val = (FDWConstValue *)palloc0(sizeof(FDWConstValue));
+	val->atttypid = node->consttype;
+	val->is_null = node->constisnull;
+
+	val->value = 0;
+	if (node->constisnull || node->constbyval)
+		val->value = node->constvalue;
+	else
+		val->value = PointerGetDatum(node->constvalue);
+
+	ref_values->const_values = lappend(ref_values->const_values, val);
+}
+
+static void parse_param(Param *node, FDWExprRefValues *ref_values) {
+	elog(DEBUG4, "FDW: parsing Param %s", nodeToString(node));
+	ParamExternData *prm = NULL;
+	ParamExternData prmdata;
+    // TODO
+	//if (ref_values->paramLI->paramFetch != NULL)
+	//	prm = ref_values->paramLI->paramFetch(ref_values->paramLI, node->paramid,
+	//			true, &prmdata);
+	//else
+		prm = &ref_values->paramLI->params[node->paramid - 1];
+
+	if (!OidIsValid(prm->ptype) ||
+		prm->ptype != node->paramtype ||
+		!(prm->pflags & PARAM_FLAG_CONST))
+	{
+		/* Planner should ensure this does not happen */
+		elog(ERROR, "Invalid parameter: %s", nodeToString(node));
+	}
+
+	FDWConstValue *val = (FDWConstValue *)palloc0(sizeof(FDWConstValue));
+	val->atttypid = prm->ptype;
+	val->is_null = prm->isnull;
+	int16		typLen = 0;
+	bool		typByVal = false;
+	val->value = 0;
+
+	get_typlenbyval(node->paramtype, &typLen, &typByVal);
+	if (prm->isnull || typByVal)
+		val->value = prm->value;
+	else
+		val->value = datumCopy(prm->value, typByVal, typLen);
+
+	ref_values->const_values = lappend(ref_values->const_values, val);
 }
 
 /*
@@ -787,7 +1031,6 @@ k2GetForeignRelSize(PlannerInfo *root,
     */
    baserel->rows = baserel->tuples;
 
-   swapPlanState(baserel);
    baserel->fdw_private = (void *) fdw_plan;
    fdw_plan->remote_conds = NIL;
    fdw_plan->local_conds = NIL;
@@ -814,7 +1057,6 @@ k2GetForeignRelSize(PlannerInfo *root,
 
    //check_index_predicates(root, baserel);
    check_partial_indexes(root, baserel);
-   swapPlanState(baserel);
 }
 
 /*
@@ -828,7 +1070,6 @@ k2GetForeignPaths(PlannerInfo *root,
 				   RelOptInfo *baserel,
 				   Oid foreigntableid)
 {
-   swapPlanState(baserel);
 	/* Create a ForeignPath node and it as the scan path */
    add_path(root, baserel,
 	         (Path *) create_foreignscan_path(root,
@@ -842,7 +1083,6 @@ k2GetForeignPaths(PlannerInfo *root,
 
 	/* Add primary key and secondary index paths also */
 	create_index_paths(root, baserel);
-   swapPlanState(baserel);
 }
 
 /*
@@ -857,7 +1097,6 @@ k2GetForeignPlan(PlannerInfo *root,
 				  List *tlist,
 		 List *scan_clauses)
 {
-  swapPlanState(baserel);
 	K2FdwPlanState *fdw_plan_state = (K2FdwPlanState *) baserel->fdw_private;
 	Index          scan_relid;
 	ListCell       *lc;
@@ -944,20 +1183,21 @@ k2GetForeignPlan(PlannerInfo *root,
 					 */
 					wholerow = true;
 					break;
-				case SelfItemPointerAttributeNumber:
-				case MinTransactionIdAttributeNumber:
-				case MinCommandIdAttributeNumber:
-				case MaxTransactionIdAttributeNumber:
-				case MaxCommandIdAttributeNumber:
-					ereport(ERROR,
-					        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-							        "System column with id %d is not supported yet",
-							        attnum)));
-					break;
-				case TableOidAttributeNumber:
+                    // TODO
+                    //case SelfItemPointerAttributeNumber:
+                    //case MinTransactionIdAttributeNumber:
+                    //case MinCommandIdAttributeNumber:
+                    //case MaxTransactionIdAttributeNumber:
+                    //case MaxCommandIdAttributeNumber:
+					//ereport(ERROR,
+					//        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
+					//		        "System column with id %d is not supported yet",
+					//		        attnum)));
+					//break;
+                    //case TableOidAttributeNumber:
 					/* Nothing to do in K2PG: Postgres will handle this. */
-					break;
-				case ObjectIdAttributeNumber:
+					//break;
+                    //case ObjectIdAttributeNumber:
 				default: /* Regular column: attrNum > 0*/
 				{
 					TargetEntry *target = makeNode(TargetEntry);
@@ -968,7 +1208,6 @@ k2GetForeignPlan(PlannerInfo *root,
 		}
 	}
 
-  swapPlanState(baserel);
 	/* Create the ForeignScan node */
 	return make_foreignscan(tlist,  /* target list */
 	                        scan_clauses,  /* ideally we should use local_exprs here, still use the whole list in case the FDW cannot process some remote exprs*/
@@ -980,23 +1219,29 @@ k2GetForeignPlan(PlannerInfo *root,
 	                        //nullptr);
 }
 
-std::string getK2SchemaName(RangeVar* relation) {
-    std::string name;
-    if (relation->schemaname != nullptr) {
-	name.append(relation->schemaname);
-	name.append("_");
-    } 
-
-    name.append(relation->relname);
-
-    return name;
+static void createCollection() {
+  skv::http::dto::CollectionMetadata meta;
+  meta.name = "postgres";
+  meta.hashScheme = skv::http::dto::HashScheme::Range;
+  meta.storageDriver = skv::http::dto::StorageDriver::K23SI;
+ 
+    auto reqFut = client.createCollection(std::move(meta), std::vector<String>{"",""});
+    auto&&[status] = reqFut.get();
+    if (!status.is2xxOK()) {
+	ereport(ERROR,
+	    (errmodule(MOD_MOT),
+		errcode(ERRCODE_UNDEFINED_DATABASE),
+		errmsg("Could not create K2 collection")));
+    }
 }
-
-// Foreign Oid -> Schema
-std::unordered_map<uint64_t, std::shared_ptr<skv::http::dto::Schema>> schemas;
 
 void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "Start create table" << std::endl;
+
+  if (!initialized) {
+    createCollection();
+  }
+  
     char* dbname = NULL;
     bool failure = false;
     dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
@@ -1010,9 +1255,8 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "got db name" << std::endl;
     //dbname will be k2 collection name
 
-    // schema is like a namespace in pg, so it should be part of the k2 schema name to allow duplicate table names
     skv::http::dto::Schema schema;
-    schema.name = getK2SchemaName(stmt->base.relation);
+    schema.name = std::to_string(stmt->base.relation->foreignOid);
   std::cout << "got schema name" << std::endl;
 
     schema.version = 0;
@@ -1065,7 +1309,8 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "create table finishing" << std::endl;
     if (!failure) {
       std::cout << "creating table for foid: " << stmt->base.relation->foreignOid << std::endl;
-      schemas[stmt->base.relation->foreignOid] = std::make_shared<skv::http::dto::Schema>(std::move(schema));
+    
+      schemaCache[stmt->base.relation->foreignOid] = std::make_shared<skv::http::dto::Schema>(std::move(schema));
     }
 
     // Primary key fields come in separate create index statement
@@ -1073,9 +1318,10 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
 
 void k2CreateIndex(IndexStmt* stmt) {
   std::cout << "create index start" << std::endl;
-  auto it = schemas.find(stmt->relation->foreignOid);
+  auto it = schemaCache.find(stmt->relation->foreignOid);
+  auto& schema = it->second;
   std::cout << "creating index for foid: " << stmt->relation->foreignOid << std::endl;
-  if (it == schemas.end()) {
+  if (it == schemaCache.end()) {
         ereport(ERROR,
             (errmodule(MOD_MOT),
                 errcode(ERRCODE_UNDEFINED_TABLE),
@@ -1092,46 +1338,53 @@ void k2CreateIndex(IndexStmt* stmt) {
   // TODO check for index expression and error
 
   std::cout << "create index start column iteration" << std::endl;
-  it->second->partitionKeyFields.push_back(0);
-  it->second->partitionKeyFields.push_back(1);
+  schema->partitionKeyFields.push_back(0);
+  schema->partitionKeyFields.push_back(1);
     ListCell* lc = nullptr;
     foreach (lc, stmt->indexParams) {
         IndexElem* ielem = (IndexElem*)lfirst(lc);
 
-	for (int i=2; i<it->second->fields.size(); ++i) {
-	  if (it->second->fields[i].name == ielem->name) {
-	    it->second->partitionKeyFields.push_back(i);
+	for (int i=2; i<schema->fields.size(); ++i) {
+	  if (schema->fields[i].name == ielem->name) {
+	    schema->partitionKeyFields.push_back(i);
 	    if (ielem->nulls_ordering == SORTBY_NULLS_LAST) {
-	      it->second->fields[i].nullLast = true;
+	      schema->fields[i].nullLast = true;
 	    }
 	  }
 	}
     }
 
-    // TODO Create K2 Schema here
-    std::cout << "Made a K2 Schema for table: " << it->first << "with " << it->second->fields.size()-2 << " fields and " << it->second->partitionKeyFields.size() - 2 << " key fields" << std::endl;
+    auto reqFut = client.createSchema("postgres", *schema);
+    auto&&[status] = reqFut.get();
+    if (!status.is2xxOK()) {
+	ereport(ERROR,
+	    (errmodule(MOD_MOT),
+		errcode(ERRCODE_UNDEFINED_DATABASE),
+		errmsg("Could not create K2 collection")));
+    } 
+    std::cout << "Made a K2 Schema for table: " << it->first << "with " << schema->fields.size()-2 << " fields and " << schema->partitionKeyFields.size() - 2 << " key fields" << std::endl;
 }
 
 TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo, TupleTableSlot* slot, TupleTableSlot* planSlot) {
 
-  auto it = schemas.find(RelationGetRelid(resultRelInfo->ri_RelationDesc));
-  std::cout << "trying to insert into foid: " << RelationGetRelid(resultRelInfo->ri_RelationDesc) << std::endl;
-  if (it == schemas.end()) {
+  Oid foid = RelationGetRelid(resultRelInfo->ri_RelationDesc);
+  auto schema = getSchema(foid);
+  if (schema == nullptr) {
     report_pg_error(MOT::RC_TABLE_NOT_FOUND);
     return nullptr;
   }
-
-  std::cout << "Insert row, got schema: " << it->second->name << std::endl;
-  skv::http::dto::SKVRecordBuilder build("my collection", it->second);;
-  // TODO how does a secondary index update happen?
+  
+  std::cout << "Insert row, got schema: " << schema->name << std::endl;
+  skv::http::dto::SKVRecordBuilder build("postgres", schema);;
   
     HeapTuple srcData = (HeapTuple)slot->tts_tuple;
     TupleDesc tupdesc = slot->tts_tupleDescriptor;
     uint64_t i = 0;
     uint64_t j = 1;
-    uint64_t cols = it->second->fields.size() - 2;
+    uint64_t cols = schema->fields.size() - 2;
 
-    build.serializeNext<std::string>("table");
+    build.serializeNext<String>(schema->name);
+  // TODO how does a secondary index update happen? This assumes primary index
     build.serializeNext<int32_t>(0);
 
     for (; i < cols; i++, j++) {
@@ -1143,7 +1396,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
 	  Oid type = tupdesc->attrs[i]->atttypid;
 	    switch (type) {
 	    case INT4OID:
-	      if (it->second->fields[i+2].type != skv::http::dto::FieldType::INT32T) {
+	      if (schema->fields[i+2].type != skv::http::dto::FieldType::INT32T) {
 		std::cout << "Types do not match" << std::endl;
 	      }
 	      int32_t k2val = (int32_t)(value & 0xffffffff);
@@ -1157,5 +1410,29 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
   skv::http::dto::SKVRecord record = build.build();
   std::cout << "my record: " << record << std::endl;
 
+  // TODO txn handling
+  auto beginFut = client.beginTxn(skv::http::dto::TxnOptions());
+  auto&& [status, txnHandle] = beginFut.get();
+  if (status.is2xxOK()) {
+    auto writeFut = txnHandle.write(record, false, skv::http::dto::ExistencePrecondition::NotExists);
+    auto&& [writeStatus] = writeFut.get();
+    if (!writeStatus.is2xxOK()) {
+      // TODO error types
+       report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+      return nullptr;     
+    }
+  } else {
+      report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+      return nullptr;
+  }
+
+  auto endFut = txnHandle.endTxn(true);
+  auto&&[endStatus] = endFut.get();
+  if (!endStatus.is2xxOK()) {
+    // TODO error types
+    report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+    return nullptr;
+  }
+ 
   return slot;
 }
