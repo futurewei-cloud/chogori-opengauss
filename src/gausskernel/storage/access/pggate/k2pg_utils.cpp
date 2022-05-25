@@ -375,7 +375,7 @@ K2PgTypeOidToStr(Oid type_id) {
 		case JSONOID: return "JSON";
 		case XMLOID: return "XML";
 		case PGNODETREEOID: return "PGNODETREE";
-		case PGNDISTINCTOID: return "PGNDISTINCT";
+		// case PGNDISTINCTOID: return "PGNDISTINCT";
 		case PGDEPENDENCIESOID: return "PGDEPENDENCIES";
 		case PGDDLCOMMANDOID: return "PGDDLCOMMAND";
 		case POINTOID: return "POINT";

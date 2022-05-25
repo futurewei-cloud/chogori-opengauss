@@ -611,9 +611,9 @@ static const K2PgTypeEntity K2SqlTypeEntityTable[] = {
 		(K2PgDatumToData)K2SqlDatumToBinary,
 		(K2PgDatumFromData)K2SqlBinaryToDatum },
 
-	{ PGNDISTINCTOID, K2SQL_DATA_TYPE_BINARY, false, -1,
-		(K2PgDatumToData)K2SqlDatumToBinary,
-		(K2PgDatumFromData)K2SqlBinaryToDatum },
+	// { PGNDISTINCTOID, K2SQL_DATA_TYPE_BINARY, false, -1,
+	// 	(K2PgDatumToData)K2SqlDatumToBinary,
+	// 	(K2PgDatumFromData)K2SqlBinaryToDatum },
 
 	{ PGDEPENDENCIESOID, K2SQL_DATA_TYPE_BINARY, false, -1,
 		(K2PgDatumToData)K2SqlDatumToBinary,
