@@ -16,16 +16,20 @@
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
 #include "nodes/relation.h"
+#include "utils/rel.h"
 #include "optimizer/cost.h"
 #include "utils/datum.h"
 #include "utils/rel.h"
+#include "utils/catcache.h"
 #include "utils/lsyscache.h"
+#include "utils/relcache.h"
 #include "utils/resowner.h"
-#include "utils/syscache.h"
 #include "utils/selfuncs.h"
 #include "utils/snapmgr.h"
+#include "utils/syscache.h"
 
 #include "k2pg_utils.h"
+#include "k2_expr.h"
 
 typedef struct CamScanPlanData
 {

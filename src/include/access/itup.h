@@ -18,6 +18,7 @@
 #include "access/tupmacs.h"
 #include "storage/buf/bufpage.h"
 #include "storage/item/itemptr.h"
+#include "utils/relcache.h"
 
 /*
  * Index tuple header structure

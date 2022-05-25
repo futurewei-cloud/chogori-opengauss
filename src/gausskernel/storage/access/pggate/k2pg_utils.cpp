@@ -5,7 +5,11 @@
 #include "utils/resowner.h"
 #include "utils/builtins.h"
 #include "utils/palloc.h"
+#include "utils/lsyscache.h"
+#include "utils/relcache.h"
 #include "catalog/pg_database.h"
+#include "commands/dbcommands.h"
+#include "tcop/utility.h"
 
 #include "access/k2/pg_gate_typedefs.h"
 #include "access/k2/k2_type.h"

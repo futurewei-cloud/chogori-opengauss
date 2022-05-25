@@ -24,11 +24,14 @@
 
 #include "postgres.h"
 
+#include "access/itup.h"
 #include "access/skey.h"
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "nodes/relation.h"
+#include "utils/rel.h"
 #include "utils/catcache.h"
+#include "utils/relcache.h"
 #include "utils/resowner.h"
 #include "utils/snapshot.h"
 

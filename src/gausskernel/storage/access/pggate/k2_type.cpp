@@ -17,6 +17,7 @@
 
 #include "access/k2/k2_type.h"
 #include "access/k2/pg_gate_api.h"
+#include "k2pg_utils.h"
 
 Datum K2SqlToDatum(const uint8 *data, int64 bytes, const K2PgTypeAttrs *type_attrs);
 void DatumToK2Sql(Datum datum, uint8 **data, int64 *bytes);
