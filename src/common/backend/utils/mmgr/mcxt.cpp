@@ -100,6 +100,14 @@ static void* MemoryAllocFromContext(MemoryContext context, Size size, const char
 void* allocTopCxt(size_t s);
 #endif
 
+/*
+ * You should not do memory allocations within a critical section, because
+ * an out-of-memory error will be escalated to a PANIC. To enforce that
+ * rule, the allocation functions Assert that.
+ */
+#define AssertNotInCriticalSection(context) \
+	Assert(CritSectionCount == 0 || (context)->allowInCritSection)
+
 /*****************************************************************************
  *	  EXPORTED ROUTINES														 *
  *****************************************************************************/
@@ -1145,6 +1153,37 @@ void* MemoryContextAllocZeroAlignedDebug(MemoryContext context, Size size, const
 
     return ret;
 }
+
+void *palloc(Size size)
+{
+	/* duplicates MemoryContextAlloc to avoid increased overhead */
+	void	   *ret;
+	MemoryContext context = GetCurrentMemoryContext();
+
+	AssertArg(MemoryContextIsValid(context));
+	AssertNotInCriticalSection(context);
+
+	if (!AllocSizeIsValid(size))
+		elog(ERROR, "invalid memory alloc request size %zu", size);
+
+	context->isReset = false;
+
+	ret = context->methods->alloc(context, size);
+	if (unlikely(ret == NULL))
+	{
+		MemoryContextStats(TopMemoryContext);
+		ereport(ERROR,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("out of memory"),
+				 errdetail("Failed on request of size %zu in memory context \"%s\".",
+						   size, context->name)));
+	}
+
+//	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
+
+	return ret;
+}
+
 /*
  * palloc_extended
  *    palloc with flags, it will return NULL while OOM happend.

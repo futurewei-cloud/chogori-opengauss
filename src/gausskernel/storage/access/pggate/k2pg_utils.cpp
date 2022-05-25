@@ -274,7 +274,7 @@ K2PgInitPostgresBackend(
 	const char *db_name,
 	const char *user_name)
 {
-	HandleK2PgStatus(K2PgInit(program_name, palloc, cstring_to_text_with_len));
+	HandleK2PgStatus(K2PgInit(program_name, (K2PgPAllocFn)palloc, (K2PgCStringToTextWithLenFn)cstring_to_text_with_len));
 
 	/*
 	 * Enable "K2PG mode" for PostgreSQL so that we will initiate a connection

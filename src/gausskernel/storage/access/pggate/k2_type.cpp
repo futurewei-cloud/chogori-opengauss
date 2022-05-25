@@ -1,6 +1,5 @@
 #include "postgres.h"
 
-//#include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "catalog/pg_type.h"
 #include "mb/pg_wchar.h"
@@ -20,10 +19,6 @@
 
 Datum K2SqlToDatum(const uint8 *data, int64 bytes, const K2PgTypeAttrs *type_attrs);
 void DatumToK2Sql(Datum datum, uint8 **data, int64 *bytes);
-
-//static const K2PgTypeEntity K2SqlFixedLenByValTypeEntity;
-//static const K2PgTypeEntity K2SqlNullTermByRefTypeEntity;
-//static const K2PgTypeEntity K2SqlVarLenByRefTypeEntity;
 
 /* Special type entity used for fixed-length, pass-by-value user-defined types.
  * TODO(jason): When user-defined types as primary keys are supported, change the below `false` to
@@ -209,7 +204,7 @@ Datum K2SqlBinaryToDatum(const void *data, int64 bytes, const K2PgTypeAttrs *typ
 		ereport(ERROR, (errcode(ERRCODE_STRING_DATA_RIGHT_TRUNCATION),
 						errmsg("Invalid data size")));
 	}
-	return PointerGetDatum(cstring_to_text_with_len(data, bytes));
+	return PointerGetDatum(cstring_to_text_with_len((const char*)data, bytes));
 }
 
 /*
@@ -519,7 +514,7 @@ Datum K2SqlIntervalToDatum(const void *data, int64 bytes, const K2PgTypeAttrs *t
 		ereport(ERROR, (errcode(ERRCODE_DATA_CORRUPTED),
 						errmsg("Unexpected size for Interval (%ld)", bytes)));
 	}
-	Interval* result = palloc(sz);
+	Interval* result = (Interval*)palloc(sz);
 	memcpy(result, data, sz);
 	return IntervalPGetDatum(result);
 }
@@ -546,7 +541,7 @@ void DatumToK2Sql(Datum datum, uint8 **data, int64 *bytes) {
 }
 
 Datum K2SqlToDatum(const uint8 *data, int64 bytes, const K2PgTypeAttrs *type_attrs) {
-	uint8 *result = palloc(bytes);
+	uint8 *result = (uint8 *)palloc(bytes);
 	memcpy(result, data, bytes);
 	return PointerGetDatum(result);
 }

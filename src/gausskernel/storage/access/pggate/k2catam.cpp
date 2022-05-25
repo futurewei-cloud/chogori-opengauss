@@ -25,6 +25,8 @@
 #include "utils/selfuncs.h"
 #include "utils/snapmgr.h"
 
+#include "k2pg_utils.h"
+
 typedef struct CamScanPlanData
 {
 	/* The relation where to read data from */

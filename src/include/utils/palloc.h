@@ -123,10 +123,12 @@ extern void* MemoryContextAllocZeroAlignedDebug(MemoryContext context, Size size
 extern char* MemoryContextStrdupDebug(MemoryContext context, const char* string, const char* file, int line);
 extern void* MemoryContextMemalignAllocDebug(MemoryContext context, Size align, Size size, const char* file, int line);
 extern void MemoryContextMemalignFree(MemoryContext context, void* pointer);
+
+extern void *palloc(Size size);
 #ifndef FRONTEND
 extern void* palloc_extended(Size size, int flags);
 extern void* palloc0_noexcept(Size size);
-#define palloc(sz) MemoryContextAlloc(CurrentMemoryContext, (sz))
+//#define palloc(sz) MemoryContextAlloc(CurrentMemoryContext, (sz))
 #endif
 #define palloc0(sz) MemoryContextAllocZero(CurrentMemoryContext, (sz))
 
