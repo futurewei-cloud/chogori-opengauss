@@ -4,6 +4,7 @@
 #include "catalog/pg_type.h"
 #include "mb/pg_wchar.h"
 #include "parser/parse_type.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/cash.h"
 #include "utils/date.h"
