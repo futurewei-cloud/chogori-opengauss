@@ -19,10 +19,36 @@
 #include "access/k2/pg_gate_api.h"
 
 Datum K2SqlToDatum(const uint8 *data, int64 bytes, const K2PgTypeAttrs *type_attrs);
-static const K2PgTypeEntity K2SqlFixedLenByValTypeEntity;
-static const K2PgTypeEntity K2SqlNullTermByRefTypeEntity;
-static const K2PgTypeEntity K2SqlVarLenByRefTypeEntity;
 void DatumToK2Sql(Datum datum, uint8 **data, int64 *bytes);
+
+//static const K2PgTypeEntity K2SqlFixedLenByValTypeEntity;
+//static const K2PgTypeEntity K2SqlNullTermByRefTypeEntity;
+//static const K2PgTypeEntity K2SqlVarLenByRefTypeEntity;
+
+/* Special type entity used for fixed-length, pass-by-value user-defined types.
+ * TODO(jason): When user-defined types as primary keys are supported, change the below `false` to
+ * `true`.
+ */
+static const K2PgTypeEntity K2SqlFixedLenByValTypeEntity =
+	{ InvalidOid, K2SQL_DATA_TYPE_INT64, false, sizeof(int64),
+		(K2PgDatumToData)K2SqlDatumToInt64,
+		(K2PgDatumFromData)K2SqlInt64ToDatum };
+/* Special type entity used for null-terminated, pass-by-reference user-defined types.
+ * TODO(jason): When user-defined types as primary keys are supported, change the below `false` to
+ * `true`.
+ */
+static const K2PgTypeEntity K2SqlNullTermByRefTypeEntity =
+	{ InvalidOid, K2SQL_DATA_TYPE_BINARY, false, -2,
+		(K2PgDatumToData)K2SqlDatumToCStr,
+		(K2PgDatumFromData)K2SqlCStrToDatum };
+/* Special type entity used for variable-length, pass-by-reference user-defined types.
+ * TODO(jason): When user-defined types as primary keys are supported, change the below `false` to
+ * `true`.
+ */
+static const K2PgTypeEntity K2SqlVarLenByRefTypeEntity =
+	{ InvalidOid, K2SQL_DATA_TYPE_BINARY, false, -1,
+		(K2PgDatumToData)K2SqlDatumToBinary,
+		(K2PgDatumFromData)K2SqlBinaryToDatum };
 
 /***************************************************************************************************
  * Find K2PG storage type for each PostgreSQL datatype.
@@ -1185,31 +1211,6 @@ static const K2PgTypeEntity K2SqlTypeEntityTable[] = {
 		(K2PgDatumToData)DatumToK2Sql,
 		(K2PgDatumFromData)K2SqlToDatum },
 };
-
-/* Special type entity used for fixed-length, pass-by-value user-defined types.
- * TODO(jason): When user-defined types as primary keys are supported, change the below `false` to
- * `true`.
- */
-static const K2PgTypeEntity K2SqlFixedLenByValTypeEntity =
-	{ InvalidOid, K2SQL_DATA_TYPE_INT64, false, sizeof(int64),
-		(K2PgDatumToData)K2SqlDatumToInt64,
-		(K2PgDatumFromData)K2SqlInt64ToDatum };
-/* Special type entity used for null-terminated, pass-by-reference user-defined types.
- * TODO(jason): When user-defined types as primary keys are supported, change the below `false` to
- * `true`.
- */
-static const K2PgTypeEntity K2SqlNullTermByRefTypeEntity =
-	{ InvalidOid, K2SQL_DATA_TYPE_BINARY, false, -2,
-		(K2PgDatumToData)K2SqlDatumToCStr,
-		(K2PgDatumFromData)K2SqlCStrToDatum };
-/* Special type entity used for variable-length, pass-by-reference user-defined types.
- * TODO(jason): When user-defined types as primary keys are supported, change the below `false` to
- * `true`.
- */
-static const K2PgTypeEntity K2SqlVarLenByRefTypeEntity =
-	{ InvalidOid, K2SQL_DATA_TYPE_BINARY, false, -1,
-		(K2PgDatumToData)K2SqlDatumToBinary,
-		(K2PgDatumFromData)K2SqlBinaryToDatum };
 
 void K2PgGetTypeTable(const K2PgTypeEntity **type_table, int *count) {
 	*type_table = K2SqlTypeEntityTable;
