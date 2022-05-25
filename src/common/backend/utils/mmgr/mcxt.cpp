@@ -1168,7 +1168,7 @@ void *palloc(Size size)
 
 	context->isReset = false;
 
-	ret = context->methods->alloc(context, size);
+	ret = context->methods->alloc(context, 0, size, __FILE__, __LINE__);
 	if (unlikely(ret == NULL))
 	{
 		MemoryContextStats(TopMemoryContext);
