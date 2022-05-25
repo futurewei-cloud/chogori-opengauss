@@ -375,9 +375,9 @@ K2PgTypeOidToStr(Oid type_id) {
 		case JSONOID: return "JSON";
 		case XMLOID: return "XML";
 		case PGNODETREEOID: return "PGNODETREE";
-		// case PGNDISTINCTOID: return "PGNDISTINCT";
-		case PGDEPENDENCIESOID: return "PGDEPENDENCIES";
-		case PGDDLCOMMANDOID: return "PGDDLCOMMAND";
+//		case PGNDISTINCTOID: return "PGNDISTINCT";
+//		case PGDEPENDENCIESOID: return "PGDEPENDENCIES";
+//		case PGDDLCOMMANDOID: return "PGDDLCOMMAND";
 		case POINTOID: return "POINT";
 		case LSEGOID: return "LSEG";
 		case PATHOID: return "PATH";
@@ -395,11 +395,11 @@ K2PgTypeOidToStr(Oid type_id) {
 		case MACADDROID: return "MACADDR";
 		case INETOID: return "INET";
 		case CIDROID: return "CIDR";
-		case MACADDR8OID: return "MACADDR8";
+//		case MACADDR8OID: return "MACADDR8";
 		case INT2ARRAYOID: return "INT2ARRAY";
 		case INT4ARRAYOID: return "INT4ARRAY";
 		case TEXTARRAYOID: return "TEXTARRAY";
-		case OIDARRAYOID: return "OIDARRAY";
+//		case OIDARRAYOID: return "OIDARRAY";
 		case FLOAT4ARRAYOID: return "FLOAT4ARRAY";
 		case ACLITEMOID: return "ACLITEM";
 		case CSTRINGARRAYOID: return "CSTRINGARRAY";
@@ -420,11 +420,11 @@ K2PgTypeOidToStr(Oid type_id) {
 		case REGOPERATOROID: return "REGOPERATOR";
 		case REGCLASSOID: return "REGCLASS";
 		case REGTYPEOID: return "REGTYPE";
-		case REGROLEOID: return "REGROLE";
-		case REGNAMESPACEOID: return "REGNAMESPACE";
+//		case REGROLEOID: return "REGROLE";
+//		case REGNAMESPACEOID: return "REGNAMESPACE";
 		case REGTYPEARRAYOID: return "REGTYPEARRAY";
 		case UUIDOID: return "UUID";
-		case LSNOID: return "LSN";
+//		case LSNOID: return "LSN";
 		case TSVECTOROID: return "TSVECTOR";
 		case GTSVECTOROID: return "GTSVECTOR";
 		case TSQUERYOID: return "TSQUERY";
@@ -439,7 +439,7 @@ K2PgTypeOidToStr(Oid type_id) {
 		case ANYARRAYOID: return "ANYARRAY";
 		case VOIDOID: return "VOID";
 		case TRIGGEROID: return "TRIGGER";
-		case EVTTRIGGEROID: return "EVTTRIGGER";
+//		case EVTTRIGGEROID: return "EVTTRIGGER";
 		case LANGUAGE_HANDLEROID: return "LANGUAGE_HANDLER";
 		case INTERNALOID: return "INTERNAL";
 		case OPAQUEOID: return "OPAQUE";
@@ -447,8 +447,8 @@ K2PgTypeOidToStr(Oid type_id) {
 		case ANYNONARRAYOID: return "ANYNONARRAY";
 		case ANYENUMOID: return "ANYENUM";
 		case FDW_HANDLEROID: return "FDW_HANDLER";
-		case INDEX_AM_HANDLEROID: return "INDEX_AM_HANDLER";
-		case TSM_HANDLEROID: return "TSM_HANDLER";
+//		case INDEX_AM_HANDLEROID: return "INDEX_AM_HANDLER";
+//		case TSM_HANDLEROID: return "TSM_HANDLER";
 		case ANYRANGEOID: return "ANYRANGE";
 		default: return "user_defined_type";
 	}
@@ -534,7 +534,7 @@ K2PgErrorLevelToString(int elevel) {
 		case DEBUG2: return "DEBUG2";
 		case DEBUG1: return "DEBUG1";
 		case LOG: return "LOG";
-		case LOG_SERVER_ONLY: return "LOG_SERVER_ONLY";
+		case COMMERROR: return "COMMERROR";
 		case INFO: return "INFO";
 		case WARNING: return "WARNING";
 		case ERROR: return "ERROR";
