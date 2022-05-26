@@ -1008,6 +1008,158 @@ static void parse_param(Param *node, FDWExprRefValues *ref_values) {
 	ref_values->const_values = lappend(ref_values->const_values, val);
 }
 
+// search for the column in the equal conditions, the performance is fine for small number of equal conditions
+static List *findOprCondition(foreign_expr_cxt context, int attr_num) {
+	List * result = NIL;
+	ListCell *lc = NULL;
+	foreach (lc, context.opr_conds) {
+		FDWOprCond *first = (FDWOprCond *) lfirst(lc);
+		if (first->ref->attr_num == attr_num) {
+			result = lappend(result, first);
+		}
+	}
+
+	return result;
+}
+
+static constexpr uint32_t K2_FIELD_OFFSET = 2;
+skv::http::dto::FieldType PGTypidToK2Type(Oid) {
+  return skv::http::dto::FieldType::INT32T;
+}
+
+skv::http::dto::expression::Expression build_expr(K2FdwScanPlan scan_plan, FDWOprCond *opr_cond) {
+  using namespace skv::http::dto;
+  expression::Expression opr_expr{};
+
+    // Check for types we support for filter pushdown
+    // We pushdown: basic scalar types (int, float, bool),
+    // text and string types, and all PG internal types that map to K2 scalar types
+    const FieldType ref_type = PGTypidToK2Type(opr_cond->ref->attr_typid);
+    switch (opr_cond->ref->attr_typid) {
+        case CHAROID:
+        case NAMEOID:
+        case TEXTOID:
+        case VARCHAROID:
+        case CSTRINGOID:
+            break;
+        default:
+          if (ref_type == FieldType::STRING) {
+                return opr_expr;
+            }
+            break;
+    }
+
+    // FDWOprCond separate column refs and constant literals without keeping the
+    // structure of the expression, so we need to switch the direction of the comparison if the
+    // column reference was not first in the original expression.
+    // TODO LTEQ GTEQ
+	switch(get_oprrest(opr_cond->opno)) {
+		case F_EQSEL: //  equal =
+          opr_expr.op = expression::Operation::EQ;
+			break;
+		case F_SCALARLTSEL: // Less than <
+          opr_expr.op = opr_cond->column_ref_first ? expression::Operation::LTE : expression::Operation::GTE;
+			break;
+            //case F_SCALARLESEL: // Less Equal <=
+            //opr_expr.op = opr_cond->column_ref_first ? expression::Operation::LTE : expression::Operation::GTE;
+			//break;
+		case F_SCALARGTSEL: // Greater than >
+          opr_expr.op = opr_cond->column_ref_first ? expression::Operation::GTE : expression::Operation::LTE;
+			break;
+            //case F_SCALARGESEL: // Greater Euqal >=
+            //opr_expr.op = opr_cond->column_ref_first ? expression::Operation::GTE : expression::Operation::LTE;
+			//break;
+		default:
+			elog(DEBUG4, "FDW: unsupported OpExpr type: %d", opr_cond->opno);
+			return opr_expr;
+	}
+
+    expression::Value col_ref = expression::makeValueReference(scan_plan->schema->fields[K2_FIELD_OFFSET + opr_cond->ref->attr_num].name);
+    // TODO k2 types, null?
+ 	int32_t k2val = (int32_t)(opr_cond->val->value & 0xffffffff);
+    expression::Value constant = expression::makeValueLiteral<int32_t>(std::move(k2val));
+    opr_expr.valueChildren.push_back(std::move(col_ref));
+    opr_expr.valueChildren.push_back(std::move(constant));
+    
+	return opr_expr;
+}
+
+static void BindScanKeys(Relation relation,
+							K2FdwExecState *fdw_state,
+							K2FdwScanPlan scan_plan) {
+	if (list_length(fdw_state->remote_exprs) == 0) {
+		elog(DEBUG4, "FDW: No remote exprs to bind keys for relation: %d", relation->rd_id);
+		return;
+	}
+
+	foreign_expr_cxt context;
+	context.opr_conds = NIL;
+
+	parse_conditions(fdw_state->remote_exprs, scan_plan->paramLI, &context);
+	elog(DEBUG4, "FDW: found %d opr_conds from %d remote exprs for relation: %d", list_length(context.opr_conds), list_length(fdw_state->remote_exprs), relation->rd_id);
+	if (list_length(context.opr_conds) == 0) {
+		elog(DEBUG4, "FDW: No Opr conditions are found to bind keys for relation: %d", relation->rd_id);
+		return;
+	}
+
+    using namespace skv::http::dto::expression;
+
+    int nKeys = scan_plan->schema->partitionKeyFields.size() + scan_plan->schema->rangeKeyFields.size() - K2_FIELD_OFFSET;
+	// Top level should be an "AND" node
+    Expression range_conds{};
+    range_conds.op = Operation::AND;
+
+	/* Bind the scan keys */
+	for (int i = 0; i < nKeys; i++)
+	{
+        // check if the key is in the Opr conditions
+        List *opr_conds = findOprCondition(context, i);
+        if (opr_conds != NIL) {
+            elog(DEBUG4, "FDW: binding key with attr_num %d for relation: %d", i, relation->rd_id);
+            ListCell *lc = NULL;
+            foreach (lc, opr_conds) {
+                FDWOprCond *opr_cond = (FDWOprCond *) lfirst(lc);
+                Expression arg = build_expr(scan_plan, opr_cond);
+                if (arg.op != Operation::UNKNOWN) {
+                    // use primary keys as range condition
+                  range_conds.expressionChildren.push_back(std::move(arg));
+                }
+            }
+        }
+	}
+
+	//HandleK2PgStatusWithOwner(PgGate_DmlBindRangeConds(fdw_state->handle, range_conds),
+	//													fdw_state->handle,
+	//													fdw_state->stmt_owner);
+
+	Expression where_conds{};
+	// Top level should be an "AND" node
+    where_conds.op = Operation::AND;
+    int nNonKeys = scan_plan->schema->fields.size() - nKeys - K2_FIELD_OFFSET;
+	// bind non-keys
+	for (int i = nKeys; i < nNonKeys + nNonKeys; i++)
+	{
+		// check if the column is in the Opr conditions
+		List *opr_conds = findOprCondition(context, i);
+		if (opr_conds != NIL) {
+			elog(DEBUG4, "FDW: binding key with attr_num %d for relation: %d", i, relation->rd_id);
+			ListCell *lc = NULL;
+			foreach (lc, opr_conds) {
+				FDWOprCond *opr_cond = (FDWOprCond *) lfirst(lc);
+				Expression arg = build_expr(scan_plan, opr_cond);
+                if (arg.op != Operation::UNKNOWN) {
+                    // use primary keys as range condition
+                  where_conds.expressionChildren.push_back(std::move(arg));
+                }
+			}
+		}
+	}
+
+	//HandleK2PgStatusWithOwner(PgGate_DmlBindWhereConds(fdw_state->handle, where_conds),
+	//													fdw_state->handle,
+	//													fdw_state->stmt_owner);
+}
+
 /*
  * k2GetForeignRelSize
  *      Obtain relation size estimates for a foreign table
