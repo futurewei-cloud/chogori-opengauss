@@ -703,12 +703,12 @@ static bool IsTransactionalDdlStatement(NodeTag node_tag) {
 		// cat $( find src/postgres -name "nodes.h" ) | grep "T_Create" | sort | uniq |
 		//   sed 's/,//g' | while read s; do echo -e "\t\tcase $s:"; done
 		// All T_Create... tags from nodes.h:
-		case T_CreateAmStmt:
+//		case T_CreateAmStmt:
 		case T_CreateCastStmt:
 		case T_CreateConversionStmt:
 		case T_CreateDomainStmt:
 		case T_CreateEnumStmt:
-		case T_CreateEventTrigStmt:
+//		case T_CreateEventTrigStmt:
 		case T_CreateExtensionStmt:
 		case T_CreateFdwStmt:
 		case T_CreateForeignServerStmt:
@@ -718,19 +718,19 @@ static bool IsTransactionalDdlStatement(NodeTag node_tag) {
 		case T_CreateOpClassStmt:
 		case T_CreateOpFamilyStmt:
 		case T_CreatePLangStmt:
-		case T_CreatePolicyStmt:
-		case T_CreatePublicationStmt:
+//		case T_CreatePolicyStmt:
+//		case T_CreatePublicationStmt:
 		case T_CreateRangeStmt:
 		case T_CreateReplicationSlotCmd:
 		case T_CreateRoleStmt:
 		case T_CreateSchemaStmt:
 		case T_CreateSeqStmt:
-		case T_CreateStatsStmt:
+//		case T_CreateStatsStmt:
 		case T_CreateStmt:
-		case T_CreateSubscriptionStmt:
+//		case T_CreateSubscriptionStmt:
 		case T_CreateTableAsStmt:
 		case T_CreateTableSpaceStmt:
-		case T_CreateTransformStmt:
+//		case T_CreateTransformStmt:
 		case T_CreateTrigStmt:
 		case T_CreateUserMappingStmt:
 		case T_CreatedbStmt:
@@ -739,39 +739,39 @@ static bool IsTransactionalDdlStatement(NodeTag node_tag) {
 		case T_DropReplicationSlotCmd:
 		case T_DropRoleStmt:
 		case T_DropStmt:
-		case T_DropSubscriptionStmt:
+//		case T_DropSubscriptionStmt:
 		case T_DropTableSpaceStmt:
 		case T_DropUserMappingStmt:
 		case T_DropdbStmt:
 		// All T_Alter... tags from nodes.h:
-		case T_AlterCollationStmt:
+//		case T_AlterCollationStmt:
 		case T_AlterDatabaseSetStmt:
 		case T_AlterDatabaseStmt:
 		case T_AlterDefaultPrivilegesStmt:
 		case T_AlterDomainStmt:
 		case T_AlterEnumStmt:
-		case T_AlterEventTrigStmt:
+//		case T_AlterEventTrigStmt:
 		case T_AlterExtensionContentsStmt:
 		case T_AlterExtensionStmt:
 		case T_AlterFdwStmt:
 		case T_AlterForeignServerStmt:
 		case T_AlterFunctionStmt:
-		case T_AlterObjectDependsStmt:
+//		case T_AlterObjectDependsStmt:
 		case T_AlterObjectSchemaStmt:
 		case T_AlterOpFamilyStmt:
-		case T_AlterOperatorStmt:
+//		case T_AlterOperatorStmt:
 		case T_AlterOwnerStmt:
-		case T_AlterPolicyStmt:
-		case T_AlterPublicationStmt:
+//		case T_AlterPolicyStmt:
+//		case T_AlterPublicationStmt:
 		case T_AlterRoleSetStmt:
 		case T_AlterRoleStmt:
 		case T_AlterSeqStmt:
-		case T_AlterSubscriptionStmt:
+//		case T_AlterSubscriptionStmt:
 		case T_AlterSystemStmt:
 		case T_AlterTSConfigurationStmt:
 		case T_AlterTSDictionaryStmt:
 		case T_AlterTableCmd:
-		case T_AlterTableMoveAllStmt:
+//		case T_AlterTableMoveAllStmt:
 		case T_AlterTableSpaceOptionsStmt:
 		case T_AlterTableStmt:
 		case T_AlterUserMappingStmt:
