@@ -1,6 +1,6 @@
 #include "k2_expr.h"
 #include "access/k2/k2_type.h"
-#include "k2pg_utils.h"
+#include "access/k2/k2pg_aux.h"
 
 K2PgExpr K2PgNewColumnRef(K2PgStatement k2pg_stmt, int16_t attr_num, int attr_typid,
 						  const K2PgTypeAttrs *type_attrs) {

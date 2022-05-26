@@ -28,7 +28,7 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
-#include "k2pg_utils.h"
+#include "access/k2/k2pg_aux.h"
 #include "k2_expr.h"
 
 typedef struct CamScanPlanData

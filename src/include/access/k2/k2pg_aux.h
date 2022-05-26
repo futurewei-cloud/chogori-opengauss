@@ -1,7 +1,7 @@
 /*--------------------------------------------------------------------------------------------------
  *
- * k2pg_utils.h
- *	  k2 pg utility methods
+ * k2pg_aux.h
+ *	  k2 pg auxiliary methods
  *
  * Copyright (c) 2022 Futurewei Cloud
  *
@@ -19,8 +19,8 @@
  *--------------------------------------------------------------------------------------------------
  */
 
-#ifndef K2PG_UTILS_H
-#define K2PG_UTILS_H
+#ifndef K2PG_AUX_H
+#define K2PG_AUX_H
 
 #include "postgres.h"
 #include "utils/relcache.h"
@@ -333,7 +333,6 @@ extern bool K2PgIsInitDbModeEnvVarSet();
  */
 extern void K2PgSetInitDbModeEnvVar();
 
-
 /**
  * Checks if environment variables indicating that K2PG's unsupported features must
  * be restricted are set
@@ -350,5 +349,4 @@ extern int K2PgUnsupportedFeatureSignalLevel();
  */
 extern bool K2PgIsNonTxnCopyEnabled();
 
-
-#endif /* K2PG_UTILS_H */
+#endif /* K2PG_AUX_H */
