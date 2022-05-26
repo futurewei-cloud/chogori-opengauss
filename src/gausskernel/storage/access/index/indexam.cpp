@@ -220,6 +220,7 @@ bool index_insert(Relation index_relation, Datum *values, const bool *isnull, It
     FmgrInfo *procedure = NULL;
 
     RELATION_CHECKS;
+    // TODO: add logic to handle t_k2pgctid in HeapTuple
     GET_REL_PROCEDURE(aminsert);
 
     if (!(index_relation->rd_am->ampredlocks))
@@ -255,7 +256,7 @@ IndexScanDesc index_beginscan(
     if (scan->xs_want_ext_oid) {
         scan->xs_gpi_scan->parentRelation = heap_relation;
     }
-	
+
 	/* prepare to fetch index matches from table */
     scan->xs_heapfetch = tableam_scan_index_fetch_begin(heap_relation);
 
@@ -490,7 +491,7 @@ ItemPointer index_getnext_tid(IndexScanDesc scan, ScanDirection direction)
     return &scan->xs_ctup.t_self;
 }
 
-bool 
+bool
 IndexFetchSlot(IndexScanDesc scan, TupleTableSlot *slot, bool isUHeap)
 {
     if (isUHeap) {
@@ -521,6 +522,8 @@ IndexFetchSlot(IndexScanDesc scan, TupleTableSlot *slot, bool isUHeap)
  */
 Tuple IndexFetchTuple(IndexScanDesc scan)
 {
+    // TODO: add logic to handle k2 secondary index here
+
     bool all_dead = false;
     Tuple fetchedTuple = NULL;
 
@@ -557,8 +560,8 @@ UHeapTuple UHeapamIndexFetchTuple(IndexScanDesc scan, bool *all_dead)
 
     UHeapTuple uheapTuple = UHeapSearchBuffer(tid, rel, scan->xs_cbuf, scan->xs_snapshot, all_dead);
 
-    /* Save the XID of the last modified tuple, which is used to determine whether the tuple of the USTORE table 
-     * was modified by another transaction. For performance reasons, we reuse t_xid_base or t_multi_base 
+    /* Save the XID of the last modified tuple, which is used to determine whether the tuple of the USTORE table
+     * was modified by another transaction. For performance reasons, we reuse t_xid_base or t_multi_base
      * to record the last modified XID of a tuple.
      */
     if (scan->isUpsert && uheapTuple) {
@@ -588,7 +591,7 @@ TupleTableSlot *slot, bool *callAgain, bool *allDead)
      * IndexScanDesc contains a memory that can hold up to MaxHeapTupleSize,
      * see RelationGetIndexScan() where the memory for IndexScanDesc is allocated.
      * That memory is used to uncompress Heap tuples but currently is not used in Ustore.
-     * So in Ustore, we will start using that memory to hold the datapage tuple instead. 
+     * So in Ustore, we will start using that memory to hold the datapage tuple instead.
      * This allows us to reduce memory allocation in UHeapSearchBuffer() -> UHeapGetTuple().
      */
     Size usableSize PG_USED_FOR_ASSERTS_ONLY = (Size) (SizeofHeapTupleHeader + MaxHeapTupleSize);
@@ -634,7 +637,7 @@ bool IndexFetchUHeap(IndexScanDesc scan, TupleTableSlot *slot)
 {
     ItemPointer tid = &scan->xs_ctup.t_self;
     bool allDead = false;
-    bool found = UHeapamIndexFetchTupleInSlot(scan, tid, scan->xs_snapshot, 
+    bool found = UHeapamIndexFetchTupleInSlot(scan, tid, scan->xs_snapshot,
                                               slot, &scan->xs_continue_hot, &allDead);
 
     if (found) {
@@ -692,7 +695,7 @@ Tuple index_getnext(IndexScanDesc scan, ScanDirection direction)
                  */
                 if (!GPIGetNextPartRelation(scan->xs_gpi_scan, CurrentMemoryContext, AccessShareLock)) {
                     continue;
-                } 
+                }
                 scan->heapRelation = scan->xs_gpi_scan->fakePartRelation;
             }
         } else {

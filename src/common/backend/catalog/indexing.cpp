@@ -60,6 +60,8 @@ void CatalogCloseIndexes(CatalogIndexState indstate)
     indstate = NULL;
 }
 
+// TODO: should we introduce CatalogIndexDelete() and use it in CatalogUpdateIndexes()?
+
 /*
  * CatalogIndexInsert - insert index entries for one catalog tuple
  *

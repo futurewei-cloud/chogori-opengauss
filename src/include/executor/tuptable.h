@@ -140,6 +140,9 @@ typedef struct TupleTableSlot {
     long tts_off;                  /* saved state for slot_deform_tuple */
     long tts_meta_off;             /* saved state for slot_deform_cmpr_tuple */
     TableAmType tts_tupslotTableAm;    /* slots's tuple table type */
+    
+	/* K2PG support */
+	Datum tts_k2pgctid; /* selected k2pgctid value */
 } TupleTableSlot;
 
 #define TTS_HAS_PHYSICAL_TUPLE(slot) ((slot)->tts_tuple != NULL && (slot)->tts_tuple != &((slot)->tts_minhdr))

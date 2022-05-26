@@ -265,6 +265,7 @@ static void initscan(HeapScanDesc scan, ScanKey key, bool is_rescan)
 
     scan->rs_base.rs_inited = false;
     scan->rs_ctup.t_data = NULL;
+    scan->rs_ctup.t_k2pgctid = (Datum) 0;
     ItemPointerSetInvalid(&scan->rs_ctup.t_self);
     scan->rs_base.rs_cbuf = InvalidBuffer;
     scan->rs_base.rs_cblock = InvalidBlockNumber;
@@ -1631,7 +1632,7 @@ TableScanDesc heap_beginscan(Relation relation, Snapshot snapshot, int nkeys, Sc
     uint32 flags = 0;
     if(!rangeScanInRedis.isRangeScanInRedis) {
         flags = SO_ALLOW_STRAT | SO_ALLOW_SYNC;
-    } 
+    }
     if (RelationIsPartitioned(relation)) {
         /*
          * If the table is a partition table, the current scan must be used by
@@ -2849,7 +2850,7 @@ Oid heap_insert(Relation relation, HeapTuple tup, CommandId cid, int options, Bu
         /*
          * If this is the single and first tuple on page, we can reinit the
          * page instead of restoring the whole thing.  Set flag, and hide
-         * buffer references from XLogInsert. Moreover, if page is already 
+         * buffer references from XLogInsert. Moreover, if page is already
          * compressed, should not init page, or lead to inconsistency.
          */
         if (ItemPointerGetOffsetNumber(&(heaptup->t_self)) == FirstOffsetNumber &&
@@ -3893,7 +3894,7 @@ int heap_multi_insert(Relation relation, Relation parent, HeapTuple* tuples, int
 
             /*
              * If the page was previously empty, we can reinit the page
-             * instead of restoring the whole thing. Moreover, if page is already 
+             * instead of restoring the whole thing. Moreover, if page is already
              * compressed, should not init page, or lead to inconsistency.
              */
             init = (ItemPointerGetOffsetNumber(&(heap_tuples[ndone]->t_self)) == FirstOffsetNumber &&
@@ -4317,7 +4318,7 @@ l1:
     }
 
     if (result != TM_Ok) {
-        Assert(result == TM_SelfModified || result == TM_Updated || 
+        Assert(result == TM_SelfModified || result == TM_Updated ||
             result == TM_Deleted || result == TM_BeingModified);
         Assert(!(tp.t_data->t_infomask & HEAP_XMAX_INVALID));
         Assert(result != TM_Updated ||
@@ -4466,7 +4467,7 @@ l1:
      * because we need to look at the contents of the tuple, but it's OK to
      * release the content lock on the buffer first.
      */
-    if (relation->rd_rel->relkind != RELKIND_RELATION && 
+    if (relation->rd_rel->relkind != RELKIND_RELATION &&
             relation->rd_rel->relkind != RELKIND_MATVIEW) {
         /* toast table entries should never be recursively toasted */
         Assert(!HeapTupleHasExternal(&tp));
@@ -4625,7 +4626,7 @@ TM_Result heap_update(Relation relation, Relation parentRelation, ItemPointer ot
             (errcode(ERRCODE_INVALID_TRANSACTION_STATE), errmsg("cannot update tuples during a parallel operation")));
     }
 
-    /*     
+    /*
      * Fetch the list of attributes to be checked for HOT update.  This is
      * wasted effort if we fail to update or have to put the new tuple on a
      * different page.	But we must compute the list before obtaining buffer
@@ -4809,7 +4810,7 @@ l2:
     }
 
     if (result != TM_Ok) {
-        Assert(result == TM_SelfModified || result == TM_Updated 
+        Assert(result == TM_SelfModified || result == TM_Updated
             || result == TM_Deleted || result == TM_BeingModified);
         Assert(!(oldtup.t_data->t_infomask & HEAP_XMAX_INVALID));
         Assert(result != TM_Updated ||
@@ -5192,7 +5193,7 @@ l2:
 
     return TM_Ok;
 }
-    
+
 static XLogRecPtr log_heap_new_cid_insert(xl_heap_new_cid *xlrec, int bucketid)
 {
     XLogRecPtr recptr;
@@ -5630,7 +5631,7 @@ void simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup)
  * starve out waiting exclusive-lockers.  However, if there is not any active
  * conflict for a tuple, we don't incur any extra overhead.
  */
-TM_Result heap_lock_tuple(Relation relation, HeapTuple tuple, Buffer* buffer, 
+TM_Result heap_lock_tuple(Relation relation, HeapTuple tuple, Buffer* buffer,
     CommandId cid, LockTupleMode mode, bool nowait, TM_FailureData *tmfd, bool allow_lock_self)
 {
     TM_Result result;
@@ -5680,7 +5681,7 @@ TM_Result heap_lock_tuple(Relation relation, HeapTuple tuple, Buffer* buffer,
     Assert(ItemIdIsNormal(lp));
     if (unlikely(!ItemIdIsNormal(lp))) {
         UnlockReleaseBuffer(*buffer);
-        ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE), 
+        ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
             errmsg("attempted to lock abnormal tuple ctid(%u,%d), rel:%u/%u/%u/%d",
                 ItemPointerGetBlockNumber(tid), tid->ip_posid, relation->rd_node.spcNode, relation->rd_node.dbNode,
                 relation->rd_node.relNode, relation->rd_node.bucketNode)));
@@ -5690,6 +5691,12 @@ TM_Result heap_lock_tuple(Relation relation, HeapTuple tuple, Buffer* buffer,
     tuple->t_len = ItemIdGetLength(lp);
     tuple->t_tableOid = RelationGetRelid(relation);
     tuple->t_bucketId = RelationGetBktid(relation);
+    /*
+	 * This will only be used for non-K2PG tuples (e.g. Temp tables) so we just
+	 * need to set the k2pgctid to 0 (NULL) here.
+	 */
+	tuple->t_k2pgctid = (Datum) 0;
+
 #ifdef PGXC
     tuple->t_xc_node_id = u_sess->pgxc_cxt.PGXCNodeIdentifier;
 #endif
@@ -6888,14 +6895,14 @@ static HeapTuple ExtractReplicaIdentity(Relation relation, HeapTuple tp, bool ke
  * Note: the NEWPAGE log record is used for both heaps and indexes, so do
  * not do anything that assumes we are touching a heap.
  */
-XLogRecPtr log_newpage(RelFileNode* rnode, ForkNumber forkNum, BlockNumber blkno, Page page, bool page_std, 
+XLogRecPtr log_newpage(RelFileNode* rnode, ForkNumber forkNum, BlockNumber blkno, Page page, bool page_std,
                        TdeInfo* tdeinfo)
 {
     int flags;
     XLogRecPtr recptr;
 
     if (IsSegmentFileNode(*rnode)) {
-        /* 
+        /*
          * Make sure extents in the segment are created before this xlog, otherwise Standby does not know where to
          * read the new page when replaying this xlog.
          */
@@ -7218,7 +7225,7 @@ static void heap_xlog_visible(XLogReaderState* record)
      * the visibility map bit does so before checking the page LSN, so any
      * bits that need to be cleared will still be cleared.
      */
-    if (XLogReadBufferForRedoExtended(record, HEAP_VISIBLE_VM_BLOCK_NUM, RBM_ZERO_ON_ERROR, false, &vmbuffer) == 
+    if (XLogReadBufferForRedoExtended(record, HEAP_VISIBLE_VM_BLOCK_NUM, RBM_ZERO_ON_ERROR, false, &vmbuffer) ==
         BLK_NEEDS_REDO) {
             char* maindata = XLogRecGetData(record);
         HeapXlogVisibleOperatorVmpage(&vmbuffer, (void *)maindata);
@@ -7512,7 +7519,7 @@ static void heap_xlog_multi_insert(XLogReaderState* record)
      * XXX: Don't do this if the page was restored from full page image. We
      * don't bother to update the FSM in that case, it doesn't need to be
      * totally accurate anyway.
-     * 
+     *
      * Skip segment-page relation, because FSM segment may have not been created yet.
      */
     if (action == BLK_NEEDS_REDO && freespace < BLCKSZ / 5) {
@@ -7878,15 +7885,15 @@ void heap_sync_internal(Relation rel, Oid toastHeapOid, LOCKMODE lockmode)
 void heap_sync(Relation rel, LOCKMODE lockmode)
 {
     Assert(!RelationIsBucket(rel));
-    
+
     bool heapIsPartitioned = RELATION_IS_PARTITIONED(rel);
     LOCKMODE toastLockmode = (lockmode == NoLock) ? NoLock : AccessShareLock;
-    
+
     /* non-WAL-logged tables or dfs tables never need fsync */
     if (!RelationNeedsWAL(rel) || RelationIsDfsStore(rel)) {
         return;
     }
-    
+
     if (!heapIsPartitioned) {
         heap_sync_internal(rel, rel->rd_rel->reltoastrelid, toastLockmode);
     } else {
@@ -8369,7 +8376,7 @@ HeapTuple heapam_index_fetch_tuple(IndexScanDesc scan, bool *all_dead)
         if (prev_buf != scan->xs_cbuf)
             heap_page_prune_opt(scan->heapRelation, scan->xs_cbuf);
     }
-    
+
     page = BufferGetPage(scan->xs_cbuf);
 
     /* Obtain share-lock on the buffer so we can examine visibility */
@@ -8401,13 +8408,13 @@ HeapTuple heapam_index_fetch_tuple(IndexScanDesc scan, bool *all_dead)
         scan->xs_continue_hot = !IsMVCCSnapshot(scan->xs_snapshot);
 
         pgstat_count_heap_fetch(scan->indexRelation);
-        
+
         return &scan->xs_ctup;
     }
-    
+
     /* We've reached the end of the HOT chain. */
     scan->xs_continue_hot = false;
-    
+
     /*
      * If we scanned a whole HOT chain and found only dead tuples, tell index
      * AM to kill its entry for that TID (this will take effect in the next
@@ -8420,4 +8427,3 @@ HeapTuple heapam_index_fetch_tuple(IndexScanDesc scan, bool *all_dead)
 
     return NULL;
 }
-

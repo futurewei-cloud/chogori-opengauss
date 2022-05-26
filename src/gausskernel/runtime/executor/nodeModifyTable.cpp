@@ -410,7 +410,7 @@ static bool ExecConflictUpdate(ModifyTableState* mtstate, ResultRelInfo* resultR
     Tuple tuple = tableam_tops_new_tuple(targetRel, conflictTid);
     test = tableam_tuple_lock(relation, tuple, &buffer,
                               estate->es_output_cid, LockTupleExclusive, false, &tmfd,
-                              false, false, false, GetActiveSnapshot(), &conflictInfo->conflictTid, 
+                              false, false, false, GetActiveSnapshot(), &conflictInfo->conflictTid,
                               false, true, conflictInfo->conflictXid);
 
     WHITEBOX_TEST_STUB("ExecConflictUpdate_Begin", WhiteboxDefaultErrorEmit);
@@ -453,8 +453,8 @@ checktest:
             }
 #endif
             test = tableam_tuple_lock(relation, tuple, &buffer,
-                                      estate->es_output_cid, LockTupleExclusive, false, &tmfd, 
-                                      true, false, false, estate->es_snapshot, &conflictInfo->conflictTid, 
+                                      estate->es_output_cid, LockTupleExclusive, false, &tmfd,
+                                      true, false, false, estate->es_snapshot, &conflictInfo->conflictTid,
                                       false, true, conflictInfo->conflictXid);
 
             Assert(test != TM_SelfCreated && test != TM_SelfUpdated);
@@ -695,6 +695,8 @@ template <bool useHeapMultiInsert>
 TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, TupleTableSlot* planSlot, EState* estate,
     bool canSetTag, int options, List** partitionList)
 {
+    // TODO: add k2 logic here
+
     Tuple tuple = NULL;
     ResultRelInfo* result_rel_info = NULL;
     Relation result_relation_desc;
@@ -726,7 +728,7 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
      * get the heap tuple out of the tuple table slot, making sure we have a
      * writable copy
      */
-    tuple = tableam_tslot_get_tuple_from_slot(result_rel_info->ri_RelationDesc, slot);    
+    tuple = tableam_tslot_get_tuple_from_slot(result_rel_info->ri_RelationDesc, slot);
 
 #ifdef PGXC
     result_remote_rel = (RemoteQueryState*)estate->es_result_remoterel;
@@ -760,9 +762,9 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
      * for a MERGE or INSERT ... ON DUPLICATE KEY UPDATE statement.
      */
     if (
-#ifdef ENABLE_MULTIPLE_NODES	
+#ifdef ENABLE_MULTIPLE_NODES
         state->operation != CMD_MERGE && state->mt_upsert->us_action == UPSERT_NONE &&
-#endif		
+#endif
         result_rel_info->ri_TrigDesc && result_rel_info->ri_TrigDesc->trig_insert_before_row) {
         slot = ExecBRInsertTriggers(estate, result_rel_info, slot);
         if (slot == NULL) /* "do nothing" */
@@ -777,9 +779,9 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
      * for a MERGE or INSERT ... ON DUPLICATE KEY UPDATE statement.
      */
     if (
-#ifdef ENABLE_MULTIPLE_NODES	
+#ifdef ENABLE_MULTIPLE_NODES
         state->operation != CMD_MERGE && state->mt_upsert->us_action == UPSERT_NONE &&
-#endif		
+#endif
         result_rel_info->ri_TrigDesc && result_rel_info->ri_TrigDesc->trig_insert_instead_row) {
         slot = ExecIRInsertTriggers(estate, result_rel_info, slot);
         if (slot == NULL) /* "do nothing" */
@@ -872,7 +874,7 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
                         /* partition oid for sync */
                         CopyFromMemCxt tmpCopyFromMemCxt = bulk->memCxt;
                         for (int16 i = 0; i < tmpCopyFromMemCxt->nextBulk; i++) {
-                            *partitionList = list_append_unique_oid(*partitionList, 
+                            *partitionList = list_append_unique_oid(*partitionList,
                                                                     tmpCopyFromMemCxt->chunk[i]->partOid);
                         }
                     }
@@ -895,7 +897,7 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
                         /* partition oid for sync */
                         CopyFromMemCxt tmpCopyFromMemCxt = bulk->memCxt;
                         for (int16 i = 0; i < tmpCopyFromMemCxt->nextBulk; i++) {
-                            *partitionList = list_append_unique_oid(*partitionList, 
+                            *partitionList = list_append_unique_oid(*partitionList,
                                                                     tmpCopyFromMemCxt->chunk[i]->partOid);
                         }
                     }
@@ -912,8 +914,8 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
                 tableam_tslot_getallattrs(slot);
 
                 tuple = tableam_tops_form_tuple(slot->tts_tupleDescriptor,
-                                                slot->tts_values, 
-                                                slot->tts_isnull, 
+                                                slot->tts_values,
+                                                slot->tts_isnull,
                                                 RelationGetTupleType(result_relation_desc));
                 if (rel_isblockchain) {
                     MemoryContext old_context = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
@@ -929,7 +931,7 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
                      */
                     ExecStoreTuple((Tuple)tuple, slot, InvalidBuffer, !rel_isblockchain);
                 } else {
-                    ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), 
+                    ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                                 errmsg("The tuple to be inserted into the table cannot be NULL")));
                 }
                 new_id = ExecUpsert(state, slot, planSlot, estate, canSetTag, tuple, &returning, &updated);
@@ -1576,7 +1578,7 @@ TupleTableSlot* ExecUpdate(ItemPointer tupleid,
 #endif
         result_rel_info->ri_TrigDesc && result_rel_info->ri_TrigDesc->trig_update_before_row) {
 #ifdef PGXC
-        slot = ExecBRUpdateTriggers(estate, epqstate, result_rel_info, oldPartitionOid, 
+        slot = ExecBRUpdateTriggers(estate, epqstate, result_rel_info, oldPartitionOid,
             bucketid, oldtuple, tupleid, slot);
 #else
         slot = ExecBRUpdateTriggers(estate, epqstate, result_rel_info, tupleid, slot);
@@ -1756,8 +1758,8 @@ lreplace:
                                 ItemPointerData start_ctid;
                                 ItemPointerData end_ctid;
                                 RelationGetCtids(fake_relation, &start_ctid, &end_ctid);
-                                if (ItemPointerCompare(tupleid, &end_ctid) <= 0) {                            
-                                    RecordDeletedTuple(RelationGetRelid(fake_relation), bucketid, 
+                                if (ItemPointerCompare(tupleid, &end_ctid) <= 0) {
+                                    RecordDeletedTuple(RelationGetRelid(fake_relation), bucketid,
                                         tupleid, node->delete_delta_rel);
                                 }
                             }
@@ -1836,12 +1838,12 @@ lreplace:
                                             errmsg("update conflict in delta table cstore.%s",
                                                 result_relation_desc->rd_rel->relname.data))));
                             }
-                        
+
                             if (IsolationUsesXactSnapshot())
                                 ereport(ERROR,
                                     (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
                                         errmsg("could not serialize access due to concurrent update")));
-                        
+
                             Assert(ItemPointerEquals(tupleid, &tmfd.ctid));
 
                             /* tuple already deleted; nothing to do */
@@ -1898,10 +1900,10 @@ lreplace:
                                         errdetail("disable row movement"))));
                         }
                         need_create_file = false;
-                    } else { 
-                        /* 
-                         * a not exist interval partition 
-                         * it can not be a range area 
+                    } else {
+                        /*
+                         * a not exist interval partition
+                         * it can not be a range area
                          */
                         if (u_sess->exec_cxt.route->partArea != PART_AREA_INTERVAL) {
                             ereport(ERROR,
@@ -2176,10 +2178,10 @@ ldelete:
                                         ItemPointerData start_ctid;
                                         ItemPointerData end_ctid;
                                         RelationGetCtids(old_fake_relation, &start_ctid, &end_ctid);
-                                        if (ItemPointerCompare(tupleid, &end_ctid) <= 0) {           
+                                        if (ItemPointerCompare(tupleid, &end_ctid) <= 0) {
                                             RecordDeletedTuple(
                                                 RelationGetRelid(old_fake_relation), bucketid, tupleid, node->delete_delta_rel);
-                                        }	
+                                        }
                                     }
 
                                     Bitmapset *modifiedIdxAttrs = NULL;
@@ -2324,7 +2326,7 @@ ldelete:
                                 (void)MemoryContextSwitchTo(old_context);
                             }
 
-                            (void)tableam_tuple_insert(fake_insert_relation, 
+                            (void)tableam_tuple_insert(fake_insert_relation,
                                 tuple, estate->es_output_cid, 0, NULL);
 
                             if (result_rel_info->ri_NumIndices > 0) {
@@ -2555,7 +2557,7 @@ TupleTableSlot* ExecModifyTable(ModifyTableState* node)
     bool is_first_modified = true;
     int2 bucketid = InvalidBktId;
     List *partition_list = NIL;
-    
+
     /*
      * This should NOT get called during EvalPlanQual; we should have passed a
      * subplan tree to EvalPlanQual, instead.  Use a runtime test not just
@@ -2914,7 +2916,7 @@ TupleTableSlot* ExecModifyTable(ModifyTableState* node)
     node->mt_done = true;
 
     ResetTrigShipFlag();
-    
+
     return NULL;
 }
 
