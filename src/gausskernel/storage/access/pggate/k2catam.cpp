@@ -614,13 +614,13 @@ ShouldPushdownScanKey(Relation relation, CamScanPlan scan_plan, AttrNumber attnu
 /* int comparator for qsort() */
 static int int_compar_cb(const void *v1, const void *v2)
 {
-  const int *k1 = v1;
-  const int *k2 = v2;
+  int k1 = (int)(*(const int *)v1);
+  int k2 = (int)(*(const int *)v2);
 
-  if (*k1 < *k2)
+  if (k1 < k2)
     return -1;
 
-  if (*k1 > *k2)
+  if (k1 > k2)
     return 1;
 
   return 0;
