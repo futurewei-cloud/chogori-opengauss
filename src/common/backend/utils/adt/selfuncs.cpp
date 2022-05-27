@@ -761,8 +761,8 @@ double mcv_selectivity(VariableStatData* vardata, FmgrInfo* opproc, Datum constv
      */
     if (equaloperator != InvalidOid)
         fmgr_info(get_opcode(equaloperator), &opequal);
-    if (HeapTupleIsValid(vardata->statsTuple) && 
-        statistic_proc_security_check(vardata, opproc->fn_oid) && 
+    if (HeapTupleIsValid(vardata->statsTuple) &&
+        statistic_proc_security_check(vardata, opproc->fn_oid) &&
         get_attstatsslot(vardata->statsTuple,
                          vardata->atttype,
                          vardata->atttypmod,
@@ -837,8 +837,8 @@ double histogram_selectivity(VariableStatData* vardata, FmgrInfo* opproc, Datum 
     Assert(n_skip >= 0);
     Assert(min_hist_size > 2 * n_skip);
 
-    if (HeapTupleIsValid(vardata->statsTuple) && 
-        statistic_proc_security_check(vardata, opproc->fn_oid) && 
+    if (HeapTupleIsValid(vardata->statsTuple) &&
+        statistic_proc_security_check(vardata, opproc->fn_oid) &&
         get_attstatsslot(vardata->statsTuple,
                          vardata->atttype,
                          vardata->atttypmod,
@@ -903,8 +903,8 @@ static double ineq_histogram_selectivity(
      * appears in pg_statistic is sorted the same way our operator sorts, or
      * the reverse way if isgt is TRUE.
      */
-    if (HeapTupleIsValid(vardata->statsTuple) && 
-        statistic_proc_security_check(vardata, opproc->fn_oid) && 
+    if (HeapTupleIsValid(vardata->statsTuple) &&
+        statistic_proc_security_check(vardata, opproc->fn_oid) &&
         get_attstatsslot(vardata->statsTuple,
                          vardata->atttype,
                          vardata->atttypmod,
@@ -2607,7 +2607,7 @@ static double EqjoinselSemiDistinct(double nd1, double nd2, double ndFull, doubl
          *      P(X=k) = (λ^k)/(k!)e^(-λ)
          * where λ is the expectation and the squared std. of the distribution, which can be derived
          * given these assumption:
-         *      1. Inner and Outer rels are filtered independently. 
+         *      1. Inner and Outer rels are filtered independently.
          *          P(Inner|Outer) = P(Inner) = ndistinct_inner / ndistinct_full
          *      2. Distinct values are uniform on the inner rel.
          *          inner_ntup_per_distinct = row_inner / ndistinct_inner
@@ -2621,7 +2621,7 @@ static double EqjoinselSemiDistinct(double nd1, double nd2, double ndFull, doubl
          * Also, to ameliorate extensive computation overhead of exp(), thresholds are set to avoid exp() calls.
          * 1 - exp(-4.6) = 0.99, anything higher than that can be treated as 100% for efficiency.
          */
-        const double shortCutThreshold = 4.6; 
+        const double shortCutThreshold = 4.6;
         if (row2 / ndFull > shortCutThreshold) {
             uncertainfrac = 1;
         } else {
@@ -2720,7 +2720,7 @@ static double eqjoinsel_semi(
         }
     }
 
-    if (HeapTupleIsValid(vardata2->statsTuple) && 
+    if (HeapTupleIsValid(vardata2->statsTuple) &&
         statistic_proc_security_check(vardata2, opfuncoid)) {
         have_mcvs2 = get_attstatsslot(vardata2->statsTuple,
             vardata2->atttype,
@@ -4726,10 +4726,10 @@ void examine_variable(PlannerInfo* root, Node* node, int varRelid, VariableStatD
                                 {
                                     /* Get index's table for permission check */
                                     RangeTblEntry *rte;
-                                
+
                                     rte = planner_rt_fetch(index->rel->relid, root);
                                     Assert(rte->rtekind == RTE_RELATION);
-                                
+
                                     /*
                                      * For simplicity, we insist on the whole
                                      * table being selectable, rather than trying
@@ -5092,7 +5092,7 @@ double get_variable_numdistinct(VariableStatData* vardata, bool* isdefault, bool
     /*
      * If no stats, try to get the estimation
      */
-    if (ENABLE_SQL_BETA_FEATURE(JOIN_SEL_WITH_CAST_FUNC) && !HeapTupleIsValid(vardata->statsTuple) && 
+    if (ENABLE_SQL_BETA_FEATURE(JOIN_SEL_WITH_CAST_FUNC) && !HeapTupleIsValid(vardata->statsTuple) &&
         stadistinct == 0.0) {
         stadistinct = GetExprNumDistinctRouter(vardata, adjust_rows, eType, isJoinVar);
 
@@ -8317,7 +8317,7 @@ void set_noanalyze_rellist(Oid relid, AttrNumber attid)
      */
     Relation rel = relation_open(relid, AccessShareLock);
 
-    if ((RELKIND_FOREIGN_TABLE == rel->rd_rel->relkind || RELKIND_STREAM == rel->rd_rel->relkind) 
+    if ((RELKIND_FOREIGN_TABLE == rel->rd_rel->relkind || RELKIND_STREAM == rel->rd_rel->relkind)
         && isSpecifiedSrvTypeFromRelId(relid, OBS_SERVER)) {
         isOBSFt = true;
     }
@@ -8330,7 +8330,7 @@ void set_noanalyze_rellist(Oid relid, AttrNumber attid)
 
     /* If the rel is DFS table or gds foreign table, don't add it to list */
     if (RelationIsPAXFormat(rel) || CSTORE_NAMESPACE == RelationGetNamespace(rel) ||
-        ((RELKIND_FOREIGN_TABLE == rel->rd_rel->relkind || RELKIND_STREAM == rel->rd_rel->relkind) 
+        ((RELKIND_FOREIGN_TABLE == rel->rd_rel->relkind || RELKIND_STREAM == rel->rd_rel->relkind)
         && IsSpecifiedFDWFromRelid(relid, DIST_FDW))) {
         relation_close(rel, AccessShareLock);
         return;
@@ -8484,7 +8484,7 @@ void output_noanalyze_rellist_to_log(int lev)
                 int attid = linitial_int(tmp_record_list);
                 /* 'attid = 0' means the whole rel has no statistics */
                 if (0 == attid) {
-                    if ((RELKIND_FOREIGN_TABLE == rel->rd_rel->relkind 
+                    if ((RELKIND_FOREIGN_TABLE == rel->rd_rel->relkind
                         || RELKIND_STREAM == rel->rd_rel->relkind) &&
                         isSpecifiedSrvTypeFromRelId(relid, OBS_SERVER)) {
                         if (obsFtbuf.len > 0) {
@@ -8870,4 +8870,100 @@ double get_windowagg_selectivity(PlannerInfo* root, WindowClause* wc, WindowFunc
     }
 
     return selec;
+}
+
+/*-------------------------------------------------------------------------
+ *
+ * Index cost estimation functions
+ *
+ *-------------------------------------------------------------------------
+ */
+
+List *deconstruct_indexquals(IndexPath *path)
+{
+	List	   *result = NIL;
+	IndexOptInfo *index = path->indexinfo;
+	ListCell   *lcc,
+			   *lci;
+
+	forboth(lcc, path->indexquals, lci, path->indexqualcols)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lcc);
+		int			indexcol = lfirst_int(lci);
+		Expr	   *clause;
+		Node	   *leftop,
+				   *rightop;
+		IndexQualInfo *qinfo;
+
+		clause = rinfo->clause;
+
+		qinfo = (IndexQualInfo *) palloc(sizeof(IndexQualInfo));
+		qinfo->rinfo = rinfo;
+		qinfo->indexcol = indexcol;
+
+		if (IsA(clause, OpExpr))
+		{
+			qinfo->clause_op = ((OpExpr *) clause)->opno;
+			leftop = get_leftop(clause);
+			rightop = get_rightop(clause);
+			if (match_index_to_operand(leftop, indexcol, index))
+			{
+				qinfo->varonleft = true;
+				qinfo->other_operand = rightop;
+			}
+			else
+			{
+				Assert(match_index_to_operand(rightop, indexcol, index));
+				qinfo->varonleft = false;
+				qinfo->other_operand = leftop;
+			}
+		}
+		else if (IsA(clause, RowCompareExpr))
+		{
+			RowCompareExpr *rc = (RowCompareExpr *) clause;
+
+			qinfo->clause_op = linitial_oid(rc->opnos);
+			/* Examine only first columns to determine left/right sides */
+			if (match_index_to_operand((Node *) linitial(rc->largs),
+									   indexcol, index))
+			{
+				qinfo->varonleft = true;
+				qinfo->other_operand = (Node *) rc->rargs;
+			}
+			else
+			{
+				Assert(match_index_to_operand((Node *) linitial(rc->rargs),
+											  indexcol, index));
+				qinfo->varonleft = false;
+				qinfo->other_operand = (Node *) rc->largs;
+			}
+		}
+		else if (IsA(clause, ScalarArrayOpExpr))
+		{
+			ScalarArrayOpExpr *saop = (ScalarArrayOpExpr *) clause;
+
+			qinfo->clause_op = saop->opno;
+			/* index column is always on the left in this case */
+			Assert(match_index_to_operand((Node *) linitial(saop->args),
+										  indexcol, index));
+			qinfo->varonleft = true;
+			qinfo->other_operand = (Node *) lsecond(saop->args);
+		}
+		else if (IsA(clause, NullTest))
+		{
+			qinfo->clause_op = InvalidOid;
+			Assert(match_index_to_operand((Node *) ((NullTest *) clause)->arg,
+										  indexcol, index));
+			qinfo->varonleft = true;
+			qinfo->other_operand = NULL;
+		}
+		else
+		{
+			elog(ERROR, "unsupported indexqual type: %d",
+				 (int) nodeTag(clause));
+		}
+
+		result = lappend(result, qinfo);
+	}
+	return result;
 }
