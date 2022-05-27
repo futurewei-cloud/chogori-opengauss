@@ -19,6 +19,7 @@
 #include "access/heapam.h"
 #include "access/itup.h"
 #include "access/tupdesc.h"
+#include "access/k2/k2catam.h"
 
 #define PARALLEL_SCAN_GAP 100
 
@@ -67,6 +68,8 @@ typedef struct HeapScanDescData {
      */
     HeapTupleData rs_ctup; /* current tuple in scan, if any */
     ParallelHeapScanDesc rs_parallel; /* parallel scan information */
+    CamScanDesc	k2scan;			/* only valid in k2-scan case */
+
     HeapTupleHeaderData rs_ctbuf_hdr;
 } HeapScanDescData;
 
@@ -97,7 +100,7 @@ struct IndexFetchTableData;
  * amgettuple-based scans.
  */
 typedef struct IndexScanDescData {
-    /* scan parameters */    
+    /* scan parameters */
     // !! heapRelation MUST BE FIRST MEMBER !!
     Relation heapRelation;  /* heap relation descriptor, or NULL */
 
@@ -185,6 +188,7 @@ typedef struct SysScanDescData {
     Relation irel;       /* NULL if doing heap scan */
     HeapScanDesc scan;   /* only valid in heap-scan case */
     IndexScanDesc iscan; /* only valid in index-scan case */
+    CamScanDesc	k2scan;			/* only valid in k2-scan case */
 } SysScanDescData;
 
 #endif /* RELSCAN_H */

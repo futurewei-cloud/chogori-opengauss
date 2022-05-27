@@ -1,7 +1,7 @@
 #include <string.h>
 #include "postgres.h"
 
-#include "k2catam.h"
+#include "access/k2/k2catam.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -1327,7 +1327,7 @@ SysScanDesc cam_systable_beginscan(Relation relation,
 	SysScanDesc scan_desc = (SysScanDesc) palloc0(sizeof(SysScanDescData));
 	scan_desc->heap_rel   = relation;
 	scan_desc->snapshot   = snapshot;
-	scan_desc->ybscan     = camScan;
+	scan_desc->k2scan     = camScan;
 
 	if (index)
 	{
@@ -1341,9 +1341,9 @@ HeapTuple cam_systable_getnext(SysScanDesc scan_desc)
 {
 	bool recheck = false;
 
-	Assert(PointerIsValid(scan_desc->ybscan));
+	Assert(PointerIsValid(scan_desc->k2scan));
 
-	HeapTuple tuple = cam_getnext_heaptuple(scan_desc->ybscan, true /* is_forward_scan */,
+	HeapTuple tuple = cam_getnext_heaptuple(scan_desc->k2scan, true /* is_forward_scan */,
 											&recheck);
 
 	Assert(!recheck);
@@ -1354,8 +1354,8 @@ HeapTuple cam_systable_getnext(SysScanDesc scan_desc)
 
 void cam_systable_endscan(SysScanDesc scan_desc)
 {
-	Assert(PointerIsValid(scan_desc->ybscan));
-	camEndScan(scan_desc->ybscan);
+	Assert(PointerIsValid(scan_desc->k2scan));
+	camEndScan(scan_desc->k2scan);
 }
 
 HeapScanDesc cam_heap_beginscan(Relation relation,
@@ -1374,7 +1374,7 @@ HeapScanDesc cam_heap_beginscan(Relation relation,
 	scan_desc->rs_snapshot  = snapshot;
 	scan_desc->rs_temp_snap = temp_snap;
 	scan_desc->rs_cblock    = InvalidBlockNumber;
-	scan_desc->ybscan       = camScan;
+	scan_desc->k2scan       = camScan;
 
 	return scan_desc;
 }
@@ -1383,9 +1383,9 @@ HeapTuple cam_heap_getnext(HeapScanDesc scan_desc)
 {
 	bool recheck = false;
 
-	Assert(PointerIsValid(scan_desc->ybscan));
+	Assert(PointerIsValid(scan_desc->k2scan));
 
-	HeapTuple tuple = cam_getnext_heaptuple(scan_desc->ybscan, true /* is_forward_scan */,
+	HeapTuple tuple = cam_getnext_heaptuple(scan_desc->k2scan, true /* is_forward_scan */,
 											&recheck);
 
 	Assert(!recheck);
@@ -1395,8 +1395,8 @@ HeapTuple cam_heap_getnext(HeapScanDesc scan_desc)
 
 void cam_heap_endscan(HeapScanDesc scan_desc)
 {
-	Assert(PointerIsValid(scan_desc->ybscan));
-	camEndScan(scan_desc->ybscan);
+	Assert(PointerIsValid(scan_desc->k2scan));
+	camEndScan(scan_desc->k2scan);
 	if (scan_desc->rs_temp_snap)
 		UnregisterSnapshot(scan_desc->rs_snapshot);
 	pfree(scan_desc);
