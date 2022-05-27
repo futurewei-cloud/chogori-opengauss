@@ -188,6 +188,7 @@ typedef struct SysScanDescData {
     Relation irel;       /* NULL if doing heap scan */
     HeapScanDesc scan;   /* only valid in heap-scan case */
     IndexScanDesc iscan; /* only valid in index-scan case */
+	Snapshot	snapshot;		/* snapshot to unregister at end of scan */
     CamScanDesc	k2scan;			/* only valid in k2-scan case */
 } SysScanDescData;
 

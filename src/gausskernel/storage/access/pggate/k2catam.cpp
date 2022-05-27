@@ -904,7 +904,8 @@ static void camBindScanKeys(Relation relation,
 
 						/* Build temporary vars */
 						IndexScanDescData tmp_scan_desc;
-						memset(&tmp_scan_desc, 0, sizeof(IndexScanDescData));
+						// TODO: initialize tmp_scan_desc
+//						memset(&tmp_scan_desc, 0, sizeof(IndexScanDescData));
 						tmp_scan_desc.indexRelation = index;
 
 						/*
@@ -1371,8 +1372,8 @@ HeapScanDesc cam_heap_beginscan(Relation relation,
 
 	/* Set up Postgres sys table scan description */
 	HeapScanDesc scan_desc = (HeapScanDesc) palloc0(sizeof(HeapScanDescData));
-	scan_desc->rs_rd        = relation;
-	scan_desc->rs_snapshot  = snapshot;
+	scan_desc->rs_base.rs_rd        = relation;
+	scan_desc->rs_base.rs_snapshot  = snapshot;
 	scan_desc->rs_temp_snap = temp_snap;
 	scan_desc->rs_cblock    = InvalidBlockNumber;
 	scan_desc->k2scan       = camScan;
