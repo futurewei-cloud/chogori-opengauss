@@ -27,6 +27,7 @@
 #include "utils/selfuncs.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "access/nbtree.h"
 
 #include "access/k2/k2pg_aux.h"
 #include "k2_expr.h"
@@ -724,9 +725,9 @@ static void camBindScanKeys(Relation relation,
 	Oid		relid    = RelationGetRelid(relation);
 
 	HandleK2PgStatus(PgGate_NewSelect(dboid, relid, &camScan->prepare_params, &camScan->handle));
-	ResourceOwnerEnlargeK2PgStmts(CurrentResourceOwner);
-	ResourceOwnerRememberK2PgStmt(CurrentResourceOwner, camScan->handle);
-	camScan->stmt_owner = CurrentResourceOwner;
+	ResourceOwnerEnlargeK2PgStmts(t_thrd.utils_cxt.CurrentResourceOwner);
+	ResourceOwnerRememberK2PgStmt(t_thrd.utils_cxt.CurrentResourceOwner, camScan->handle);
+	camScan->stmt_owner = t_thrd.utils_cxt.CurrentResourceOwner;
 
 	if (IsSystemRelation(relation))
 	{
@@ -1285,7 +1286,7 @@ SysScanDesc cam_systable_beginscan(Relation relation,
 	 * Look up the index to scan with if we can. If the index is the primary key which is part
 	 * of the table in K2PG, we should scan the table directly.
 	 */
-	if (indexOK && !IgnoreSystemIndexes && !ReindexIsProcessingIndex(indexId))
+	if (indexOK && !u_sess->attr.attr_common.IgnoreSystemIndexes && !ReindexIsProcessingIndex(indexId))
 	{
 		index = RelationIdGetRelation(indexId);
 		if (index->rd_index->indisprimary)
@@ -1426,7 +1427,7 @@ void camCostEstimate(RelOptInfo *baserel, Selectivity selectivity,
 		k2pg_per_tuple_cost_factor *= K2PG_UNCOVERED_INDEX_COST_FACTOR;
 	}
 
-	Cost cost_per_tuple = cpu_tuple_cost * k2pg_per_tuple_cost_factor +
+	Cost cost_per_tuple = u_sess->attr.attr_sql.cpu_tuple_cost * k2pg_per_tuple_cost_factor +
 	                      baserel->baserestrictcost.per_tuple;
 
 	*startup_cost = baserel->baserestrictcost.startup;
