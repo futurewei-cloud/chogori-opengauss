@@ -1374,8 +1374,8 @@ HeapScanDesc cam_heap_beginscan(Relation relation,
 	HeapScanDesc scan_desc = (HeapScanDesc) palloc0(sizeof(HeapScanDescData));
 	scan_desc->rs_base.rs_rd        = relation;
 	scan_desc->rs_base.rs_snapshot  = snapshot;
+	scan_desc->rs_base.rs_cblock    = InvalidBlockNumber;
 	scan_desc->rs_temp_snap = temp_snap;
-	scan_desc->rs_cblock    = InvalidBlockNumber;
 	scan_desc->k2scan       = camScan;
 
 	return scan_desc;
@@ -1400,7 +1400,7 @@ void cam_heap_endscan(HeapScanDesc scan_desc)
 	Assert(PointerIsValid(scan_desc->k2scan));
 	camEndScan(scan_desc->k2scan);
 	if (scan_desc->rs_temp_snap)
-		UnregisterSnapshot(scan_desc->rs_snapshot);
+		UnregisterSnapshot(scan_desc->rs_base.rs_snapshot);
 	pfree(scan_desc);
 }
 

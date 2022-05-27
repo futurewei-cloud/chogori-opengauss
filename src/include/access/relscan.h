@@ -54,6 +54,7 @@ typedef struct HeapScanDescData {
     /* scan parameters */
     uint32 rs_flags;
     bool rs_allow_strat;  /* allow or disallow use of access strategy */
+	bool rs_temp_snap;	/* unregister snapshot at scan end? */
 
     /* scan current state */
     TupleDesc rs_tupdesc;  /* heap tuple descriptor for rs_ctup */
