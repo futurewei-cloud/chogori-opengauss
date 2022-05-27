@@ -909,7 +909,7 @@ void* PgGate_GetThreadLocalJumpBuffer() {
 }
 
 void PgGate_SetThreadLocalErrMsg(const void* new_msg) {
-  elog(DEBUG5, "PgGateAPI: PgGate_SetThreadLocalErrMsg %s", new_msg);
+  elog(DEBUG5, "PgGateAPI: PgGate_SetThreadLocalErrMsg %s", static_cast<const char*>(new_msg));
   PgSetThreadLocalErrMsg(new_msg);
 }
 
