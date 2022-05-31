@@ -297,8 +297,8 @@ Datum mot_fdw_handler(PG_FUNCTION_ARGS)
     fdwroutine->GetForeignPlan = MOTGetForeignPlan;
     fdwroutine->PlanForeignModify = NULL;
     fdwroutine->ExplainForeignScan = MOTExplainForeignScan;
-    fdwroutine->BeginForeignScan = MOTBeginForeignScan;
-    fdwroutine->IterateForeignScan = MOTIterateForeignScan;
+    fdwroutine->BeginForeignScan = k2BeginForeignScan;
+    fdwroutine->IterateForeignScan = k2IterateForeignScan;
     fdwroutine->ReScanForeignScan = MOTReScanForeignScan;
     fdwroutine->EndForeignScan = MOTEndForeignScan;
     fdwroutine->AnalyzeForeignTable = MOTAnalyzeForeignTable;

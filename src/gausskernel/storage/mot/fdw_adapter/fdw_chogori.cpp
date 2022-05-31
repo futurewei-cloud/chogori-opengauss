@@ -81,7 +81,23 @@ is_builtin(Oid objectId)
 
 // Postgres object identifier (OID) defined in Postgres' postgres_ext.h
 typedef unsigned int K2PgOid;
-#define kInvalidOid ((K2PgOid) 0)
+#define kInvalidOid ((K2PgOid)0)
+
+// Structure to hold the values of hidden columns when passing tuple from K2 SQL to PG.
+typedef struct PgSysColumns {
+  // Postgres system columns.
+  uint32_t oid;
+  uint32_t tableoid;
+  uint32_t xmin;
+  uint32_t cmin;
+  uint32_t xmax;
+  uint32_t cmax;
+  uint64_t ctid;
+
+  // K2 Sql system columns.
+  uint8_t *k2pgctid;
+  uint8_t *k2pgbasectid;
+} K2PgSysColumns;
 
 // Structure to hold parameters for preparing query plan.
 //
@@ -1148,7 +1164,6 @@ static void BindScanKeys(Relation relation,
 				FDWOprCond *opr_cond = (FDWOprCond *) lfirst(lc);
 				Expression arg = build_expr(scan_plan, opr_cond);
                 if (arg.op != Operation::UNKNOWN) {
-                    // use primary keys as range condition
                   where_conds.expressionChildren.push_back(std::move(arg));
                 }
 			}
@@ -1158,6 +1173,136 @@ static void BindScanKeys(Relation relation,
 	//HandleK2PgStatusWithOwner(PgGate_DmlBindWhereConds(fdw_state->handle, where_conds),
 	//													fdw_state->handle,
 	//													fdw_state->stmt_owner);
+}
+
+void
+k2BeginForeignScan(ForeignScanState *node, int eflags)
+{
+	EState      *estate      = node->ss.ps.state;
+	Relation    relation     = node->ss.ss_currentRelation;
+	ForeignScan *foreignScan = (ForeignScan *) node->ss.ps.plan;
+
+	K2FdwExecState *k2pg_state = NULL;
+
+	/* Do nothing in EXPLAIN (no ANALYZE) case.  node->fdw_state stays NULL. */
+	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
+		return;
+
+	/* Allocate and initialize K2PG scan state. */
+	k2pg_state = (K2FdwExecState *) palloc0(sizeof(K2FdwExecState));
+
+	node->fdw_state = (void *) k2pg_state;
+    // TODO
+	//HandleK2PgStatus(PgGate_NewSelect(K2PgGetDatabaseOid(relation),
+	//			   RelationGetRelid(relation),
+	//			   NULL /* prepare_params */,
+	//			   &k2pg_state->handle));
+	//ResourceOwnerEnlargeK2PgStmts(CurrentResourceOwner);
+	//ResourceOwnerRememberK2PgStmt(CurrentResourceOwner, k2pg_state->handle);
+	//k2pg_state->stmt_owner = CurrentResourceOwner;
+	//k2pg_state->exec_params = &estate->k2pg_exec_params;
+	k2pg_state->remote_exprs = foreignScan->fdw_exprs;
+	elog(DEBUG4, "FDW: foreign_scan for relation %d, fdw_exprs: %d", relation->rd_id, list_length(foreignScan->fdw_exprs));
+
+	//k2pg_state->exec_params->rowmark = -1;
+	//ListCell   *l;
+	//foreach(l, estate->es_rowMarks) {
+	//	ExecRowMark *erm = (ExecRowMark *) lfirst(l);
+		// Do not propogate non-row-locking row marks.
+	//	if (erm->markType != ROW_MARK_REFERENCE &&
+	//		erm->markType != ROW_MARK_COPY)
+	//		k2pg_state->exec_params->rowmark = erm->markType;
+	//	break;
+	//}
+
+	k2pg_state->is_exec_done = false;
+
+	/* Set the current syscatalog version (will check that we are up to date) */
+    // TODO
+	//HandleK2PgStatusWithOwner(PgGate_SetCatalogCacheVersion(k2pg_state->handle,
+	//													k2pg_catalog_cache_version),
+	//													k2pg_state->handle,
+	//													k2pg_state->stmt_owner);
+}
+
+/*
+ * k2IterateForeignScan
+ *		Read next record from the data file and store it into the
+ *		ScanTupleSlot as a virtual tuple
+ */
+TupleTableSlot *
+k2IterateForeignScan(ForeignScanState *node)
+{
+	TupleTableSlot *slot;
+	K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
+	bool           has_data   = false;
+
+	/* Execute the select statement one time. */
+	if (!k2pg_state->is_exec_done) {
+      K2FdwScanPlanData scan_plan{};
+
+		Relation relation = node->ss.ss_currentRelation;
+		scan_plan.target_relation = relation;
+		scan_plan.paramLI = node->ss.ps.state->es_param_list_info;
+		LoadTableInfo(RelationGetRelid(relation), &scan_plan);
+		scan_plan.bind_desc = RelationGetDescr(relation);
+		BindScanKeys(relation, k2pg_state, &scan_plan);
+
+		//k2SetupScanTargets(node);
+		//HandleK2PgStatusWithOwner(PgGate_ExecSelect(k2pg_state->handle, k2pg_state->exec_params),
+		//						k2pg_state->handle,
+		//						k2pg_state->stmt_owner);
+		k2pg_state->is_exec_done = true;
+	}
+
+	/* Clear tuple slot before starting */
+	slot = node->ss.ss_ScanTupleSlot;
+	ExecClearTuple(slot);
+
+	TupleDesc       tupdesc = slot->tts_tupleDescriptor;
+	Datum           *values = slot->tts_values;
+	bool            *isnull = slot->tts_isnull;
+	K2PgSysColumns syscols;
+
+	/* Fetch one row. */
+	//HandleK2PgStatusWithOwner(PgGate_DmlFetch(k2pg_state->handle,
+	//                                      tupdesc->natts,
+	//                                      (uint64_t *) values,
+	//                                      isnull,
+	//                                      &syscols,
+	//                                      &has_data),
+	//                        k2pg_state->handle,
+	//                        k2pg_state->stmt_owner);
+
+	/* If we have result(s) update the tuple slot. */
+	if (has_data)
+	{
+      // TODO
+      //if (node->k2pg_fdw_aggs == NIL)
+      //{
+			HeapTuple tuple = heap_form_tuple(tupdesc, values, isnull);
+			if (syscols.oid != InvalidOid)
+			{
+				HeapTupleSetOid(tuple, syscols.oid);
+			}
+
+			slot = ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+            // TODO
+			/* Setup special columns in the slot */
+			//slot->tts_k2pgctid = PointerGetDatum(syscols.k2pgctid);
+            //}
+            //else
+            //{
+			/*
+			 * Aggregate results stored in virtual slot (no tuple). Set the
+			 * number of valid values and mark as non-empty.
+			 */
+			//slot->tts_nvalid = tupdesc->natts;
+			//slot->tts_isempty = false;
+            //}
+	}
+
+	return slot;
 }
 
 /*

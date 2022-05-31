@@ -22,3 +22,6 @@ void k2CreateIndex(IndexStmt *stmt);
 
 TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo, TupleTableSlot* slot, TupleTableSlot* planSlot);
 
+void k2BeginForeignScan(ForeignScanState *node, int eflags);
+
+TupleTableSlot * k2IterateForeignScan(ForeignScanState *node);
