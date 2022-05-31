@@ -103,6 +103,9 @@ typedef FormData_pg_index *Form_pg_index;
 #define INDOPTION_DESC           0x0001    /* values are in reverse order */
 #define INDOPTION_NULLS_FIRST    0x0002    /* NULLs are first instead of last */
 
+/* Options for K2PG-based index */
+#define INDOPTION_HASH			0x0004	/* values are hash-indexed */
+
 /*
  * Use of these macros is recommended over direct examination of the state
  * flag columns where possible; this allows source code compatibility with
@@ -114,4 +117,3 @@ typedef FormData_pg_index *Form_pg_index;
 #define IndexIsLive(indexForm)  (((indexForm)->indisready || !(indexForm)->indisvalid) && ((indexForm)->indisusable))
 
 #endif   /* PG_INDEX_H */
-

@@ -20,7 +20,7 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-#include "k2_expr.h"
+#include "access/k2/k2_expr.h"
 #include "access/k2/k2_type.h"
 #include "access/k2/k2pg_aux.h"
 

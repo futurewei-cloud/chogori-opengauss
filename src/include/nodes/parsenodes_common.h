@@ -1182,6 +1182,14 @@ typedef struct Constraint {
     bool skip_validation; /* skip validation of existing rows? */
     bool initially_valid; /* mark the new constraint as valid? */
 
+	/* For K2PG LSM primary or unique key defined inline with the table
+	 * definition, we allow the key definition to include the sorting info
+	 * like "create table (... primary key (h hash, r1 asc, r2 desc))".
+	 * We save the IndexElem of the attributes in 'k2pg_index_params' to access
+	 * the full definition of the key attributes.
+	 */
+	List	   *k2pg_index_params;	/* IndexElem nodes of UNIQUE or PRIMARY KEY
+									 * constraint */
     /*
      * @hdfs
      * Field used for soft constraint, which works on HDFS foreign table.

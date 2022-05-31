@@ -403,7 +403,7 @@ void _outBitmapset(StringInfo str, Bitmapset* bms)
     appendStringInfoChar(str, 'b');
     tmpset = bms_copy(bms);
     while ((x = bms_first_member(tmpset)) >= 0) {
-        appendStringInfo(str, " %d", x);   
+        appendStringInfo(str, " %d", x);
     }
     bms_free_ext(tmpset);
     appendStringInfoChar(str, ')');
@@ -768,7 +768,7 @@ static void _outModifyTable(StringInfo str, ModifyTable* node)
     WRITE_NODE_FIELD(exclRelTlist);
     WRITE_INT_FIELD(exclRelRTIndex);
     WRITE_BOOL_FIELD(partKeyUpsert);
-#endif		
+#endif
 }
 
 static void _outUpsertClause(StringInfo str, const UpsertClause* node)
@@ -1081,9 +1081,9 @@ static void _outCommonRemoteQueryPart(StringInfo str, T* node)
         appendStringInfo(str, " :rq_param_types");
     }
     for (i = 0; i < node->rq_num_params; i++) {
-        appendStringInfo(str, " %d", node->rq_param_types[i]);    
+        appendStringInfo(str, " %d", node->rq_param_types[i]);
     }
-    
+
     WRITE_BOOL_FIELD(rq_params_internal);
 
     WRITE_ENUM_FIELD(exec_type, RemoteQueryExecType);
@@ -1117,7 +1117,7 @@ static void _outCommonRemoteQueryPart(StringInfo str, T* node)
     }
     if (t_thrd.proc->workingVersionNum >= FIX_SQL_ADD_RELATION_REF_COUNT) {
         WRITE_NODE_FIELD(relationOids);
-    }  
+    }
 }
 static void _outRemoteQuery(StringInfo str, RemoteQuery* node)
 {
@@ -3559,7 +3559,7 @@ static void _outInsertStmt(StringInfo str, InsertStmt* node)
     }
 #else
 	WRITE_NODE_FIELD(upsertClause);
-#endif	
+#endif
     WRITE_NODE_FIELD(hintState);
 }
 
@@ -4200,7 +4200,7 @@ static void _outQuery(StringInfo str, Query* node)
     WRITE_INT_FIELD(mergeTarget_relation);
     WRITE_NODE_FIELD(mergeSourceTargetList);
     WRITE_NODE_FIELD(mergeActionList);
-#ifdef ENABLE_MULTIPLE_NODES	
+#ifdef ENABLE_MULTIPLE_NODES
     if (t_thrd.proc->workingVersionNum >= UPSERT_TO_MERGE_VERSION_NUM) {
         WRITE_NODE_FIELD(upsertQuery);
     }
@@ -4210,7 +4210,7 @@ static void _outQuery(StringInfo str, Query* node)
 #else
         WRITE_NODE_FIELD(upsertQuery);
         WRITE_NODE_FIELD(upsertClause);
-#endif	
+#endif
     WRITE_BOOL_FIELD(isRowTriggerShippable);
     WRITE_BOOL_FIELD(use_star_targets);
     WRITE_BOOL_FIELD(is_from_full_join_rewrite);
@@ -4778,6 +4778,7 @@ static void _outConstraint(StringInfo str, Constraint* node)
             WRITE_NODE_FIELD(options);
             WRITE_STRING_FIELD(indexname);
             WRITE_STRING_FIELD(indexspace);
+ 			WRITE_NODE_FIELD(k2pg_index_params);
             /* access_method and where_clause not currently used */
             break;
 
@@ -5278,7 +5279,7 @@ static void OutTimeCapsuleStmt(StringInfo str, TimeCapsuleStmt* node)
     WRITE_NODE_FIELD(relation);
     WRITE_STRING_FIELD(new_relname);
 
-    WRITE_NODE_FIELD(tvver); 
+    WRITE_NODE_FIELD(tvver);
     WRITE_ENUM_FIELD(tvtype, TvVersionType);
 }
 

@@ -52,7 +52,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/nbtree.h"
 
 #include "access/k2/k2pg_aux.h"
-#include "k2_expr.h"
+#include "access/k2/k2_expr.h"
 
 typedef struct CamScanPlanData
 {
