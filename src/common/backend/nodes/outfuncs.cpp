@@ -769,6 +769,7 @@ static void _outModifyTable(StringInfo str, ModifyTable* node)
     WRITE_INT_FIELD(exclRelRTIndex);
     WRITE_BOOL_FIELD(partKeyUpsert);
 #endif
+	WRITE_NODE_FIELD(k2PushdownTlist);
 }
 
 static void _outUpsertClause(StringInfo str, const UpsertClause* node)

@@ -313,6 +313,8 @@ static ModifyTable* _copyModifyTable(const ModifyTable* from)
     COPY_SCALAR_FIELD(exclRelRTIndex);
     COPY_SCALAR_FIELD(partKeyUpsert);
 
+	COPY_NODE_FIELD(k2PushdownTlist);
+
     return newnode;
 }
 

@@ -500,7 +500,7 @@ Plan* create_stream_plan(PlannerInfo* root, StreamPath* best_path)
     stream->sort = NULL;
     stream->smpDesc.consumerDop = 1;
     stream->smpDesc.producerDop = subplan->dop;
-#ifdef ENABLE_MULTIPLE_NODES    
+#ifdef ENABLE_MULTIPLE_NODES
     stream->smpDesc.distriType = REMOTE_DISTRIBUTE;
 #else
     stream->smpDesc.distriType = LOCAL_DISTRIBUTE;
@@ -1984,7 +1984,7 @@ static List* fix_tsstore_scan_qual(PlannerInfo* root, List* qpqual)
         fixed_quals = lappend(fixed_quals, clause);
     }
 
-    return fixed_quals; 
+    return fixed_quals;
 }
 #endif   /* ENABLE_MULTIPLE_NODES */
 
@@ -2403,51 +2403,51 @@ static TsStoreScan* create_tsstorescan_plan(PlannerInfo* root, Path* best_path, 
     TsStoreScan* scan_plan = NULL;
     Index scan_relid = best_path->parent->relid;
     RangeTblEntry* rte = NULL;
- 
+
     /* build tsstore scan tlist, should only contain columns referenced, one column at least */
     if (tlist != NIL) {
-        list_free_ext(tlist); 
+        list_free_ext(tlist);
     }
     tlist = build_relation_tlist(best_path->parent);
     if (tlist == NIL) {
         tlist = build_one_column_tlist(root, best_path->parent);
     }
-    
+
     /* Sort clauses into best execution order */
     scan_clauses = order_qual_clauses(root, scan_clauses);
- 
+
     /* Reduce RestrictInfo list to bare expressions; ignore pseudoconstants */
     scan_clauses = extract_actual_clauses(scan_clauses, false);
- 
+
     scan_plan = make_tsstorescan(tlist, scan_clauses, scan_relid);
- 
+
     rte = planner_rt_fetch(scan_relid, root);
     if (rte->tablesample != NULL) {
         ereport(ERROR,
                 (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                  errmsg("Unsupported Table Sample FOR TIMESERIES.")));
     }
- 
+
     scan_plan->relStoreLocation = best_path->parent->relStoreLocation;
- 
+
 #ifdef STREAMPLAN
-    add_distribute_info(root, &scan_plan->plan, scan_relid, best_path, scan_clauses);   
+    add_distribute_info(root, &scan_plan->plan, scan_relid, best_path, scan_clauses);
 #endif
- 
+
     // set replica info.
     if (IsExecNodesReplicated(scan_plan->plan.exec_nodes)) {
         scan_plan->is_replica_table = true;
     }
-    
+
     copy_path_costsize(&scan_plan->plan, best_path);
- 
+
     // Add some hints for better performance
     scan_plan->selectionRatio = scan_plan->plan.plan_rows / best_path->parent->tuples;
- 
+
     /*Fix the qual to support pushing predicate down to tsstore scan.*/
     scan_plan->tsstorequal = (u_sess->attr.attr_sql.enable_csqual_pushdown ?
                               fix_tsstore_scan_qual(root, scan_clauses) : NIL);
- 
+
     return scan_plan;
  }
 #endif   /* ENABLE_MULTIPLE_NODES */
@@ -3097,7 +3097,7 @@ static SubqueryScan* create_subqueryscan_plan(PlannerInfo* root, Path* best_path
     /* If we apply row hint, modify rows of subplan as well */
     if (scan_clauses == NIL)
         scan_plan->subplan->plan_rows = scan_plan->scan.plan.plan_rows;
-    
+
     return scan_plan;
 }
 
@@ -3783,7 +3783,7 @@ static List* build_one_column_tlist(PlannerInfo* root, RelOptInfo* rel)
 
     switch (rte->rtekind) {
         case RTE_RELATION: {
-              
+
               Expr *colexpr = NULL;
               /* append plan need a real tlist for later mark_distribute_setop() */
               if (u_sess->opt_cxt.is_under_append_plan) {
@@ -3808,7 +3808,7 @@ static List* build_one_column_tlist(PlannerInfo* root, RelOptInfo* rel)
 
                   relation_close(relation, AccessShareLock);
 
-              } 
+              }
 
               /* otherwise, use a Dummy tlist */
               if (colexpr == NULL) {
@@ -8259,13 +8259,13 @@ Plan* make_stream_sort(PlannerInfo* root, Plan* lefttree)
 /*
  * for correlated replicate plan like:
  *    HashJoin
- *      Scan t1 
+ *      Scan t1
  *      Limit 1 (on all dns)
  *         Scan t2 -replicate table, correlate qual: (t1.b=t2.b)
  * the results for limit 1 is not stable for each execution of dn,
  * so a Sort is added
  *    HashJoin
- *      Scan t1 
+ *      Scan t1
  *      Limit 1 (on all dns)
  *        Sort --to keep results on each dn stable
  *         Scan t2 -replicate table, correlate qual: (t1.b=t2.b)
@@ -8294,7 +8294,7 @@ Plan* add_sort_for_correlated_replicate_limit_plan(PlannerInfo* root,
     if (sortPlan != NULL) {
         result_plan = (Plan*)make_limit(root, sortPlan, limitOffset, limitCount, offset_est, count_est);
     } else {
-        /* 
+        /*
          * oops, cannot add sort above lefttree since the targetlist does not support sort op
          * later shall add a dummy tlist for sort
          */
@@ -8303,7 +8303,7 @@ Plan* add_sort_for_correlated_replicate_limit_plan(PlannerInfo* root,
 
     return result_plan;
 }
-                                                                
+
 /*
  * Why we add a broadcast stream on sort-limit plan after we pick a single dn ?
  * -----------------------------------------------------------------------------
@@ -8502,7 +8502,7 @@ BaseResult* make_result(PlannerInfo* root, List* tlist, Node* resconstantqual, P
     plan->righttree = NULL;
     node->resconstantqual = resconstantqual;
 
-    /* 
+    /*
      * We currently apply this optimization in multiple nodes mode only
      * while sticking to the original plans in the single node mode, because
      * dummy path implementation for single node mode has not been completed yet.
@@ -8819,6 +8819,9 @@ ModifyTable* make_modifytable(CmdType operation, bool canSetTag, List* resultRel
     /* setrefs.c will fill in the targetlist, if needed */
     node->plan.targetlist = NIL;
 
+    // TODO: add logic to populate k2PushdownTlist if it is useful
+	node->k2PushdownTlist = NULL;
+
     node->operation = operation;
     node->canSetTag = canSetTag;
     node->resultRelations = resultRelations;
@@ -8860,7 +8863,7 @@ ModifyTable* make_modifytable(CmdType operation, bool canSetTag, List* resultRel
         }
 
         /*
-         * If the FROM clause is empty, append a dummy RTE_RESULT RTE at the end of the parse->rtable 
+         * If the FROM clause is empty, append a dummy RTE_RESULT RTE at the end of the parse->rtable
          * during subquery_planner. For that case, vec_output should be false.
          */
         RangeTblEntry* result_add = root->simple_rte_array[root->simple_rel_array_size - 1];
