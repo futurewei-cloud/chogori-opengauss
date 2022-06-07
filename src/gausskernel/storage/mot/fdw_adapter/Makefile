@@ -38,7 +38,7 @@ ENGINE_INC = $(top_builddir)/src/gausskernel/storage/mot/core
 include $(top_builddir)/src/Makefile.global
 
 OBJ_DIR = ./obj
-OBJS = $(OBJ_DIR)/mot_fdw.o $(OBJ_DIR)/mot_internal.o $(OBJ_DIR)/mot_fdw_xlog.o $(OBJ_DIR)/mot_match_index.o $(OBJ_DIR)/mot_fdw_error.o $(OBJ_DIR)/fdw_chogori.o
+OBJS = $(OBJ_DIR)/mot_fdw.o $(OBJ_DIR)/mot_internal.o $(OBJ_DIR)/mot_fdw_xlog.o $(OBJ_DIR)/mot_match_index.o $(OBJ_DIR)/mot_fdw_error.o $(OBJ_DIR)/fdw_chogori.o $(OBJ_DIR)/fdw_chogori_parse.o
 
 DATA = mot_fdw.control mot_fdw--1.0.sql
 
