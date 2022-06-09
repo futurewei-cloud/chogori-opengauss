@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 
@@ -44,7 +45,8 @@
 
 #include "fdw_chogori_parse.h"
 
-#include <skv/client/SKVClient.h>
+#include <skvhttp/client/SKVClient.h>
+#include <skvhttp/dto/Expression.h>
 
 class PgStatement;
 
@@ -286,6 +288,146 @@ skv::http::dto::expression::Expression build_expr(K2FdwScanPlanData* scan_plan, 
     opr_expr.valueChildren.push_back(std::move(constant));
     
 	return opr_expr;
+}
+
+// Checks if the value children structure of an expression match what is expected by BuildRangeRecords and throws if not
+static void ValidateExprChildren(const skv::http::dto::expression::Expression& expr) {
+    auto& child_args = expr.valueChildren;
+    // the first arg for the child should column reference
+    if (child_args.size() < 2) {
+        throw std::invalid_argument("Size of valueChildren is < 2");
+    }
+    if (!child_args[0].isReference()) {
+        throw std::invalid_argument("First argument should be column reference");
+    }
+    if (child_args[1].isReference()) {
+        throw std::invalid_argument("Second argument should be constant value");
+    }
+}
+
+static void AppendValueToRecord(skv::http::dto::expression::Value& value, skv::http::dto::SKVRecordBuilder& builder) {
+  skv::http::dto::applyTyped(value, [&value, &builder] (const auto& afr) mutable {
+    typename std::remove_reference_t<decltype(afr)>::ValueT constant;
+    skv::http::MPackReader reader(value.literal);
+    if (reader.read(constant)) {
+      builder.serializeNext(constant);
+    }
+    throw std::runtime_error("Unable to deserialize value literal");
+  });
+}
+
+// Start and end builders must be passed with the metadata fields already serialized (e.g. table and index ID)
+static void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
+                              skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end, std::shared_ptr<skv::http::dto::Schema> schema) {
+  using namespace skv::http::dto::expression;
+  using namespace skv::http;
+  if (range_conds.op == Operation::UNKNOWN) {
+        return;
+    }
+
+  if (range_conds.op != Operation::AND) {
+    std::string msg = "Only AND top-level condition is supported in range expression";
+        //K2LOG_E(log::k2Adapter, "{}", msg);
+        //return STATUS(InvalidCommand, msg);
+         throw std::invalid_argument(msg);
+    }
+
+    if (range_conds.expressionChildren.size() == 0) {
+      //K2LOG_D(log::k2Adapter, "Child conditions are empty");
+        return;
+    }
+
+    // use multimap since the same column might have multiple conditions
+    std::multimap<std::string, Expression> children_by_col_name;
+    for (auto& pg_expr : range_conds.expressionChildren) {
+      ValidateExprChildren(pg_expr);
+        // the children should be PgOperators for the top "and" condition
+        auto& child_args = pg_expr.valueChildren;
+        children_by_col_name.insert(std::make_pair(child_args[0].fieldName, pg_expr));
+    }
+
+    std::vector<Expression> sorted_args;
+    std::vector<dto::SchemaField> fields = schema->fields;
+    std::unordered_map<std::string, int> field_map;
+    for (int i = K2_FIELD_OFFSET; i < fields.size(); i++) {
+        field_map[fields[i].name] = i;
+        auto range = children_by_col_name.equal_range(fields[i].name);
+        for (auto it = range.first; it != range.second; ++it) {
+            sorted_args.push_back(it->second);
+        }
+    }
+
+    int start_idx = K2_FIELD_OFFSET - 1;
+    bool didBranch = false;
+    for (auto& pg_expr : sorted_args) {
+         if (didBranch) {
+            // there was a branch in the processing of previous condition and we cannot continue.
+            // Ideally, this shouldn't happen if the query parser did its job well.
+            // This is not an error, and so we can still process the request. PG would down-filter the result set after
+            //K2LOG_D(log::k2Adapter, "Condition branched at previous key field. Use the condition as filter condition");
+            leftover_exprs.push_back(pg_expr);
+            continue; // keep going so that we log all skipped expressions;
+        }
+        auto& args = pg_expr.valueChildren;
+        skv::http::dto::expression::Value& col_ref = args[0];
+        skv::http::dto::expression::Value& val = args[1];
+        int cur_idx = field_map[col_ref.fieldName];
+
+        switch(pg_expr.op) {
+            case Operation::EQ: {
+                if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
+                    start_idx = cur_idx;
+                    AppendValueToRecord(val, start);
+                    AppendValueToRecord(val, end);
+                } else {
+                    didBranch = true;
+                    leftover_exprs.emplace_back(pg_expr);
+                }
+            } break;
+            case Operation::GTE:
+            case Operation::GT: {
+                if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
+                    start_idx = cur_idx;
+                    AppendValueToRecord(val, start);
+                } else {
+                    didBranch = true;
+                }
+                // always push the comparison operator to K2 as discussed
+                leftover_exprs.emplace_back(pg_expr);
+            } break;
+            case Operation::LT: {
+                if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
+                    start_idx = cur_idx;
+                    AppendValueToRecord(val, end);
+                } else {
+                    didBranch = true;
+                }
+                // always push the comparison operator to K2 as discussed
+                leftover_exprs.emplace_back(pg_expr);
+            } break;
+            case Operation::LTE: {
+              /*
+                if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
+                    start_idx = cur_idx;
+                    if (val->getValue()->IsMaxInteger()) {
+                        // do not set the range if the value is maximum
+                        didBranch = true;
+                    } else {
+                        K2Adapter::SerializeValueToSKVRecord(val->getValue()->UpperBound(), end);
+                    }
+                    } else { */
+              // Not pushing LTE to range record because end record is exclusive
+                didBranch = true;
+                leftover_exprs.emplace_back(pg_expr);
+            } break;
+            default: {
+              //const char* msg = "Expression Condition must be one of [BETWEEN, EQ, GE, LE]";
+              //K2LOG_W(log::k2Adapter, "{}", msg);
+                didBranch = true;
+                leftover_exprs.emplace_back(pg_expr);
+            } break;
+        }
+    }
 }
 
 static void BindScanKeys(Relation relation,
