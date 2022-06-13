@@ -36,11 +36,7 @@ extern bool k2ininsert(Relation rel, Datum *values, bool *isnull, Datum k2pgctid
 						IndexUniqueCheck checkUnique, struct IndexInfo *indexInfo);
 extern void k2indelete(Relation rel, Datum *values, bool *isnull, Datum k2pgctid, Relation heapRel,
 						struct IndexInfo *indexInfo);
-// extern IndexBuildResult *k2inbackfill(Relation heap,
-// 									   Relation index,
-// 									   struct IndexInfo *indexInfo,
-// 									   uint64_t *read_time,
-// 									   RowBounds *row_bounds);
+
 extern IndexBulkDeleteResult *k2inbulkdelete(IndexVacuumInfo *info,
 											  IndexBulkDeleteResult *stats,
 											  IndexBulkDeleteCallback callback,
@@ -58,9 +54,7 @@ extern void k2incostestimate(struct PlannerInfo *root,
 							  double *indexCorrelation,
 							  double *indexPages);
 extern bytea *k2inoptions(Datum reloptions, bool validate);
-// extern bool k2inproperty(Oid index_oid, int attno,
-// 						  IndexAMProperty prop, const char *propname,
-// 						  bool *res, bool *isnull);
+
 extern bool k2invalidate(Oid opclassoid);
 
 extern IndexScanDesc k2inbeginscan(Relation rel, int nkeys, int norderbys);

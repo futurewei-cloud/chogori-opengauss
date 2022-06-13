@@ -228,11 +228,6 @@ static TupleTableSlot* IndexOnlyNext(IndexOnlyScanState* node)
              */
         }
 
-        /*
-         * Fill the scan tuple slot with data from the index.
-         */
-//        StoreIndexTuple(slot, indexScan->xs_itup, indexScan->xs_itupdesc);
-
 		/*
 		 * Fill the scan tuple slot with data from the index.  This might be
 		 * provided in either HeapTuple or IndexTuple format.  Conceivably an

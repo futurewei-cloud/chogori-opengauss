@@ -45,59 +45,6 @@ typedef struct
 	bool	is_backfill;	/* are we concurrently backfilling an index? */
 } K2PgBuildState;
 
-/*
- * LSM handler function: return IndexAmRoutine with access method parameters
- * and callbacks.
- */
-// Datum
-// k2inhandler(PG_FUNCTION_ARGS)
-// {
-// 	IndexAmRoutine *amroutine = makeNode(IndexAmRoutine);
-
-// 	amroutine->amstrategies = BTMaxStrategyNumber;
-// 	amroutine->amsupport = BTNProcs;
-// 	amroutine->amcanorder = true;
-// 	amroutine->amcanorderbyop = false;
-// 	amroutine->amcanbackward = true;
-// 	amroutine->amcanunique = true;
-// 	amroutine->amcanmulticol = true;
-// 	amroutine->amoptionalkey = true;
-// 	amroutine->amsearcharray = true;
-// 	amroutine->amsearchnulls = true;
-// 	amroutine->amstorage = false;
-// 	amroutine->amclusterable = true;
-// 	amroutine->ampredlocks = true;
-// 	amroutine->amcanparallel = false; /* TODO: support parallel scan */
-// 	amroutine->amcaninclude = true;
-// 	amroutine->amkeytype = InvalidOid;
-
-// 	amroutine->ambuild = k2inbuild;
-// 	amroutine->ambuildempty = k2inbuildempty;
-// 	amroutine->aminsert = NULL; /* use k2pg_aminsert below instead */
-// 	amroutine->ambulkdelete = k2inbulkdelete;
-// 	amroutine->amvacuumcleanup = k2invacuumcleanup;
-// 	amroutine->amcanreturn = k2incanreturn;
-// 	amroutine->amcostestimate = k2incostestimate;
-// 	amroutine->amoptions = k2inoptions;
-// 	amroutine->amproperty = k2inproperty;
-// 	amroutine->amvalidate = k2invalidate;
-// 	amroutine->ambeginscan = k2inbeginscan;
-// 	amroutine->amrescan = k2inrescan;
-// 	amroutine->amgettuple = k2ingettuple;
-// 	amroutine->amgetbitmap = NULL; /* TODO: support bitmap scan */
-// 	amroutine->amendscan = k2inendscan;
-// 	amroutine->ammarkpos = NULL; /* TODO: support mark/restore pos with ordering */
-// 	amroutine->amrestrpos = NULL;
-// 	amroutine->amestimateparallelscan = NULL; /* TODO: support parallel scan */
-// 	amroutine->aminitparallelscan = NULL;
-// 	amroutine->amparallelrescan = NULL;
-// 	amroutine->k2pg_aminsert = k2ininsert;
-// 	amroutine->k2pg_amdelete = k2indelete;
-// 	amroutine->k2pg_ambackfill = k2inbackfill;
-
-// 	PG_RETURN_POINTER(amroutine);
-// }
-
 static void
 k2inbuildCallback(Relation index, HeapTuple heapTuple, Datum *values, const bool *isnull,
 				   bool tupleIsAlive, void *state)
@@ -135,37 +82,6 @@ k2inbuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
 	result->index_tuples = buildstate.index_tuples;
 	return result;
 }
-
-// IndexBuildResult *
-// k2inbackfill(Relation heap,
-// 			  Relation index,
-// 			  struct IndexInfo *indexInfo,
-// 			  uint64_t *read_time,
-// 			  RowBounds *row_bounds)
-// {
-// 	K2PgBuildState	buildstate;
-// 	double			heap_tuples = 0;
-
-// 	/* Do the heap scan */
-// 	buildstate.isprimary = index->rd_index->indisprimary;
-// 	buildstate.index_tuples = 0;
-// 	buildstate.is_backfill = true;
-// 	heap_tuples = IndexBackfillHeapRangeScan(heap,
-// 											 index,
-// 											 indexInfo,
-// 											 k2inbuildCallback,
-// 											 &buildstate,
-// 											 read_time,
-// 											 row_bounds);
-
-// 	/*
-// 	 * Return statistics
-// 	 */
-// 	IndexBuildResult *result = (IndexBuildResult *) palloc(sizeof(IndexBuildResult));
-// 	result->heap_tuples  = heap_tuples;
-// 	result->index_tuples = buildstate.index_tuples;
-// 	return result;
-// }
 
 void
 k2inbuildempty(Relation index)
@@ -239,13 +155,6 @@ k2inoptions(Datum reloptions, bool validate)
 	return NULL;
 }
 
-// bool
-// k2inproperty(Oid index_oid, int attno, IndexAMProperty prop, const char *propname,
-// 			  bool *res, bool *isnull)
-// {
-// 	return false;
-// }
-
 bool
 k2invalidate(Oid opclassoid)
 {
@@ -290,9 +199,6 @@ k2inrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,	ScanKey orderbys,
  *   SELECT data FROM heapRelation WHERE rowid IN
  *     ( SELECT rowid FROM indexRelation WHERE key = given_value )
  *
- * TODO(neil) Postgres layer should make just one request for IndexScan.
- *   - Query ROWID from IndexTable using key.
- *   - Query data from Table (relation) using ROWID.
  */
 bool
 k2ingettuple(IndexScanDesc scan, ScanDirection dir)
