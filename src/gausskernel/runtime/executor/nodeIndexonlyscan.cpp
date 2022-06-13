@@ -85,7 +85,7 @@ bool ExecCBIFixHBktRel(IndexScanDesc indexScan, Buffer *vmbuffer)
     if (unlikely(RELATION_OWN_BUCKET(indexScan->indexRelation))) {
         HBktIdxScanDesc hpScan = (HBktIdxScanDesc)indexScan;
         if (cbi_scan_need_fix_hbkt_rel(hpScan->currBktIdxScan)) {
-            /* 
+            /*
              * Release VM buffer pin, if any. Ensure IndexOnlyScan to obtain
              * the right visibility map after swapping the bucket relation.
              */
@@ -231,7 +231,29 @@ static TupleTableSlot* IndexOnlyNext(IndexOnlyScanState* node)
         /*
          * Fill the scan tuple slot with data from the index.
          */
-        StoreIndexTuple(slot, indexScan->xs_itup, indexScan->xs_itupdesc);
+//        StoreIndexTuple(slot, indexScan->xs_itup, indexScan->xs_itupdesc);
+
+		/*
+		 * Fill the scan tuple slot with data from the index.  This might be
+		 * provided in either HeapTuple or IndexTuple format.  Conceivably an
+		 * index AM might fill both fields, in which case we prefer the heap
+		 * format, since it's probably a bit cheaper to fill a slot from.
+		 */
+		if (scandesc->xs_hitup)
+		{
+			/*
+			 * We don't take the trouble to verify that the provided tuple has
+			 * exactly the slot's format, but it seems worth doing a quick
+			 * check on the number of fields.
+			 */
+			Assert(slot->tts_tupleDescriptor->natts ==
+				   scandesc->xs_hitupdesc->natts);
+			ExecStoreTuple(scandesc->xs_hitup, slot, InvalidBuffer, false);
+		}
+		else if (scandesc->xs_itup)
+			StoreIndexTuple(slot, scandesc->xs_itup, scandesc->xs_itupdesc);
+		else
+			elog(ERROR, "no data returned for index-only scan");
 
         /*
          * If the index was lossy, we have to recheck the index quals.
@@ -671,7 +693,7 @@ IndexOnlyScanState* ExecInitIndexOnlyScan(IndexOnlyScan* node, EState* estate, i
     }
 
     /*
-     * Choose user-specified snapshot if TimeCapsule clause exists, otherwise 
+     * Choose user-specified snapshot if TimeCapsule clause exists, otherwise
      * estate->es_snapshot instead.
      */
     scanSnap = TvChooseScanSnap(indexstate->ioss_RelationDesc, &node->scan, &indexstate->ss);
@@ -901,7 +923,7 @@ void ExecInitPartitionForIndexOnlyScan(IndexOnlyScanState* indexstate, EState* e
         } else {
             indexstate->ss.part_id = 0;
         }
-        
+
         ListCell* cell = NULL;
         List* part_seqs = resultPlan->ls_rangeSelectedPartitions;
         foreach (cell, part_seqs) {

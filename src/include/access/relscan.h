@@ -131,6 +131,8 @@ typedef struct IndexScanDescData {
     /* in an index-only scan, this is valid after a successful amgettuple */
     IndexTuple xs_itup;    /* index tuple returned by AM */
     TupleDesc xs_itupdesc; /* rowtype descriptor of xs_itup */
+	HeapTuple	xs_hitup;		/* index data returned by AM, as HeapTuple */
+	TupleDesc	xs_hitupdesc;	/* rowtype descriptor of xs_hitup */
 
     /* xs_ctup/xs_cbuf/xs_recheck are valid after a successful index_getnext */
     HeapTupleData xs_ctup; /* current heap tuple, if any */
@@ -144,6 +146,25 @@ typedef struct IndexScanDescData {
     /* state data for traversing HOT chains in index_getnext */
     bool xs_continue_hot; /* T if must keep walking HOT chain */
     IndexFetchTableData *xs_heapfetch;
+
+	/* During execution, Postgres will push down hints to K2PG for performance purpose.
+	 * (currently, only LIMIT values are being pushed down). All these execution information will
+	 * kept in "k2pg_exec_params".
+	 *
+	 * - Generally, "k2pg_exec_params" is kept in execution-state. As Postgres executor traverses and
+	 *   excutes the nodes, it passes along the execution state. Necessary information (such as
+	 *   LIMIT values) will be collected and written to "k2pg_exec_params" in EState.
+	 *
+	 * - However, IndexScan execution doesn't use Postgres's node execution infrastructure. Neither
+	 *   execution plan nor execution state is passed to IndexScan operators. As a result,
+	 *   "k2pg_exec_params" is kept in "IndexScanDescData" to avoid passing EState to a lot of
+	 *   IndexScan functions.
+	 *
+	 * - Postgres IndexScan function will call and pass "k2pg_exec_params" to PgGate to control the
+	 *   index-scan execution in K2PG.
+	 */
+	K2PgExecParameters *k2pg_exec_params;
+
     /* put decompressed heap tuple data into xs_ctbuf_hdr be careful! when malloc memory  should give extra mem for
      *xs_ctbuf_hdr. t_bits which is varlength arr
      */

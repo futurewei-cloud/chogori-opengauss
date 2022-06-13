@@ -134,7 +134,9 @@ IndexScanDesc RelationGetIndexScan(Relation index_relation, int nkeys, int norde
 
     scan->xs_itup = NULL;
     scan->xs_itupdesc = NULL;
-
+	scan->xs_hitup = NULL;
+	scan->xs_hitupdesc = NULL;
+    
     scan->xs_ctup.tupTableType = HEAP_TUPLE;
     ItemPointerSetInvalid(&scan->xs_ctup.t_self);
     scan->xs_ctup.t_data = NULL;

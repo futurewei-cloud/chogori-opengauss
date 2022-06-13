@@ -85,6 +85,7 @@
 #include "storage/smgr/smgr.h"
 #include "access/ustore/knl_uvisibility.h"
 #include "access/ustore/knl_uscan.h"
+#include "access/k2/k2pg_aux.h"
 #include "utils/snapmgr.h"
 #include "access/heapam.h"
 #include "vecexecutor/vecnodes.h"
@@ -522,7 +523,17 @@ IndexFetchSlot(IndexScanDesc scan, TupleTableSlot *slot, bool isUHeap)
  */
 Tuple IndexFetchTuple(IndexScanDesc scan)
 {
-    // TODO: add logic to handle k2 secondary index here
+	/*
+	 * For K2PG secondary indexes, there are two scenarios.
+	 * - If K2PG returns an index-tuple, the returned k2pgctid value should be used to query data.
+	 * - If K2PG returns a heap_tuple, all requested data was already selected in the tuple.
+	 */
+	if (IsK2PgEnabled())
+	{
+		if (scan->xs_hitup != 0)
+			return scan->xs_hitup;
+		return CamFetchTuple(scan->heapRelation, scan->xs_ctup.t_k2pgctid);
+	}
 
     bool all_dead = false;
     Tuple fetchedTuple = NULL;
