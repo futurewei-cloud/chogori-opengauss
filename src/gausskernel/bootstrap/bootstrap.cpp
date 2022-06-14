@@ -63,6 +63,10 @@
 #include "utils/snapmgr.h"
 #include "access/parallel_recovery/page_redo.h"
 
+#include "catalog/pg_database.h"
+#include "access/k2/k2cat_cmds.h"
+#include "access/k2/k2pg_aux.h"
+
 #ifdef PGXC
 #include "nodes/nodes.h"
 #include "pgxc/poolmgr.h"
@@ -402,16 +406,41 @@ static void BootstrapModeMain(void)
         Nulls[i] = false;
     }
 
+	/*
+	 * In K2PG we only need to create the template1 database
+	 * (corresponding to creating the "base/1" subdir as its oid is hardcoded).
+	 */
+	if (IsK2PgEnabled())
+	{
+		K2InitPGCluster();
+
+		K2PgCreateDatabase(TemplateDbOid,
+		                  "template1",
+		                  InvalidOid,
+		                  FirstBootstrapObjectId,
+		                  false /* colocated */);
+	}
+
     /*
      * Process bootstrap input.
      */
     boot_yyparse();
 
-    /*
-     * We should now know about all mapped relations, so it's okay to write
-     * out the initial relation mapping files.
-     */
-    RelationMapFinishBootstrap();
+	/* We do not use a relation map file in K2PG mode yet */
+	if (!IsK2PgEnabled())
+	{
+        /*
+        * We should now know about all mapped relations, so it's okay to write
+        * out the initial relation mapping files.
+        */
+        RelationMapFinishBootstrap();
+    }
+
+ 	if (IsK2PgEnabled())
+	{
+		// set initDbDone to be true on K2 SKV
+		K2FinishInitDB();
+	}
 
     /* Clean up and exit */
     cleanup();
