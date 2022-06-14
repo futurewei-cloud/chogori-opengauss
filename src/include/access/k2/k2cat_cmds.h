@@ -65,7 +65,6 @@ extern void K2PgCreateIndex(const char *indexName,
 						   Datum reloptions,
 						   Oid indexId,
 						   Relation rel,
-//						   OptSplit *split_options,
 						   const bool skip_index_backfill);
 
 extern void K2PgDropIndex(Oid relationId);
