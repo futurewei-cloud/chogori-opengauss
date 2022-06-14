@@ -1183,6 +1183,14 @@ void dropdb(const char* dbname, bool missing_ok)
     if(IS_PGXC_COORDINATOR) {
         DropDBCleanConnection(dbname);
     }
+
+	/*
+	 * Call K2PG to delete the entries ourselves.
+	 */
+	if (IsK2PgEnabled())
+	{
+		K2PgDropDatabase(db_id, dbname);
+	}
 }
 
 /*
