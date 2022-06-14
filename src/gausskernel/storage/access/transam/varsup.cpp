@@ -38,8 +38,18 @@
 #include "storage/procarray.h"
 #endif
 
+#include "access/k2/k2cat_cmds.h"
+#include "access/k2/k2pg_aux.h"
+
 /* Number of OIDs to prefetch (preallocate) per XLOG write */
 #define VAR_OID_PREFETCH 8192
+
+/*
+ * Number of OIDs to prefetch (preallocate) in K2PG setup.
+ * Given there are multiple Postgres nodes, each node should prefetch
+ * in smaller chunks.
+ */
+#define K2PG_OID_PREFETCH	        256
 
 #ifdef PGXC /* PGXC_DATANODE */
 /*
@@ -601,8 +611,25 @@ Oid GetNewObjectId(bool IsToastRel)
 
     /* If we run out of logged for use oids then we must log more */
     if (t_thrd.xact_cxt.ShmemVariableCache->oidCount == 0) {
-        XLogPutNextOid(t_thrd.xact_cxt.ShmemVariableCache->nextOid + VAR_OID_PREFETCH);
-        t_thrd.xact_cxt.ShmemVariableCache->oidCount = VAR_OID_PREFETCH;
+		if (IsK2PgEnabled())
+		{
+			Oid begin_oid = InvalidOid;
+			Oid end_oid   = InvalidOid;
+
+            K2PgReservePgOids(MyDatabaseId,
+                        t_thrd.xact_cxt.ShmemVariableCache->nextOid,
+			            K2PG_OID_PREFETCH,
+			            &begin_oid,
+			            &end_oid);
+
+            t_thrd.xact_cxt.ShmemVariableCache->nextOid = begin_oid;
+			t_thrd.xact_cxt.ShmemVariableCache->oidCount = end_oid - begin_oid;
+		}
+		else
+		{
+            XLogPutNextOid(t_thrd.xact_cxt.ShmemVariableCache->nextOid + VAR_OID_PREFETCH);
+            t_thrd.xact_cxt.ShmemVariableCache->oidCount = VAR_OID_PREFETCH;
+		}
     }
 
     result = t_thrd.xact_cxt.ShmemVariableCache->nextOid;
