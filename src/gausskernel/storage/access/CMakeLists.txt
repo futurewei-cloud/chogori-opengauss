@@ -5,7 +5,7 @@ set(CMAKE_RULE_MESSAGES OFF)
 set(CMAKE_SKIP_RPATH TRUE)
 
 set(CMAKE_MODULE_PATH
-    ${CMAKE_CURRENT_SOURCE_DIR}/pggate
+    ${CMAKE_CURRENT_SOURCE_DIR}/k2
     ${CMAKE_CURRENT_SOURCE_DIR}/cbtree
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/dfs
@@ -27,7 +27,7 @@ set(CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/ustore
 )
 
-add_subdirectory(pggate)
+add_subdirectory(k2)
 add_subdirectory(cbtree)
 add_subdirectory(common)
 add_subdirectory(dfs)

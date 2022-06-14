@@ -1,4 +1,4 @@
-subdir = src/gausskernel/storage/access/pggate
+subdir = src/gausskernel/storage/access/k2
 top_builddir = ../../../../..
 include $(top_builddir)/src/Makefile.global
 
