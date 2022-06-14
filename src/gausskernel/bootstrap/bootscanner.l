@@ -98,9 +98,11 @@ insert			{ return(INSERT_TUPLE); }
 
 
 "declare"		{ return(XDECLARE); }
+"k2pg_declare"	{ return(K2DECLARE); } /* For K2PG pkeys */
 "build"			{ return(XBUILD); }
 "indices"		{ return(INDICES); }
 "unique"		{ return(UNIQUE); }
+"primary"		{ return(PRIMARY); } /* For K2 pkeys */
 "index"			{ return(INDEX); }
 "on"			{ return(ON); }
 "using"			{ return(USING); }
