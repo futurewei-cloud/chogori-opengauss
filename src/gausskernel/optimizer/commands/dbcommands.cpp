@@ -82,6 +82,9 @@
 #include "storage/dfs/dfs_connector.h"
 #include "storage/smgr/segment.h"
 
+#include "access/k2/k2cat_cmds.h"
+#include "access/k2/k2pg_aux.h"
+
 typedef struct {
     Oid src_dboid;  /* source (template) DB */
     Oid dest_dboid; /* DB we are trying to create */
@@ -522,6 +525,9 @@ void createdb(const CreatedbStmt* stmt)
     new_record[Anum_pg_database_dattablespace - 1] = ObjectIdGetDatum(dst_deftablespace);
     new_record[Anum_pg_database_compatibility - 1] = DirectFunctionCall1(namein, CStringGetDatum(dbcompatibility));
 
+	if (IsK2PgEnabled())
+		K2PgCreateDatabase(dboid, dbname, src_dboid, InvalidOid, false);
+
     /*
      * We deliberately set datacl to default (NULL), rather than copying it
      * from the template database.	Copying it would be a bad idea when the
@@ -624,7 +630,7 @@ void createdb(const CreatedbStmt* stmt)
                 dsttablespace = dst_deftablespace;
             else
                 dsttablespace = srctablespace;
-            
+
             dstpath = GetDatabasePath(dboid, dsttablespace);
 
             /*
@@ -814,7 +820,7 @@ void ts_dropdb_xact_callback(bool isCommit, const void* arg)
     }
     (void)pg_atomic_sub_fetch_u32(&g_instance.ts_compaction_cxt.drop_db_count, 1);
     ereport(LOG, (errmodule(MOD_TIMESERIES), errcode(ERRCODE_LOG),
-        errmsg("drop db callback have drop db session count after subtract %u", 
+        errmsg("drop db callback have drop db session count after subtract %u",
         pg_atomic_read_u32(&g_instance.ts_compaction_cxt.drop_db_count))));
 }
 
@@ -833,17 +839,17 @@ void handle_compaction_dropdb(const char* dbname)
         (void)pg_atomic_add_fetch_u32(&g_instance.ts_compaction_cxt.drop_db_count, 1);
         g_instance.ts_compaction_cxt.dropdb_id = drop_databse_oid;
         ereport(LOG, (errmodule(MOD_TIMESERIES), errcode(ERRCODE_LOG),
-            errmsg("drop db callback have drop db session count after add %u", 
+            errmsg("drop db callback have drop db session count after add %u",
             pg_atomic_read_u32(&g_instance.ts_compaction_cxt.drop_db_count))));
-               
-        while (!g_instance.ts_compaction_cxt.compaction_rest && 
+
+        while (!g_instance.ts_compaction_cxt.compaction_rest &&
             g_instance.ts_compaction_cxt.state == Compaction::COMPACTION_IN_PROGRESS) {
             pg_usleep(100 * USECS_PER_MSEC);
         }
-        
+
         set_dbcleanup_callback(ts_dropdb_xact_callback, &g_instance.ts_compaction_cxt.dropdb_id,
             sizeof(g_instance.ts_compaction_cxt.dropdb_id));
-  
+
     }
 }
 #endif
@@ -884,7 +890,7 @@ static void InitDropDbInfo(Oid dbOid, DropDbArg** dropDbInfo)
      * XXX change this when a generic fix for SnapshotNow races is implemented
      */
     snapshot = RegisterSnapshot(GetLatestSnapshot());
-    
+
     rel = heap_open(TableSpaceRelationId, AccessShareLock);
     scan = tableam_scan_begin(rel, snapshot, 0, NULL);
     while ((tuple = (HeapTuple) tableam_scan_getnexttuple(scan, ForwardScanDirection)) != NULL) {
@@ -915,7 +921,7 @@ static void InitDropDbInfo(Oid dbOid, DropDbArg** dropDbInfo)
     InsertDropDbInfo(dbOid, dropDbInfo, pendingDeletesList);
     list_free(pendingDeletesList);
 }
-/* 
+/*
  * Use record tablespace oid list instead of using snapshot scan,
  * because we cannot see the information of target db after dropping
  * database success.
@@ -1276,7 +1282,7 @@ void RenameDatabase(const char* oldname, const char* newname)
      */
     heap_close(rel, NoLock);
     /*
-     * change the database name in the pg_job. 
+     * change the database name in the pg_job.
      */
     pg_job_tbl = heap_open(PgJobRelationId, ExclusiveLock);
     scan = heap_beginscan(pg_job_tbl, SnapshotNow, 0, NULL);
@@ -2373,7 +2379,7 @@ void xlog_db_drop(Oid dbId, Oid tbSpcId)
     if (!rmtree(dst_path, true)) {
         ereport(WARNING, (errmsg("some useless files may be left behind in old database directory \"%s\"", dst_path)));
     }
-    
+
     if (InHotStandby) {
         /*
          * Release locks prior to commit. XXX There is a race condition
@@ -2389,7 +2395,7 @@ void xlog_db_drop(Oid dbId, Oid tbSpcId)
 void xlogRemoveRemainSegsByDropDB(Oid dbId, Oid tablespaceId)
 {
     Assert(dbId != InvalidOid || tablespaceId != InvalidOid);
-    
+
     AutoMutexLock remainSegsLock(&g_instance.xlog_cxt.remain_segs_lock);
     remainSegsLock.lock();
     if (t_thrd.xlog_cxt.remain_segs == NULL) {
@@ -2400,7 +2406,7 @@ void xlogRemoveRemainSegsByDropDB(Oid dbId, Oid tablespaceId)
     hash_seq_init(&status, t_thrd.xlog_cxt.remain_segs);
     ExtentTag *extentTag = NULL;
     while ((extentTag = (ExtentTag *)hash_seq_search(&status)) != NULL) {
-        if ((dbId != InvalidOid && extentTag->remainExtentHashTag.rnode.dbNode != dbId) || 
+        if ((dbId != InvalidOid && extentTag->remainExtentHashTag.rnode.dbNode != dbId) ||
             (tablespaceId != InvalidOid && extentTag->remainExtentHashTag.rnode.spcNode != tablespaceId)) {
             continue;
         }
@@ -2433,10 +2439,10 @@ void dbase_redo(XLogReaderState* record)
 
 /*
  * Get remote nodes prepared xacts, if remote nodes have prepared xacts,
- * we cannot drop database. Otherwise, drop database finally failed in 
+ * we cannot drop database. Otherwise, drop database finally failed in
  * remote nodes and gs_clean cannot connect to database in CN to clean
  * the in-doubt transactions.
- * The memory palloc in PortalHeapMemory context, it will release after 
+ * The memory palloc in PortalHeapMemory context, it will release after
  * operation finished, it also can be released in abort transaction if operation
  * failed.
  */
