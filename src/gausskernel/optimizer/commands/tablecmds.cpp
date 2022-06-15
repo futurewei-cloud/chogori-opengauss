@@ -5433,6 +5433,11 @@ void renameatt(RenameStmt* stmt)
         false,                                      /* recursing? */
         0,                                          /* expected inhcount */
         stmt->behavior);
+
+	if (IsK2PgEnabled())
+	{
+		K2PgRename(stmt, relid);
+	}
 }
 
 /*
@@ -5617,6 +5622,12 @@ void RenameRelation(RenameStmt* stmt)
         UpdatePgObjectChangecsn(relOid, userRelaiton->rd_rel->relkind);
         RelationClose(userRelaiton);
     }
+
+	/* Do the work */
+	if (IsK2PgEnabled())
+	{
+      K2PgRename(stmt, relid);
+	}
 }
 
 /*
