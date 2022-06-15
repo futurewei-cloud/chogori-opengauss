@@ -102,7 +102,7 @@ extern HeapTuple cam_heap_getnext(HeapScanDesc scanDesc);
 extern void cam_heap_endscan(HeapScanDesc scanDesc);
 
 /*
- * The ybc_idx API is used to process the following SELECT.
+ * The k2 index API is used to process the following SELECT.
  *   SELECT data FROM heapRelation WHERE rowid IN
  *     ( SELECT rowid FROM indexRelation WHERE key = given_value )
  */

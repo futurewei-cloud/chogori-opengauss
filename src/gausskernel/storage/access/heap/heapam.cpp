@@ -107,6 +107,9 @@
 #include "replication/bcm.h"
 #endif
 
+#include "access/k2/k2catam.h"
+#include "access/k2/k2pg_aux.h"
+
 #define DECOMPRESS_HEAP_TUPLE(_isCompressed, _heapTuple, _destTupleData, _rd_att, _heapPage)  \
     do {                                                                                      \
         if ((_isCompressed)) {                                                                \
@@ -1695,6 +1698,13 @@ static HeapScanDesc heap_beginscan_internal(Relation relation, Snapshot snapshot
 {
     HeapScanDesc scan;
 
+	/* K2PG scan methods should only be used for tables that are handled by K2 PgGate. */
+	if (IsK2PgRelation(relation))
+	{
+        // TODO: check to see if we need to set and pass in bool temp_snap
+		return cam_heap_beginscan(relation, snapshot, nkeys, key, false);
+	}
+
     /*
      * increment relation ref count while scanning relation
      *
@@ -1805,6 +1815,12 @@ void heap_endscan(TableScanDesc sscan)
      *  unpin scan buffers
      */
     HeapScanDesc scan = (HeapScanDesc)sscan;
+
+	if (IsK2PgRelation(scan->rs_base.rs_rd))
+	{
+		return cam_heap_endscan(scan);
+	}
+
     if (BufferIsValid(scan->rs_base.rs_cbuf)) {
         ReleaseBuffer(scan->rs_base.rs_cbuf);
     }
@@ -2035,6 +2051,12 @@ static BlockNumber HeapParallelscanNextpage(HeapScanDesc scan)
 HeapTuple heap_getnext(TableScanDesc sscan, ScanDirection direction)
 {
     HeapScanDesc scan = (HeapScanDesc) sscan;
+
+	if (IsK2PgRelation(scan->rs_base.rs_rd))
+	{
+		return cam_heap_getnext(scan);
+	}
+
     /* Note: no locking manipulations needed */
     HEAPDEBUG_1; /* heap_getnext( info ) */
 
