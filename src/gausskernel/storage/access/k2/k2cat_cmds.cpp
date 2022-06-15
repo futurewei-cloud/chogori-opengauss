@@ -237,53 +237,6 @@ static void CreateTableAddColumns(K2PgStatement handle,
 	}
 }
 
-// static Datum*
-// CreateSplitPointDatums(ParseState *pstate,
-//                        List *split_point,
-//                        Oid *col_attrtypes,
-//                        int32 *col_attrtypmods)
-// {
-// 	Datum *datums = palloc(sizeof(Datum) * list_length(split_point));
-// 	/* Within a split point, go through the splits for each column */
-// 	int split_num = 0;
-// 	ListCell *cell;
-// 	foreach(cell, split_point)
-// 	{
-// 		/* Get the column's split */
-// 		PartitionRangeDatum *split = (PartitionRangeDatum*) lfirst(cell);
-
-// 		/* If it contains a value, convert that value */
-// 		if (split->kind == PARTITION_RANGE_DATUM_VALUE)
-// 		{
-// 			A_Const *aconst = (A_Const*) split->value;
-// 			Node *value = (Node *) make_const(pstate, &aconst->val, aconst->location);
-// 			value = coerce_to_target_type(pstate,
-// 			                              value,
-// 			                              exprType(value),
-// 			                              col_attrtypes[split_num],
-// 			                              col_attrtypmods[split_num],
-// 			                              COERCION_ASSIGNMENT,
-// 			                              COERCE_IMPLICIT_CAST,
-// 			                              -1);
-// 			if (value == NULL || ((Const*)value)->consttype == 0)
-// 				ereport(ERROR, (errmsg("Type mismatch in split point")));
-
-// 			split->value = value;
-// 			datums[split_num] = ((Const*)value)->constvalue;
-// 		}
-// 		else
-// 		{
-// 			/*
-// 			 * TODO (george): maybe we'll allow MINVALUE/MAXVALUE in the future,
-// 			 * but for now it is illegal
-// 			 */
-// 			ereport(ERROR, (errmsg("Split points must specify finite values")));
-// 		}
-// 		++split_num;
-// 	}
-// 	return datums;
-// }
-
 void
 K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, Oid pgNamespaceId)
 {
@@ -675,13 +628,6 @@ K2PgPrepareAlterTable(AlterTableStmt *stmt, Relation rel, Oid relationId)
 			case AT_ColumnDefault:
 			case AT_DropNotNull:
 			case AT_SetNotNull:
-//			case AT_AddIdentity:
-//			case AT_SetIdentity:
-//			case AT_DropIdentity:
-//			case AT_EnableRowSecurity:
-//			case AT_DisableRowSecurity:
-//			case AT_ForceRowSecurity:
-//			case AT_NoForceRowSecurity:
 				/* For these cases a K2PG alter isn't required, so we do nothing. */
 				break;
 

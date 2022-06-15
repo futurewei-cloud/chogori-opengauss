@@ -452,7 +452,7 @@ static void validateCheckConstraintForBucket(Relation rel, Partition part, HeapT
 static void validateForeignKeyConstraint(char* conname, Relation rel, Relation pkrel, Oid pkindOid, Oid constraintOid);
 static void createForeignKeyTriggers(
     Relation rel, Oid refRelOid, Constraint* fkconstraint, Oid constraintOid, Oid indexOid);
-static void ATController(Relation rel, List* cmds, bool recurse, LOCKMODE lockmode);
+static void ATController(AlterTableStmt* stmt, Relation rel, List* cmds, bool recurse, LOCKMODE lockmode);
 static bool ATCheckLedgerTableCmd(Relation rel, AlterTableCmd* cmd);
 static void ATPrepCmd(List** wqueue, Relation rel, AlterTableCmd* cmd, bool recurse, bool recursing, LOCKMODE lockmode);
 static void ATRewriteCatalogs(List** wqueue, LOCKMODE lockmode);
@@ -6649,7 +6649,7 @@ void AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt* stmt)
     // Next version remove hack patch for 'ALTER FOREIGN TABLE ... ADD NODE'
     if (stmt->cmds != NIL) {
         /* process 'ALTER TABLE' cmd */
-        ATController(rel, stmt->cmds, interpretInhOption(stmt->relation->inhOpt), lockmode);
+        ATController(stmt, rel, stmt->cmds, interpretInhOption(stmt->relation->inhOpt), lockmode);
     } else {
         /* if do not call ATController, close the relation in here, but keep lock until commit */
         relation_close(rel, NoLock);
@@ -6665,7 +6665,7 @@ void AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt* stmt)
             Relation deltaRel = relation_open(deltaRelId, lockmode);
             Assert(RelationIsValid(deltaRel));
 
-            ATController(deltaRel, addNodeCmds, interpretInhOption(stmt->relation->inhOpt), lockmode);
+            ATController(stmt, deltaRel, addNodeCmds, interpretInhOption(stmt->relation->inhOpt), lockmode);
         } else {
 
             /* process 'ALTER FOREIGN TABLE ... ADD NODE' cmd */
@@ -6677,7 +6677,7 @@ void AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt* stmt)
                 /* open error table releation, closed in ATController */
                 Relation errtablerel = relation_open(errtableid, lockmode);
 
-                ATController(errtablerel, addNodeCmds, interpretInhOption(stmt->relation->inhOpt), lockmode);
+                ATController(stmt, errtablerel, addNodeCmds, interpretInhOption(stmt->relation->inhOpt), lockmode);
             }
         }
         list_free_ext(addNodeCmds);
@@ -6702,7 +6702,7 @@ void AlterTableInternal(Oid relid, List* cmds, bool recurse)
 
     rel = relation_open(relid, lockmode);
 
-    ATController(rel, cmds, recurse, lockmode);
+    ATController(NULL, rel, cmds, recurse, lockmode);
 }
 
 static LOCKMODE set_lockmode(LOCKMODE mode, LOCKMODE cmd_mode)
@@ -6995,10 +6995,13 @@ LOCKMODE AlterTableGetLockLevel(List* cmds)
     return lockmode;
 }
 
-static void ATController(Relation rel, List* cmds, bool recurse, LOCKMODE lockmode)
+static void ATController(AlterTableStmt* stmt, Relation rel, List* cmds, bool recurse, LOCKMODE lockmode)
 {
     List* wqueue = NIL;
     ListCell* lcmd = NULL;
+
+	Oid relid = RelationGetRelid(rel);
+
 #ifdef PGXC
     RedistribState* redistribState = NULL;
     bool doRedistribute = false;
@@ -7061,6 +7064,16 @@ static void ATController(Relation rel, List* cmds, bool recurse, LOCKMODE lockmo
     /* Close the relation, but keep lock until commit */
     relation_close(rel, NoLock);
 
+	/*
+	 * Prepare the K2PG alter statement handle -- need to call this before the
+	 * system catalogs are changed below (since it looks up table metadata).
+	 */
+	K2PgStatement handle = NULL;
+	if (IsK2PgRelation(rel))
+	{
+		handle = K2PgPrepareAlterTable(stmt, rel, relid);
+	}
+
     /* Phase 2: update system catalogs */
     ATRewriteCatalogs(&wqueue, lockmode);
 
@@ -7080,6 +7093,16 @@ static void ATController(Relation rel, List* cmds, bool recurse, LOCKMODE lockmo
     if (redistribState != NULL)
         FreeRedistribState(redistribState);
 #endif
+
+	/*
+	 * Execute the K2PG alter table (if needed).
+	 * Must call this after syscatalog updates succeed (e.g. dependencies are
+	 * checked) since we do not support rollback of K2PG alter operations yet.
+	 */
+	if (handle)
+	{
+		K2PgExecAlterPgTable(handle, relid);
+	}
 
     /* Phase 3: scan/rewrite tables as needed */
     ATRewriteTables(&wqueue, lockmode);
