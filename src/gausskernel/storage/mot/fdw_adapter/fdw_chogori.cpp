@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <iostream>
+#include <skvhttp/dto/SKVRecord.h>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -28,6 +29,7 @@
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/memutils.h"
+#include "utils/numeric.h"
 #include "utils/rel.h"
 #include "utils/date.h"
 #include "utils/syscache.h"
@@ -152,6 +154,7 @@ struct K2FdwExecState
 
    PgExecParameters *exec_params; /* execution control parameters for K2 PG */
    bool is_exec_done; /* Each statement should be executed exactly one time */
+  skv::http::dto::Query query;
 };
 
 struct K2FdwScanPlanData
@@ -169,6 +172,8 @@ struct K2FdwScanPlanData
    TupleDesc bind_desc;
 
   std::shared_ptr<skv::http::dto::Schema> schema;
+  skv::http::dto::expression::Expression range_conds;
+  skv::http::dto::expression::Expression where_conds;
 };
 
 using skv::http::String;
@@ -503,6 +508,8 @@ static void BindScanKeys(Relation relation,
 	//HandleK2PgStatusWithOwner(PgGate_DmlBindWhereConds(fdw_state->handle, where_conds),
 	//													fdw_state->handle,
 	//													fdw_state->stmt_owner);
+    scan_plan->range_conds = std::move(range_conds);
+    scan_plan->where_conds = std::move(where_conds);
 }
 
 void
@@ -566,6 +573,8 @@ k2IterateForeignScan(ForeignScanState *node)
 	TupleTableSlot *slot;
 	K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
 	bool           has_data   = false;
+    
+    auto&& [status, txnHandle] = client.beginTxn(skv::http::dto::TxnOptions()).get();
 
 	/* Execute the select statement one time. */
 	if (!k2pg_state->is_exec_done) {
@@ -578,6 +587,22 @@ k2IterateForeignScan(ForeignScanState *node)
 		scan_plan.bind_desc = RelationGetDescr(relation);
 		BindScanKeys(relation, k2pg_state, &scan_plan);
 
+        auto&&[status, query] = txnHandle.createQuery("postgres", scan_plan.schema->name).get();
+        if (!status.is2xxOK()) {
+          // err
+        }
+
+        skv::http::dto::SKVRecordBuilder startBuild("postgres", scan_plan.schema);
+        skv::http::dto::SKVRecordBuilder endBuild("postgres", scan_plan.schema);
+        std::vector<skv::http::dto::expression::Expression> leftovers;
+        BuildRangeRecords(scan_plan.range_conds, leftovers, startBuild, endBuild, scan_plan.schema);
+        query.startScanRecord = startBuild.build().storage;
+        query.endScanRecord = endBuild.build().storage;
+        for (skv::http::dto::expression::Expression& expr : leftovers) {
+          scan_plan.where_conds.expressionChildren.push_back(std::move(expr));
+        }
+        query.setFilterExpression(std::move(scan_plan.where_conds));
+        k2pg_state->query = std::move(query);
 		//k2SetupScanTargets(node);
 		//HandleK2PgStatusWithOwner(PgGate_ExecSelect(k2pg_state->handle, k2pg_state->exec_params),
 		//						k2pg_state->handle,
@@ -594,6 +619,10 @@ k2IterateForeignScan(ForeignScanState *node)
 	bool            *isnull = slot->tts_isnull;
 	PgSysColumns syscols;
 
+    auto&& [statusQ, records] = txnHandle.query(k2pg_state->query).get();
+    if (!statusQ.is2xxOK()) {
+      //err
+    }
 	/* Fetch one row. */
 	//HandleK2PgStatusWithOwner(PgGate_DmlFetch(k2pg_state->handle,
 	//                                      tupdesc->natts,
@@ -605,18 +634,27 @@ k2IterateForeignScan(ForeignScanState *node)
 	//                        k2pg_state->stmt_owner);
 
 	/* If we have result(s) update the tuple slot. */
-	if (has_data)
+	if (records.size())
 	{
       // TODO
       //if (node->k2pg_fdw_aggs == NIL)
       //{
-			HeapTuple tuple = heap_form_tuple(tupdesc, values, isnull);
-			if (syscols.oid != InvalidOid)
-			{
-				HeapTupleSetOid(tuple, syscols.oid);
-			}
+      skv::http::dto::SKVRecord& record = records[0];
+      record.seekField(K2_FIELD_OFFSET);
+      std::optional<int32_t> value = record.deserializeNext<int32_t>();
+   std::cout << "K2FDW: scanned a record with val: " << *value << std::endl;
+      
+      //HeapTuple tuple = heap_form_tuple(tupdesc, values, isnull);
+            slot->tts_isnull[0] = false;
+            slot->tts_values[0] = NumericGetDatum(*value);
+			//if (syscols.oid != InvalidOid)
+			//{
+			//	HeapTupleSetOid(tuple, syscols.oid);
+			//}
 
-			slot = ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+            ExecStoreVirtualTuple(slot);
+            // TODO xmin xmax like MOT
+			//slot = ExecStoreTuple(tuple, slot, InvalidBuffer, false);
             // TODO
 			/* Setup special columns in the slot */
 			//slot->tts_k2pgctid = PointerGetDatum(syscols.k2pgctid);
