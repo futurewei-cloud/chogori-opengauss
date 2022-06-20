@@ -64,8 +64,10 @@
 #include "access/parallel_recovery/page_redo.h"
 
 #include "catalog/pg_database.h"
+
 #include "access/k2/k2cat_cmds.h"
 #include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
 
 #ifdef PGXC
 #include "nodes/nodes.h"
@@ -733,9 +735,14 @@ void InsertOneTuple(Oid objectid)
     tuple = (HeapTuple) tableam_tops_form_tuple(tupDesc, values, Nulls, HEAP_TUPLE);
     if (objectid != (Oid)0)
         HeapTupleSetOid(tuple, objectid);
+
+    if (IsK2PgEnabled())
+		K2PgExecuteInsert(t_thrd.bootstrap_cxt.boot_reldesc, tupDesc, tuple);
+
     pfree(tupDesc); /* just free's tupDesc, not the attrtypes */
 
-    (void)simple_heap_insert(t_thrd.bootstrap_cxt.boot_reldesc, tuple);
+    if (!IsK2PgEnabled())
+        (void)simple_heap_insert(t_thrd.bootstrap_cxt.boot_reldesc, tuple);
     tableam_tops_free_tuple(tuple);
     ereport(DEBUG4, (errmsg("row inserted")));
 

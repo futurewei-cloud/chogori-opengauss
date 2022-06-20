@@ -17,7 +17,7 @@
 #include "knl/knl_variable.h"
 #include <arpa/inet.h>
 #include <fnmatch.h>
-#include <libgen.h> 
+#include <libgen.h>
 #include "access/tableam.h"
 #include "access/heapam.h"
 #include "access/hash.h"
@@ -115,6 +115,9 @@
 #include "access/ustore/knl_uscan.h"
 #include "access/ustore/knl_uheap.h"
 #include "access/ustore/knl_whitebox_test.h"
+
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
 
 #define ISOCTAL(c) (((c) >= '0') && ((c) <= '7'))
 #define OCTVALUE(c) ((c) - '0')
@@ -953,7 +956,7 @@ uint64 DoCopy(CopyStmt* stmt, const char* queryString)
             ereport(ERROR,
                 (errcode(ERRCODE_INVALID_TEMP_OBJECTS),
                     errmsg("Temp table's data is invalid because datanode %s restart. "
-                       "Quit your session to clean invalid temp tables.", 
+                       "Quit your session to clean invalid temp tables.",
                        g_instance.attr.attr_common.PGXCNodeName)));
         }
 
@@ -1306,11 +1309,11 @@ void GetTransSourceStr(CopyState cstate, int beginPos, int endPos)
     /* valid length is endPos - beginPos + 1, extra 1 for \0 */
     int transStrLen = endPos - beginPos + 2;
     char *transString = (char *)palloc0(transStrLen * sizeof(char));
-    
-    errno_t rc = strncpy_s(transString, transStrLen, 
+
+    errno_t rc = strncpy_s(transString, transStrLen,
                            cstate->source_query_string + beginPos, transStrLen - 1);
     securec_check(rc, "\0", "\0");
-    
+
     cstate->transform_query_string = transString;
 }
 
@@ -1853,7 +1856,7 @@ static void TransformColExpr(CopyState cstate)
     int colcounter = 0;
     List* exprlist = cstate->trans_expr_list;
     int colnum = list_length(exprlist);
-    
+
     if (colnum == 0) {
         return;
     }
@@ -1946,7 +1949,7 @@ static void SetColInFunction(CopyState cstate, int attrno, const TypeName* type)
     /* Make new typeid & typemod of Typename. */
     tup = typenameType(NULL, type, &attrmod);
     attroid = HeapTupleGetOid(tup);
-    
+
     cstate->as_typemods[attrno - 1].assign = true;
     cstate->as_typemods[attrno - 1].typemod = attrmod;
 
@@ -1959,7 +1962,7 @@ static void SetColInFunction(CopyState cstate, int attrno, const TypeName* type)
         cstate->trans_tupledesc->attrs[attrno - 1]->attstorage = ((Form_pg_type)GETSTRUCT(tup))->typstorage;
     }
     ReleaseSysCache(tup);
-    
+
 
     /* Fetch the input function and typioparam info */
     if (IS_BINARY(cstate))
@@ -2919,7 +2922,7 @@ static uint64 CopyTo(CopyState cstate, bool isFirst, bool isLast)
                 } else {
                     processed = CStoreCopyTo(cstate, tupDesc, values, nulls);
                 }
-            // XXXTAM: WE need to refactor this once we know what to do 
+            // XXXTAM: WE need to refactor this once we know what to do
             // with heap_deform_tuple2 in the heap case
             } else {
                 Tuple tuple;
@@ -2928,10 +2931,10 @@ static uint64 CopyTo(CopyState cstate, bool isFirst, bool isLast)
 
                 while ((tuple = scan_handler_tbl_getnext(scandesc, ForwardScanDirection, cstate->curPartionRel)) != NULL) {
                     CHECK_FOR_INTERRUPTS();
-                
+
                     /* Deconstruct the tuple ... faster than repeated heap_getattr */
                     tableam_tops_deform_tuple2(tuple, tupDesc, values, nulls, GetTableScanDesc(scandesc, cstate->curPartionRel)->rs_cbuf);
-                    
+
                         /* Format and send the data */
                     CopyOneRowTo(cstate, HeapTupleGetOid((HeapTuple)tuple), values, nulls);
                     processed++;
@@ -3321,7 +3324,7 @@ CopyFromManager initCopyFromManager(MemoryContext parent, Relation heapRel, bool
     mgr->isPartRel = RELATION_IS_PARTITIONED(heapRel) || RELATION_OWN_BUCKET(heapRel);
     if (!mgr->isPartRel) {
         CopyFromBulk bulk;
-        
+
         mgr->bulk = bulk =
             (CopyFromBulk)palloc(sizeof(CopyFromBulkData) + sizeof(Tuple) * MAX_BUFFERED_TUPLES);
 
@@ -3478,7 +3481,7 @@ CopyFromBulk findBulk(CopyFromManager mgr, Oid partOid, int2 bucketId, bool* toF
         oldCxt = MemoryContextSwitchTo(copyFromMemCxt->memCxtCandidate);
 
         bulk->tuples = (Tuple*)palloc(sizeof(Tuple) * bulk->maxTuples);
-        
+
         (void)MemoryContextSwitchTo(oldCxt);
 
         return bulk;
@@ -3647,7 +3650,7 @@ void AddToBulk(CopyFromBulk bulk, HeapTuple tup, bool needCopy)
 
     Assert(bulk != NULL && tup != NULL);
 
-    Assert(TUPLE_IS_HEAP_TUPLE(tup)); 
+    Assert(TUPLE_IS_HEAP_TUPLE(tup));
 
     if (needCopy) {
 #ifdef USE_ASSERT_CHECKING
@@ -3785,7 +3788,7 @@ static uint64 CopyFrom(CopyState cstate)
     int hi_options = 0; /* start with default heap_insert options */
     BulkInsertState bistate;
     uint64 processed = 0;
-    
+
     int2 bucketid = InvalidBktId;
     bool useHeapMultiInsert = false;
     bool isPartitionRel = false;
@@ -3911,7 +3914,7 @@ static uint64 CopyFrom(CopyState cstate)
     isPartitionRel = RELATION_IS_PARTITIONED(resultRelationDesc);
     hasBucket = RELATION_OWN_BUCKET(resultRelationDesc);
     hasPartition = isPartitionRel || hasBucket;
-    needflush = ((hi_options & TABLE_INSERT_SKIP_WAL) || enable_heap_bcm_data_replication()) 
+    needflush = ((hi_options & TABLE_INSERT_SKIP_WAL) || enable_heap_bcm_data_replication())
                 && !RelationIsForeignTable(cstate->rel) && !RelationIsStream(cstate->rel)
                 && !RelationIsSegmentTable(cstate->rel);
 
@@ -4053,7 +4056,7 @@ static uint64 CopyFrom(CopyState cstate)
 #ifdef ENABLE_MULTIPLE_NODES
     else if (RelationIsTsStore(cstate->rel) && IS_PGXC_DATANODE) {
         if (!g_instance.attr.attr_common.enable_tsdb) {
-            ereport(ERROR, 
+            ereport(ERROR,
                 (errcode(ERRCODE_LOG),
                 errmsg("Can't copy data when 'enable_tsdb' is off"),
                 errdetail("When the guc is off, it is forbidden to insert to timeseries table"),
@@ -4561,78 +4564,83 @@ static uint64 CopyFrom(CopyState cstate)
                     if (hasPartition) {
                         resetPerTupCxt = resetPerTupCxt || (PerTupCxtSize >= MAX_TUPLES_SIZE);
                     }
-                    
+
                     if (isPartitionRel && needflush) {
                         partitionList = list_append_unique_oid(partitionList,
                                                                heapTupleGetPartitionId(resultRelationDesc, tuple));
                     }
                 } else {
                     List* recheckIndexes = NIL;
-                    Relation targetRel;
-                    ItemPointer pTSelf = NULL;
-                    if (isPartitionRel) {
-                        /* get partititon oid to insert the record */
-                        partitionid = heapTupleGetPartitionId(resultRelationDesc, tuple);
-                        searchFakeReationForPartitionOid(estate->esfRelations,
-                            estate->es_query_cxt,
-                            resultRelationDesc,
-                            partitionid,
-                            heaprel,
-                            partition,
-                            RowExclusiveLock);
-                        targetRel = heaprel;
-                        if (bucketid != InvalidBktId) {
-                            searchHBucketFakeRelation(
-                                estate->esfRelations, estate->es_query_cxt, heaprel, bucketid, targetRel);
-                        }
-
-                        (void)tableam_tuple_insert(targetRel, tuple, mycid, 0, NULL);
-
-                        if (needflush) {
-                            partitionList = list_append_unique_oid(partitionList, partitionid);
-                        }
-                    } else if (hasBucket) {
-                        Assert(bucketid != InvalidBktId);
-                        searchHBucketFakeRelation(
-                            estate->esfRelations, estate->es_query_cxt, cstate->rel, bucketid, targetRel);
-                        (void)tableam_tuple_insert(targetRel, tuple, mycid, 0, NULL);
-                    } else {
-                        targetRel = cstate->rel;
-                        (void)tableam_tuple_insert(targetRel, tuple, mycid, 0, NULL);
-                    }
-
-                    if (rel_isblockchain) {
-                        has_hash = hist_table_record_insert(targetRel, (HeapTuple)tuple, &res_hash);
-                    }
-
-                    pTSelf = tableam_tops_get_t_self(cstate->rel, tuple);
-
-                    /*
-                     * Global Partition Index stores the partition's tableOid with the index
-                     * tuple which is extracted from the tuple of the slot. Make sure it is set.
-                     */
-                    if (slot->tts_tupslotTableAm != TAM_USTORE) {
-                        ((HeapTuple)slot->tts_tuple)->t_tableOid = RelationGetRelid(targetRel);
-                    } else {
-                        ((UHeapTuple)slot->tts_tuple)->table_oid = RelationGetRelid(targetRel);
-                    }
-
                     /* OK, store the tuple and create index entries for it */
-                    if (resultRelInfo->ri_NumIndices > 0 && !RelationIsColStore(cstate->rel))
-                        recheckIndexes = ExecInsertIndexTuples(slot,
-                            pTSelf,
-                            estate,
-                            isPartitionRel ? heaprel : NULL,
-                            isPartitionRel ? partition : NULL,
-                            bucketid, NULL, NULL);
+					if (IsK2PgRelation(resultRelInfo->ri_RelationDesc)) {
+						K2PgExecuteInsert(cstate->rel, tupDesc, (HeapTuple)tuple);
+                    } else {
+                        Relation targetRel;
+                        ItemPointer pTSelf = NULL;
+                        if (isPartitionRel) {
+                            /* get partititon oid to insert the record */
+                            partitionid = heapTupleGetPartitionId(resultRelationDesc, tuple);
+                            searchFakeReationForPartitionOid(estate->esfRelations,
+                                estate->es_query_cxt,
+                                resultRelationDesc,
+                                partitionid,
+                                heaprel,
+                                partition,
+                                RowExclusiveLock);
+                            targetRel = heaprel;
+                            if (bucketid != InvalidBktId) {
+                                searchHBucketFakeRelation(
+                                    estate->esfRelations, estate->es_query_cxt, heaprel, bucketid, targetRel);
+                            }
 
-                    /* AFTER ROW INSERT Triggers */
-                    ExecARInsertTriggers(estate, resultRelInfo, partitionid, bucketid, (HeapTuple)tuple,
-                        recheckIndexes);
+                            (void)tableam_tuple_insert(targetRel, tuple, mycid, 0, NULL);
 
-                    list_free(recheckIndexes);
+                            if (needflush) {
+                                partitionList = list_append_unique_oid(partitionList, partitionid);
+                            }
+                        } else if (hasBucket) {
+                            Assert(bucketid != InvalidBktId);
+                            searchHBucketFakeRelation(
+                                estate->esfRelations, estate->es_query_cxt, cstate->rel, bucketid, targetRel);
+                            (void)tableam_tuple_insert(targetRel, tuple, mycid, 0, NULL);
+                        } else {
+                            targetRel = cstate->rel;
+                            (void)tableam_tuple_insert(targetRel, tuple, mycid, 0, NULL);
+                        }
 
-                    resetPerTupCxt = true;
+                        if (rel_isblockchain) {
+                            has_hash = hist_table_record_insert(targetRel, (HeapTuple)tuple, &res_hash);
+                        }
+
+                        pTSelf = tableam_tops_get_t_self(cstate->rel, tuple);
+
+                        /*
+                        * Global Partition Index stores the partition's tableOid with the index
+                        * tuple which is extracted from the tuple of the slot. Make sure it is set.
+                        */
+                        if (slot->tts_tupslotTableAm != TAM_USTORE) {
+                            ((HeapTuple)slot->tts_tuple)->t_tableOid = RelationGetRelid(targetRel);
+                        } else {
+                            ((UHeapTuple)slot->tts_tuple)->table_oid = RelationGetRelid(targetRel);
+                        }
+
+                        /* OK, store the tuple and create index entries for it */
+                        if (resultRelInfo->ri_NumIndices > 0 && !RelationIsColStore(cstate->rel))
+                            recheckIndexes = ExecInsertIndexTuples(slot,
+                                pTSelf,
+                                estate,
+                                isPartitionRel ? heaprel : NULL,
+                                isPartitionRel ? partition : NULL,
+                                bucketid, NULL, NULL);
+
+                        /* AFTER ROW INSERT Triggers */
+                        ExecARInsertTriggers(estate, resultRelInfo, partitionid, bucketid, (HeapTuple)tuple,
+                            recheckIndexes);
+
+                        list_free(recheckIndexes);
+
+                        resetPerTupCxt = true;
+                    }
                 }
                 if (has_hash) {
                     cstate->hashstate.has_histhash = true;
@@ -4726,7 +4734,7 @@ static uint64 CopyFrom(CopyState cstate)
 #ifdef PGXC
 
     /* Send COPY DONE to datanodes */
-    if (IS_PGXC_COORDINATOR && cstate->remoteCopyState != NULL && 
+    if (IS_PGXC_COORDINATOR && cstate->remoteCopyState != NULL &&
         cstate->remoteCopyState->rel_loc != NULL) {
         RemoteCopyData* remoteCopyState = cstate->remoteCopyState;
         bool replicated = (remoteCopyState->rel_loc->locatorType == LOCATOR_TYPE_REPLICATED);
@@ -4787,7 +4795,7 @@ static uint64 CopyFrom(CopyState cstate)
         HeapSyncHashSearch(cstate->rel->rd_id, HASH_REMOVE);
 
     list_free_ext(partitionList);
-    
+
     return processed;
 }
 
@@ -4847,7 +4855,7 @@ static int getPartitionNumInInitCopy(Relation relation)
     } else {
         partitionNum = getNumberOfRangePartitions(relation);
     }
-    return partitionNum; 
+    return partitionNum;
 }
 
 static void InitCopyMemArg(CopyState cstate, MemInfoArg* CopyMem)
@@ -5123,9 +5131,9 @@ void UHeapCopyFromInsertBatch(Relation rel, EState* estate, CommandId mycid, int
     tableam_tuple_multi_insert(rel,
             NULL,
             (Tuple*)bufferedTuples,
-            nBufferedTuples, 
-            mycid, 
-            hiOptions, 
+            nBufferedTuples,
+            mycid,
+            hiOptions,
             bistate,
             NULL);
     MemoryContextSwitchTo(oldcontext);
@@ -5176,7 +5184,7 @@ void FlushInsertSelectBulk(DistInsertSelectState* node, EState* estate, bool can
     Relation resultRelationDesc;
     TupleTableSlot* slot = NULL;
     bool needflush = false;
-    
+
     /* get information on the (current) result relation
      */
     resultRelInfo = estate->es_result_relation_info;
@@ -5184,12 +5192,12 @@ void FlushInsertSelectBulk(DistInsertSelectState* node, EState* estate, bool can
 
     slot = ExecInitExtraTupleSlot(estate);
     ExecSetSlotDescriptor(slot, RelationGetDescr(resultRelationDesc));
-    
+
     if (enable_heap_bcm_data_replication() && !RelationIsForeignTable(resultRelationDesc)
         && !RelationIsStream(resultRelationDesc) && !RelationIsSegmentTable(resultRelationDesc)) {
         needflush = true;
     }
-    
+
     if (node->mgr->isPartRel) {
         int cnt = 0;
         Assert(RELATION_IS_PARTITIONED(resultRelationDesc) || RELATION_CREATE_BUCKET(resultRelationDesc));
@@ -5204,7 +5212,7 @@ void FlushInsertSelectBulk(DistInsertSelectState* node, EState* estate, bool can
                         *partitionList = list_append_unique_oid(*partitionList, copyFromMemCxt->chunk[i]->partOid);
                     }
                 }
-                
+
                 (void)CopyFromChunkInsert<true>(NULL,
                     estate,
                     copyFromMemCxt->chunk[0],
@@ -5242,7 +5250,7 @@ void FlushInsertSelectBulk(DistInsertSelectState* node, EState* estate, bool can
     if (!needflush) {
         return;
     }
-    
+
     if (resultRelationDesc->rd_rel->parttype ==  PARTTYPE_PARTITIONED_RELATION) {
         ListCell *cell = NULL;
         foreach(cell, *partitionList) {
@@ -5365,7 +5373,7 @@ bool IsTypeAcceptEmptyStr(Oid typeOid)
  *
  * Returns a CopyState, to be passed to NextCopyFrom and related functions.
  */
-CopyState BeginCopyFrom(Relation rel, const char* filename, List* attnamelist, 
+CopyState BeginCopyFrom(Relation rel, const char* filename, List* attnamelist,
                              List* options, void* mem_info, const char* queryString)
 {
     CopyState cstate;
@@ -6148,7 +6156,7 @@ static void ExecTransColExpr(CopyState cstate, ExprContext* econtext, int numPhy
 {
     bool needTransform = false;
     int i;
-    
+
     for (i = 0; i < numPhysAttrs; i++) {
         if (cstate->transexprs[i]) {
             needTransform = true;
@@ -6159,18 +6167,18 @@ static void ExecTransColExpr(CopyState cstate, ExprContext* econtext, int numPhy
     if (needTransform) {
         TupleTableSlot *slot = MakeSingleTupleTableSlot(cstate->trans_tupledesc);
         HeapTuple tuple = heap_form_tuple(cstate->trans_tupledesc, values, nulls);
-        
+
         ExecStoreTuple(tuple, slot, InvalidBuffer, false);
         econtext->ecxt_scantuple = slot;
-        
+
         for (i = 0; i < numPhysAttrs; i++) {
             if (!cstate->transexprs[i])
                 continue;
-            
+
             values[i] = ExecEvalExpr(cstate->transexprs[i], econtext,
                                     &nulls[i], NULL);
         }
-        
+
         ExecDropSingleTupleTableSlot(slot);
     }
 }
@@ -7954,7 +7962,7 @@ bool is_valid_location(const char* location)
     // check URL prefix
     if (strncmp(l, GSFS_PREFIX, GSFS_PREFIX_LEN) != 0 && strncmp(l, GSFSS_PREFIX, GSFSS_PREFIX_LEN) != 0  &&
         strncmp(l, GSOBS_PREFIX, GSOBS_PREFIX_LEN) != 0 && strncmp(l, LOCAL_PREFIX, LOCAL_PREFIX_LEN) != 0 &&
-        strncmp(l, ROACH_PREFIX, ROACH_PREFIX_LEN) != 0 && strncmp(l, OBS_PREFIX, OBS_PREfIX_LEN) != 0 && 
+        strncmp(l, ROACH_PREFIX, ROACH_PREFIX_LEN) != 0 && strncmp(l, OBS_PREFIX, OBS_PREfIX_LEN) != 0 &&
         l[0] != '/' && l[0] != '.')
         return false;
 
