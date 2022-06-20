@@ -89,6 +89,9 @@
 #include "gs_ledger/ledger_utils.h"
 #include "gs_ledger/userchain.h"
 
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
+
 #ifdef PGXC
 static TupleTableSlot* fill_slot_with_oldvals(TupleTableSlot* slot, HeapTupleHeader oldtuphd, Bitmapset* modifiedCols);
 static void RecoredGeneratedExpr(ResultRelInfo *resultRelInfo, EState *estate, CmdType cmdtype);
@@ -643,7 +646,10 @@ static Oid ExecUpsert(ModifyTableState* state, TupleTableSlot* slot, TupleTableS
              * executor's MVCC snapshot at higher isolation levels.
              */
             Assert(upsertState->us_action == UPSERT_NOTHING);
-            ExecCheckTIDVisible(targetrel, estate, targetrel, &conflictInfo.conflictTid);
+ 			if (!IsK2PgRelation(resultRelationDesc)) {
+				// K2PG does not use Postgres transaction control code.
+                ExecCheckTIDVisible(targetrel, estate, targetrel, &conflictInfo.conflictTid);
+            }
             InstrCountFiltered2(&state->ps, 1);
             *updated = true;
             ReleaseResourcesForUpsertGPI(isgpi, resultRelationDesc, bucketRel, &partition_relation, part);
@@ -651,13 +657,25 @@ static Oid ExecUpsert(ModifyTableState* state, TupleTableSlot* slot, TupleTableS
         }
     }
 
-    /* insert the tuple */
-    newid = tableam_tuple_insert(targetrel, tuple, estate->es_output_cid, 0, NULL);
+	if (IsK2PgRelation(resultRelationDesc))
+	{
+        newid = K2PgHeapInsert(slot, (HeapTuple)tuple, estate);
+        /* insert index entries for tuple */
+		if (K2PgRelInfoHasSecondaryIndices(resultRelInfo)) {
+            ItemPointerData item = TUPLE_IS_UHEAP_TUPLE(tuple) ? ((UHeapTuple)tuple)->ctid : ((HeapTuple)tuple)->t_self;
+            recheckIndexes = ExecInsertIndexTuples(slot, &item, estate, heaprel, partition, bucketid, &specConflict, NULL);
 
-    /* insert index entries for tuple */
-    ItemPointerData item = TUPLE_IS_UHEAP_TUPLE(tuple) ? ((UHeapTuple)tuple)->ctid : ((HeapTuple)tuple)->t_self;
-    recheckIndexes = ExecInsertIndexTuples(slot, &item, estate, heaprel,
-        partition, bucketid, &specConflict, NULL);
+        }
+	}
+	else
+	{
+        /* insert the tuple */
+        newid = tableam_tuple_insert(targetrel, tuple, estate->es_output_cid, 0, NULL);
+        /* insert index entries for tuple */
+        ItemPointerData item = TUPLE_IS_UHEAP_TUPLE(tuple) ? ((UHeapTuple)tuple)->ctid : ((HeapTuple)tuple)->t_self;
+        recheckIndexes = ExecInsertIndexTuples(slot, &item, estate, heaprel,
+            partition, bucketid, &specConflict, NULL);
+    }
 
     /* other transaction commit index insertion before us,
      * then abort the tuple and try to find the conflict tuple again
@@ -695,7 +713,11 @@ template <bool useHeapMultiInsert>
 TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, TupleTableSlot* planSlot, EState* estate,
     bool canSetTag, int options, List** partitionList)
 {
-    // TODO: add k2 logic here
+	/*
+	 * The attribute "k2pg_conflict_slot" is only used within ExecInsert.
+	 * Initialize its value to NULL.
+	 */
+	estate->k2pg_conflict_slot = NULL;
 
     Tuple tuple = NULL;
     ResultRelInfo* result_rel_info = NULL;
