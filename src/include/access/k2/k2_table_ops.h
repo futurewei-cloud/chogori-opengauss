@@ -49,10 +49,12 @@ extern Oid K2PgExecuteInsert(Relation rel,
 /*
  * Execute the insert outside of a transaction.
  * Assumes the caller checked that it is safe to do so.
+ *
+ * disable this for now since K2PG is always transactional
  */
-extern Oid K2PgExecuteNonTxnInsert(Relation rel,
-								  TupleDesc tupleDesc,
-								  HeapTuple tuple);
+//extern Oid K2PgExecuteNonTxnInsert(Relation rel,
+//								  TupleDesc tupleDesc,
+//								  HeapTuple tuple);
 
 /*
  * Insert a tuple into the an index's backing K2PG index table.
