@@ -1217,6 +1217,29 @@ TupleTableSlot* ExecDelete(ItemPointer tupleid, Oid deletePartitionOid, int2 buc
         if (slot->tts_isempty) {
             (void)ExecStoreAllNullTuple(slot);
         }
+	}
+    else if (IsK2PgRelation(result_relation_desc))
+	{
+		bool row_found = K2PgExecuteDelete(result_relation_desc, planSlot, estate, node);
+		if (!row_found)
+		{
+			/*
+			 * No row was found. This is possible if it's a single row txn
+			 * and there is no row to delete (since we do not first do a scan).
+			 */
+			return NULL;
+		}
+
+		if (K2PgRelInfoHasSecondaryIndices(result_rel_info))
+		{
+			Datum k2pgctid = K2PgGetPgTupleIdFromSlot(planSlot);
+
+			/* Delete index entries of the old tuple
+            *
+            * TODO: double check the logic here
+            */
+			ExecDeleteIndexTuples(planSlot, tupleid, estate, part_relation, partition, NULL, false);
+		}
     } else {
         /*
          * delete the tuple
