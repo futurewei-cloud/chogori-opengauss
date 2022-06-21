@@ -1232,8 +1232,6 @@ TupleTableSlot* ExecDelete(ItemPointer tupleid, Oid deletePartitionOid, int2 buc
 
 		if (K2PgRelInfoHasSecondaryIndices(result_rel_info))
 		{
-			Datum k2pgctid = K2PgGetPgTupleIdFromSlot(planSlot);
-
 			/* Delete index entries of the old tuple
             *
             * TODO: double check the logic here
@@ -1697,7 +1695,48 @@ TupleTableSlot* ExecUpdate(ItemPointer tupleid,
 
         /* FDW might have changed tuple */
         tuple = tableam_tslot_get_tuple_from_slot(result_relation_desc, slot);
-    } else {
+    } else if (IsK2PgRelation(result_relation_desc)) {
+        // TODO: double check the logic here
+
+		/*
+		 * Check the constraints of the tuple.
+		 */
+        if (result_relation_desc->rd_att->constr) {
+            if (node->mt_insert_constr_slot == NULL) {
+                ExecConstraints(result_rel_info, slot, estate);
+            } else {
+                ExecConstraints(result_rel_info, node->mt_insert_constr_slot, estate);
+            }
+        }
+
+		RangeTblEntry *rte = rt_fetch(result_rel_info->ri_RangeTableIndex,
+									  estate->es_range_table);
+
+		bool row_found = K2PgExecuteUpdate(result_relation_desc, planSlot, (HeapTuple)tuple, estate, node, rte->updatedCols);
+
+		if (!row_found)
+		{
+			/*
+			 * No row was found. This is possible if it's a single row txn
+			 * and there is no row to update (since we do not first do a scan).
+			 */
+			return NULL;
+		}
+
+		/*
+		 * Update indexes if needed.
+		 */
+		if (K2PgRelInfoHasSecondaryIndices(result_rel_info))
+		{
+			/* Delete index entries of the old tuple */
+            ExecDeleteIndexTuples(slot, tupleid, estate, fake_part_rel, partition, NULL, false);
+
+			/* Insert new index entries for tuple */
+            List* recheckIndexes = NIL;
+            ItemPointerData item = TUPLE_IS_UHEAP_TUPLE(tuple) ? ((UHeapTuple)tuple)->ctid : ((HeapTuple)tuple)->t_self;
+            recheckIndexes = ExecInsertIndexTuples(slot, &item, estate, fake_part_rel, partition, bucketid, NULL, NULL);
+		}
+	} else {
         bool update_indexes = false;
 
         /*
