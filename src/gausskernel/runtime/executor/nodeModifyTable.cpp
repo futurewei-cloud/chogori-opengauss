@@ -2834,9 +2834,42 @@ TupleTableSlot* ExecModifyTable(ModifyTableState* node)
                 char relkind;
                 Datum datum;
                 bool isNull = false;
+				AttrNumber  resno;
 
                 relkind = result_rel_info->ri_RelationDesc->rd_rel->relkind;
-                if (relkind == RELKIND_RELATION || relkind == RELKIND_SEQUENCE) {
+
+				/*
+				 * For K2PG relations extract the old row from the wholerow junk
+				 * attribute if needed.
+				 * 1. For tables with secondary indexes we need the (old) k2pgctid for
+				 *    removing old index entries (for UPDATE and DELETE)
+				 * 2. For tables with row triggers we need to pass the old row for
+				 *    trigger execution.
+				 */
+				if (IsK2PgRelation(result_rel_info->ri_RelationDesc) &&
+					(K2PgRelInfoHasSecondaryIndices(result_rel_info) ||
+					K2PgRelHasOldRowTriggers(result_rel_info->ri_RelationDesc,
+					                       operation)))
+				{
+    				resno = ExecFindJunkAttribute(junk_filter, "wholerow");
+					datum = ExecGetJunkAttribute(slot, resno, &isNull);
+
+					/* shouldn't ever get a null result... */
+					if (isNull)
+						elog(ERROR, "wholerow is NULL");
+
+                    old_tuple = DatumGetHeapTupleHeader(datum);
+					resno = ExecFindJunkAttribute(junk_filter, "k2pgctid");
+					datum = ExecGetJunkAttribute(slot, resno, &isNull);
+
+					/* shouldn't ever get a null result... */
+					if (isNull)
+						elog(ERROR, "k2pgctid is NULL");
+
+                    tuple_id = (ItemPointer)DatumGetPointer(datum);
+                    tuple_ctid = *tuple_id; /* be sure we don't free ctid!! */
+                    tuple_id = &tuple_ctid;
+				} else if (relkind == RELKIND_RELATION || relkind == RELKIND_SEQUENCE) {
                     datum = ExecGetJunkAttribute(slot, junk_filter->jf_junkAttNo, &isNull);
                     /* shouldn't ever get a null result... */
                     if (isNull) {
