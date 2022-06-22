@@ -109,6 +109,7 @@
 
 #include "access/k2/k2catam.h"
 #include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
 
 #define DECOMPRESS_HEAP_TUPLE(_isCompressed, _heapTuple, _destTupleData, _rd_att, _heapPage)  \
     do {                                                                                      \
@@ -6133,6 +6134,12 @@ void heap_inplace_update(Relation relation, HeapTuple tuple)
     uint32 oldlen;
     uint32 newlen;
     errno_t rc;
+
+	if (IsK2PgEnabled())
+	{
+		K2PgUpdateSysCatalogTuple(relation, NULL /* oldtuple */, tuple);
+		return;
+	}
 
     /*
      * For now, parallel operations are required to be strictly read-only.
