@@ -58,6 +58,10 @@
 #include "pgxc/pgxc.h"
 #endif
 
+#include "access/k2/k2_type.h"
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
+
 /* ----------
  * Local definitions
  * ----------
@@ -121,6 +125,7 @@ typedef struct RI_ConstraintInfo {
                                        * PK) */
     Oid ff_eq_oprs[RI_MAX_NUMKEYS];   /* equality operators (FK =
                                        * FK) */
+    Oid         conindid;             /* (TODO: add this support) index supporting this constraint */
 } RI_ConstraintInfo;
 
 /* ----------
@@ -191,6 +196,9 @@ static bool ri_OneKeyEqual(
 static bool ri_AttributesEqual(Oid eq_opr, Oid typeId, Datum oldvalue, Datum newvalue);
 static bool ri_Check_Pk_Match(Relation pk_rel, Relation fk_rel, HeapTuple old_row, const RI_ConstraintInfo* riinfo);
 
+static void BuildPgTupleId(Relation pk_rel, Relation fk_rel, Relation idx,
+					const RI_ConstraintInfo *riinfo, HeapTuple tup, void **data, int64_t *bytes);
+
 static void ri_InitHashTables(void);
 static SPIPlanPtr ri_FetchPreparedPlan(RI_QueryKey* key);
 static void ri_HashPreparedPlan(RI_QueryKey* key, SPIPlanPtr plan);
@@ -229,6 +237,9 @@ static Datum RI_FKey_check(PG_FUNCTION_ARGS)
     RI_QueryKey qkey;
     SPIPlanPtr qplan;
     int i;
+	Oid	ref_table_id = InvalidOid;		/* Referenced Relation (table / index) ID */
+	char* tuple_id = NULL;
+	int64_t tuple_id_size = 0;
 
 #ifdef PGXC
     /*
@@ -257,29 +268,33 @@ static Datum RI_FKey_check(PG_FUNCTION_ARGS)
         new_row_buf = trigdata->tg_trigtuplebuf;
     }
 
-    /*
-     * We should not even consider checking the row if it is no longer valid,
-     * since it was either deleted (so the deferred check should be skipped)
-     * or updated (in which case only the latest version of the row should be
-     * checked).  Test its liveness according to SnapshotSelf.
-     *
-     * NOTE: The normal coding rule is that one must acquire the buffer
-     * content lock to call HeapTupleSatisfiesVisibility.  We can skip that
-     * here because we know that AfterTriggerExecute just fetched the tuple
-     * successfully, so there cannot be a VACUUM compaction in progress on the
-     * page (either heap_fetch would have waited for the VACUUM, or the
-     * VACUUM's LockBufferForCleanup would be waiting for us to drop pin). And
-     * since this is a row inserted by our open transaction, no one else can
-     * be entitled to change its xmin/xmax.
-     */
-    Assert(new_row_buf != InvalidBuffer);
-    LockBuffer(new_row_buf, BUFFER_LOCK_SHARE);
-    if (!tableam_tuple_satisfies_snapshot(trigdata->tg_relation, new_row, SnapshotSelf, new_row_buf)) {
-    	LockBuffer(new_row_buf, BUFFER_LOCK_UNLOCK);
-    	return PointerGetDatum(NULL);
-    }
+	/* For K2PG relations visibility will be handled by K2 Platform (storage layer). */
+	if (!IsK2PgRelation(trigdata->tg_relation))
+	{
+        /*
+        * We should not even consider checking the row if it is no longer valid,
+        * since it was either deleted (so the deferred check should be skipped)
+        * or updated (in which case only the latest version of the row should be
+        * checked).  Test its liveness according to SnapshotSelf.
+        *
+        * NOTE: The normal coding rule is that one must acquire the buffer
+        * content lock to call HeapTupleSatisfiesVisibility.  We can skip that
+        * here because we know that AfterTriggerExecute just fetched the tuple
+        * successfully, so there cannot be a VACUUM compaction in progress on the
+        * page (either heap_fetch would have waited for the VACUUM, or the
+        * VACUUM's LockBufferForCleanup would be waiting for us to drop pin). And
+        * since this is a row inserted by our open transaction, no one else can
+        * be entitled to change its xmin/xmax.
+        */
+        Assert(new_row_buf != InvalidBuffer);
+        LockBuffer(new_row_buf, BUFFER_LOCK_SHARE);
+        if (!tableam_tuple_satisfies_snapshot(trigdata->tg_relation, new_row, SnapshotSelf, new_row_buf)) {
+            LockBuffer(new_row_buf, BUFFER_LOCK_UNLOCK);
+            return PointerGetDatum(NULL);
+        }
 
-    LockBuffer(new_row_buf, BUFFER_LOCK_UNLOCK);
+        LockBuffer(new_row_buf, BUFFER_LOCK_UNLOCK);
+    }
 
     /*
      * Get the relation descriptors of the FK and PK tables.
@@ -418,6 +433,37 @@ static Datum RI_FKey_check(PG_FUNCTION_ARGS)
             break;
     }
 
+	/*
+	 * Skip foreign key check if referenced row is present in K2PG cache.
+	 */
+	if (IsK2PgRelation(pk_rel))
+	{
+		/*
+		 * Get the referenced index table.
+		 * For primary key index, we need to use the base table relation.
+		 */
+		Relation idx_rel = RelationIdGetRelation(riinfo.conindid);
+		if (idx_rel->rd_index != NULL)
+		{
+			ref_table_id = idx_rel->rd_index->indisprimary ?
+					idx_rel->rd_index->indrelid : riinfo.conindid;
+		}
+
+		BuildPgTupleId(
+			pk_rel /* Primary table */,
+			fk_rel /* Reference table */,
+			ref_table_id == pk_rel->rd_id ? pk_rel : idx_rel /* Reference index */,
+			&riinfo, new_row, (void **)&tuple_id, &tuple_id_size);
+		RelationClose(idx_rel);
+
+		if (tuple_id != NULL && PgGate_ForeignKeyReferenceExists(ref_table_id, tuple_id, tuple_id_size))
+		{
+			elog(DEBUG1, "Skipping FK check for table %d, k2pgctid %s", ref_table_id, tuple_id);
+			heap_close(pk_rel, RowShareLock);
+			return PointerGetDatum(NULL);
+		}
+	}
+
     if (SPI_connect() != SPI_OK_CONNECT) {
         heap_close(pk_rel, RowShareLock);
         ereport(ERROR, (errcode(ERRCODE_SPI_CONNECTION_FAILURE), errmsg("SPI_connect failed")));
@@ -470,7 +516,11 @@ static Datum RI_FKey_check(PG_FUNCTION_ARGS)
     if (SPI_finish() != SPI_OK_FINISH) {
         heap_close(pk_rel, RowShareLock);
         ereport(ERROR, (errcode(ERRCODE_SPI_FINISH_FAILURE), errmsg("SPI_finish failed")));
-    }
+    } else if (IsK2PgRelation(pk_rel) && tuple_id != NULL) {
+		PgGate_CacheForeignKeyReference(ref_table_id, tuple_id, tuple_id_size);
+		elog(DEBUG1, "Cached foreign key reference: table ID %u, tuple ID %s",
+			 ref_table_id, tuple_id);
+	}
 
     heap_close(pk_rel, RowShareLock);
 
@@ -2777,7 +2827,7 @@ static bool ri_PerformCheck(RI_QueryKey* qkey, SPIPlanPtr qplan, Relation fk_rel
      * that SPI_execute_snapshot will register the snapshots, so we don't need
      * to bother here.
      */
-    if (IsolationUsesXactSnapshot() && detectNewRows) {
+    if (!IsK2PgRelation(pk_rel) && IsolationUsesXactSnapshot() && detectNewRows) {
         CommandCounterIncrement(); /* be sure all my own work is visible */
         test_snapshot = GetLatestSnapshot();
         crosscheck_snapshot = GetTransactionSnapshot();
@@ -2819,6 +2869,60 @@ static bool ri_PerformCheck(RI_QueryKey* qkey, SPIPlanPtr qplan, Relation fk_rel
         ri_ReportViolation(qkey, constrname, pk_rel, fk_rel, new_tuple ? new_tuple : old_tuple, NULL, false);
 
     return SPI_processed != 0;
+}
+
+static void
+BuildPgTupleId(Relation pk_rel, Relation fk_rel, Relation idx_rel,
+				const RI_ConstraintInfo *riinfo, HeapTuple tup,
+				void **value, int64_t *bytes)
+{
+	K2PgStatement k2pg_stmt;
+	K2PgPrepareParameters prepare_params;
+
+	prepare_params.index_oid = RelationGetRelid(idx_rel);
+	prepare_params.index_only_scan = true;
+	prepare_params.use_secondary_index = (RelationGetRelid(idx_rel) == RelationGetRelid(pk_rel)) ?
+			false : true;
+
+	HandleK2PgStatus(PgGate_NewSelect(
+		K2PgGetDatabaseOid(idx_rel), RelationGetRelid(idx_rel), &prepare_params, &k2pg_stmt));
+
+	TupleDesc	tupdesc = fk_rel->rd_att;
+	bool using_index = idx_rel->rd_index != NULL && !idx_rel->rd_index->indisprimary;
+
+	Bitmapset *pkey = GetFullK2PgTablePrimaryKey(idx_rel);
+	const int nattrs = bms_num_members(pkey);
+	K2PgAttrValueDescriptor *attrs =
+			(K2PgAttrValueDescriptor*)palloc(nattrs * sizeof(K2PgAttrValueDescriptor));
+	K2PgAttrValueDescriptor *next_attr = attrs;
+	uint64_t tuple_id;
+
+	elog(DEBUG1, "riinfo->nkeys = %d, nattrs = %d, using_index = %d", riinfo->nkeys, nattrs, using_index);
+
+	for (int i = 0; i < riinfo->nkeys; i++)
+	{
+		next_attr->attr_num = using_index ? (i + 1) : riinfo->pk_attnums[i];
+		const int fk_attnum = riinfo->fk_attnums[i];
+		const Oid type_id = TupleDescAttr(tupdesc, fk_attnum - 1)->atttypid;
+		next_attr->type_entity = K2PgDataTypeFromOidMod(fk_attnum, type_id);
+		next_attr->datum = heap_getattr(tup, fk_attnum, tupdesc, &next_attr->is_null);
+		elog(DEBUG1, "key: attr_num = %d, type_id = %d, is_null = %d", next_attr->attr_num, type_id, next_attr->is_null);
+		++next_attr;
+	}
+
+	if (using_index) {
+		next_attr->attr_num = K2PgUniqueIdxKeySuffixAttributeNumber;
+		next_attr->type_entity = K2PgDataTypeFromOidMod(K2PgUniqueIdxKeySuffixAttributeNumber, BYTEAOID);
+		next_attr->is_null = true;
+	 	elog(DEBUG1, "K2PgUniqueIdxKey: attr_num = %d, type_id = %d, is_null = %d", next_attr->attr_num, BYTEAOID, next_attr->is_null);
+	}
+
+	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(k2pg_stmt, attrs, nattrs, &tuple_id));
+
+	const K2PgTypeEntity *type_entity = K2PgDataTypeFromOidMod(K2PgTupleIdAttributeNumber, BYTEAOID);
+	type_entity->datum_to_k2pg(tuple_id, value, bytes);
+
+	pfree(attrs);
 }
 
 /*
