@@ -187,6 +187,10 @@ extern void ReleaseCatCache(HeapTuple tuple);
 
 extern uint32 GetCatCacheHashValue(CatCache* cache, Datum v1, Datum v2, Datum v3, Datum v4);
 
+/* Used in IsK2PgEnabled() mode only */
+extern void SetCatCacheTuple(CatCache *cache, HeapTuple tup, TupleDesc tupdesc);
+extern void SetCatCacheList(CatCache *cache, int nkeys, List *fnlist);
+
 extern CatCList* SearchCatCacheList(CatCache* cache, int nkeys, Datum v1, Datum v2, Datum v3, Datum v4);
 extern void ReleaseCatCacheList(CatCList* list);
 

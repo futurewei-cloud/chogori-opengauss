@@ -56,6 +56,8 @@
 #include "utils/snapmgr.h"
 #include "libpq/md5.h"
 
+#include "access/k2/k2pg_aux.h"
+
 /*
  * Given a hash value and the size of the hash table, find the bucket
  * in which the hash value belongs. Since the hash table must contain
@@ -2952,4 +2954,314 @@ void PrintCatCacheListLeakWarning(CatCList* list)
             list->my_cache->cc_relname,
             list->my_cache->id,
             list->refcount)));
+}
+
+/*
+ * Utility to add a Tuple entry to the cache only if it does not exist.
+ * Used only when IsK2PgEnabled() is true.
+ * Currently used in two cases:
+ *  1. When initializing the caches (i.e. on backend start).
+ *  2. When inserting a new entry to the sys catalog (i.e. on DDL create).
+ */
+void
+SetCatCacheTuple(CatCache *cache, HeapTuple tup, TupleDesc desc)
+{
+	ScanKeyData key[CATCACHE_MAXKEYS];
+	Datum		arguments[CATCACHE_MAXKEYS];
+	uint32      hashValue;
+	Index       hashIndex;
+    Dlelem* dlelem = NULL;
+    CatCTup* cTup = NULL;
+
+	/* Make sure we're in an xact, even if this ends up being a cache hit */
+	Assert(IsTransactionState());
+
+	/*
+	 * Initialize cache if needed.
+	 */
+	if (cache->cc_tupdesc == NULL)
+		CatalogCacheInitializeCache(cache);
+
+	/*
+	 * initialize the search key information
+	 */
+	memcpy(key, cache->cc_skey, sizeof(key));
+	for (int i = 0; i < CATCACHE_MAXKEYS; i++)
+	{
+		if (key[i].sk_attno == InvalidOid)
+		{
+			key[i].sk_argument = (Datum) 0;
+			continue;
+		}
+		bool is_null;
+		key[i].sk_argument     = heap_getattr(tup,
+		                                      key[i].sk_attno,
+		                                      desc,
+		                                      &is_null);
+		if (is_null)
+			key[i].sk_argument = (Datum) 0;
+	}
+
+	/*
+	 * find the hash bucket in which to look for the tuple
+	 */
+	hashValue = CatalogCacheComputeHashValue(cache, cache->cc_nkeys,
+											 key[0].sk_argument,
+											 key[1].sk_argument,
+											 key[2].sk_argument,
+											 key[3].sk_argument);
+	hashIndex = HASH_INDEX(hashValue, cache->cc_nbuckets);
+
+	/* Initialize local parameter array */
+	arguments[0] = key[0].sk_argument;
+	arguments[1] = key[1].sk_argument;
+	arguments[2] = key[2].sk_argument;
+	arguments[3] = key[3].sk_argument;
+
+	/*
+	 * scan the hash bucket until we find a match or exhaust our tuples
+	 *
+	 * Note: it's okay to use dlist_foreach here, even though we modify the
+	 * dlist within the loop, because we don't continue the loop afterwards.
+	 */
+    for (dlelem = DLGetHead(&cache->cc_bucket[hashIndex]); dlelem; dlelem = DLGetSucc(dlelem)) {
+        cTup = (CatCTup *) DLE_VAL(dlelem);
+ 		bool res = false;
+        if (cTup->dead)
+            continue; /* ignore dead entries */
+
+		if (cTup->hash_value != hashValue)
+			continue;            /* quickly skip entry if wrong hash val */
+
+		/*
+		 * see if the cached tuple matches our key.
+		 */
+		HeapKeyTest(&cTup->tuple, cache->cc_tupdesc, cache->cc_nkeys, key, res);
+		if (!res)
+			continue;
+
+		/*
+		 * We found a match in the cache -- nothing to do.
+		 */
+		return;
+	}
+
+	/*
+	 * Tuple was not found in cache, so we should add it.
+	 */
+	CatalogCacheCreateEntry(cache, tup, arguments, hashValue, hashIndex, false);
+}
+
+/*
+ * K2PG utility method to set the data for a cache list entry.
+ * Used during InitCatCachePhase2 (specifically for the procedure name list
+ * and for rewrite rules).
+ * Code basically takes the second part of SearchCatCacheList (which sets the
+ * data if no entry is found).
+ */
+void
+SetCatCacheList(CatCache *cache,
+                int nkeys,
+                List *current_list)
+{
+	ScanKeyData cur_skey[CATCACHE_MAXKEYS];
+	Datum		arguments[CATCACHE_MAXKEYS];
+	uint32      lHashValue;
+	CatCList    *cl = NULL;
+    Dlelem* dlelem = NULL;
+    CatCTup* cTup = NULL;
+
+	List *volatile ctlist = NULL;
+	ListCell      *ctlist_item = NULL;
+	int           nmembers;
+	HeapTuple     ntp = NULL;
+	MemoryContext oldcxt = NULL;
+	int           i;
+
+	/*
+	 * one-time startup overhead for each cache
+	 */
+	if (cache->cc_tupdesc == NULL)
+		CatalogCacheInitializeCache(cache);
+
+	Assert(nkeys > 0 && nkeys < cache->cc_nkeys);
+	memcpy(cur_skey, cache->cc_skey, sizeof(cur_skey));
+	HeapTuple tup = (HeapTuple)linitial(current_list);
+	for (i = 0; i < nkeys; i++)
+	{
+		if (cur_skey[i].sk_attno == InvalidOid)
+			break;
+		bool is_null = false; /* Not needed as this is checked before */
+		cur_skey[i].sk_argument = heap_getattr(tup,
+		                                       cur_skey[i].sk_attno,
+		                                       cache->cc_tupdesc,
+		                                       &is_null);
+	}
+	lHashValue = CatalogCacheComputeHashValue(cache,
+											  nkeys,
+											  cur_skey[0].sk_argument,
+											  cur_skey[1].sk_argument,
+											  cur_skey[2].sk_argument,
+											  cur_skey[3].sk_argument);
+
+#ifdef CATCACHE_STATS
+	cache->cc_lsearches++;
+#endif
+
+
+	/* Initialize local parameter array */
+	arguments[0] = cur_skey[0].sk_argument;
+	arguments[1] = cur_skey[1].sk_argument;
+	arguments[2] = cur_skey[2].sk_argument;
+	arguments[3] = cur_skey[3].sk_argument;
+
+	/*
+	 * List was not found in cache, so we have to build it by reading the
+	 * relation.  For each matching tuple found in the relation, use an
+	 * existing cache entry if possible, else build a new one.
+	 *
+	 * We have to bump the member refcounts temporarily to ensure they won't
+	 * get dropped from the cache while loading other members. We use a PG_TRY
+	 * block to ensure we can undo those refcounts if we get an error before
+	 * we finish constructing the CatCList.
+	 */
+	ResourceOwnerEnlargeCatCacheListRefs(t_thrd.utils_cxt.CurrentResourceOwner);
+
+	ctlist = NIL;
+
+	PG_TRY();
+	{
+		Relation relation;
+		relation = heap_open(cache->cc_reloid, AccessShareLock);
+
+		ListCell *lc;
+		foreach(lc, current_list)
+		{
+			uint32     hashValue;
+			Index      hashIndex;
+			bool       found = false;
+
+			ntp = (HeapTuple) lfirst(lc);
+
+			/*
+			 * See if there's an entry for this tuple already.
+			 */
+			hashValue = CatalogCacheComputeTupleHashValue(cache, cache->cc_nkeys, ntp);
+			hashIndex = HASH_INDEX(hashValue, cache->cc_nbuckets);
+
+            for (dlelem = DLGetHead(&cache->cc_bucket[hashIndex]); dlelem; dlelem = DLGetSucc(dlelem)) {
+                cTup = (CatCTup *) DLE_VAL(dlelem);
+
+				if (cTup->dead || cTup->negative)
+					continue;    /* ignore dead and negative entries */
+
+				if (cTup->hash_value != hashValue)
+					continue;    /* quickly skip entry if wrong hash val */
+
+				if (IsK2PgEnabled())
+					continue; /* Cannot rely on ctid comparison in K2PG mode */
+
+				if (!ItemPointerEquals(&(cTup->tuple.t_self),
+									   &(ntp->t_self)))
+					continue;    /* not same tuple */
+
+				/*
+				 * Found a match, but can't use it if it belongs to another
+				 * list already
+				 */
+				if (cTup->c_list)
+					continue;
+
+				found = true;
+				break;            /* A-OK */
+			}
+
+			if (!found)
+			{
+				/* We didn't find a usable entry, so make a new one */
+				cTup = CatalogCacheCreateEntry(cache,
+											 ntp,
+											 arguments,
+											 hashValue,
+											 hashIndex,
+											 false);
+			}
+
+			/* Careful here: add entry to ctlist, then bump its refcount */
+			/* This way leaves state correct if lappend runs out of memory */
+			ctlist = lappend(ctlist, cTup);
+			cTup->refcount++;
+		}
+
+		heap_close(relation, AccessShareLock);
+
+		/*
+		 * Now we can build the CatCList entry.  First we need a dummy tuple
+		 * containing the key values...
+		 */
+        oldcxt = MemoryContextSwitchTo(u_sess->cache_mem_cxt);
+		nmembers = list_length(ctlist);
+		cl       = (CatCList *) palloc(offsetof(CatCList, members) +
+									   nmembers * sizeof(CatCTup *));
+
+		/* Extract key values */
+		CatCacheCopyKeys(cache->cc_tupdesc, nkeys, cache->cc_keyno,
+						 arguments, cl->keys);
+		MemoryContextSwitchTo(oldcxt);
+
+		/*
+		 * We are now past the last thing that could trigger an elog before we
+		 * have finished building the CatCList and remembering it in the
+		 * resource owner.  So it's OK to fall out of the PG_TRY, and indeed
+		 * we'd better do so before we start marking the members as belonging
+		 * to the list.
+		 */
+
+	}
+	PG_CATCH();
+	{
+		foreach(ctlist_item, ctlist)
+		{
+			cTup = (CatCTup *) lfirst(ctlist_item);
+			Assert(cTup->c_list == NULL);
+			Assert(cTup->refcount > 0);
+			cTup->refcount--;
+			if (
+#ifndef CATCACHE_FORCE_RELEASE
+					cTup->dead &&
+#endif
+					cTup->refcount == 0 &&
+					(cTup->c_list == NULL || cTup->c_list->refcount == 0))
+					CatCacheRemoveCTup(cache, cTup);
+		}
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	cl->cl_magic   = CL_MAGIC;
+	cl->my_cache   = cache;
+	cl->refcount   = 0;            /* for the moment */
+	cl->dead       = false;
+	cl->ordered    = false;
+	cl->nkeys      = nkeys;
+	cl->hash_value = lHashValue;
+	cl->n_members  = nmembers;
+
+	i = 0;
+	foreach(ctlist_item, ctlist)
+	{
+		cl->members[i++] = cTup = (CatCTup *) lfirst(ctlist_item);
+		Assert(cTup->c_list == NULL);
+		cTup->c_list = cl;
+		/* release the temporary refcount on the member */
+		Assert(ct->refcount > 0);
+		cTup->refcount--;
+		/* mark list dead if any members already dead */
+		if (cTup->dead)
+			cl->dead = true;
+	}
+	Assert(i == nmembers);
+
+    DLAddHead(&cache->cc_lists, &cl->cache_elem);
 }
