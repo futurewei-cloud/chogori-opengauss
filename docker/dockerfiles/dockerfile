@@ -27,6 +27,7 @@ RUN cd /tmp && \
     tar zxvf openGauss-third_party_binarylibs.tar.gz && rm -f openGauss-third_party_binarylibs.tar.gz
 RUN cd /tmp/openGauss-third_party_binarylibs/buildtools/centos7.6_x86_64/ && \
     ln -s gcc7.3 gcc8.5
+RUN rm -rf /tmp/openGauss-third_party_binarylibs/dependency/centos7.6_x86_64/boost
 RUN mkdir -p /usr/lib64/huawei && \
     echo '/usr/lib64/huawei' > /etc/ld.so.conf.d/huawei-x86_64.conf && \
     cp /tmp/openGauss-third_party_binarylibs/platform/centos7.6_x86_64/Huawei_Secure_C/Dynamic_Lib/libsecurec.so /usr/lib64/huawei/
