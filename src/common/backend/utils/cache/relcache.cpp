@@ -145,6 +145,7 @@
 #include "catalog/pg_streaming_cont_query.h"
 #include "catalog/pg_streaming_reaper_status.h"
 #include "catalog/gs_model.h"
+#include "commands/dbcommands.h"
 #include "commands/matview.h"
 #include "commands/sec_rls_cmds.h"
 #include "commands/tablespace.h"
@@ -192,6 +193,8 @@
 #ifdef ENABLE_MULTIPLE_NODES
 #include "tsdb/common/ts_tablecmds.h"
 #endif   /* ENABLE_MULTIPLE_NODES */
+
+#include "access/k2/k2pg_aux.h"
 
 /*
  *		name of relcache init file(s), used to speed up backend startup
@@ -4911,10 +4914,15 @@ void RelationCacheInitializePhase3(void)
     MemoryContext oldcxt;
     bool needNewCacheFile = !u_sess->relcache_cxt.criticalSharedRelcachesBuilt;
 
-    /*
-     * relation mapper needs initialized too
-     */
     RelationMapInitializePhase3();
+	/* We do not use a relation map file in K2PG mode yet */
+	if (!IsK2PgEnabled())
+	{
+	  /*
+	   * relation mapper needs initialized too
+	   */
+	  RelationMapInitializePhase3();
+	}
 
     /*
      * switch to cache memory context
@@ -4974,7 +4982,15 @@ retry:
     /* In bootstrap mode, the faked-up formrdesc info is all we'll have */
     if (IsBootstrapProcessingMode())
         return;
-
+/*
+	 * In K2PG mode initialize the relache at the beginning so that we need
+	 * fewer cache lookups in steady state.
+	 */
+	if (needNewCacheFile && IsK2PgEnabled())
+	{
+		K2PgPreloadRelCache();
+	}
+    
     /*
      * If we didn't get the critical system indexes loaded into relcache, do
      * so now.	These are critical because the catcache and/or opclass cache
@@ -5141,6 +5157,15 @@ retry:
             pg_atomic_exchange_u32(&t_thrd.xact_cxt.ShmemVariableCache->CriticalCacheBuildLock, 0);
         }
     }
+
+ 	/*
+	 * During initdb also preload catalog caches (not just relation cache) as
+	 * they will be used heavily.
+	 */
+	if (IsK2PgEnabled() && K2PgIsPreparingTemplates())
+	{
+		K2PgPreloadCatalogCaches();
+	}
 }
 
 /*
@@ -7767,4 +7792,571 @@ Oid RelationGetPrimaryKeyIndex(Relation relation)
 	}
 
 	return relation->rd_pkindex;
+}
+
+/*
+ * A special version of RelationBuildRuleLock (initializes rewrite rules for a relation).
+ *
+ * Its only difference from the original is that instead of doing a direct scan
+ * on RewriteRelationId, it uses partial query against RULERELNAME cache
+ * (which we pre-initialized in K2PgPreloadRelCache).
+ */
+static void
+K2PgRelationBuildRuleLock(Relation relation)
+{
+	MemoryContext rulescxt;
+	MemoryContext oldcxt;
+	Relation	rewrite_desc;
+	TupleDesc	rewrite_tupdesc;
+	RuleLock   *rulelock;
+	int			numlocks;
+	RewriteRule **rules;
+	int			maxlocks;
+
+	/*
+	 * Make the private context.  Assume it'll not contain much data.
+	 */
+	rulescxt = AllocSetContextCreate(u_sess->cache_mem_cxt,
+									 "relation rules",
+									 ALLOCSET_SMALL_SIZES);
+	relation->rd_rulescxt = rulescxt;
+
+	/*
+	 * allocate an array to hold the rewrite rules (the array is extended if
+	 * necessary)
+	 */
+	maxlocks = 4;
+	rules = (RewriteRule **)
+		MemoryContextAlloc(rulescxt, sizeof(RewriteRule *) * maxlocks);
+	numlocks = 0;
+
+	/*
+	 * # ORIGINAL POSTGRES COMMENT:
+	 *
+	 * open pg_rewrite and begin a scan
+	 *
+	 * Note: since we scan the rules using RewriteRelRulenameIndexId, we will
+	 * be reading the rules in name order, except possibly during
+	 * emergency-recovery operations (ie, IgnoreSystemIndexes). This in turn
+	 * ensures that rules will be fired in name order.
+	 *
+	 *
+	 *
+	 * Instead of full scan, we're doing partial cache lookup. This cache is also using
+	 * RewriteRelRulenameIndexId, so the order persists.
+	 */
+	rewrite_desc = heap_open(RewriteRelationId, AccessShareLock);
+	rewrite_tupdesc = RelationGetDescr(rewrite_desc);
+
+	CatCList* rewrite_list = SearchSysCacheList1(RULERELNAME,
+												 ObjectIdGetDatum(RelationGetRelid(relation)));
+
+	for (int i = 0; i < rewrite_list->n_members; i++)
+	{
+		HeapTuple       rewrite_tuple = &rewrite_list->members[i]->tuple;
+		Form_pg_rewrite rewrite_form  = (Form_pg_rewrite) GETSTRUCT(rewrite_tuple);
+
+		bool		isnull;
+		Datum		rule_datum;
+		char		*rule_str;
+		RewriteRule *rule;
+
+		rule = (RewriteRule *) MemoryContextAlloc(rulescxt,
+												  sizeof(RewriteRule));
+
+		rule->ruleId = HeapTupleGetOid(rewrite_tuple);
+
+		rule->event = (CmdType)(rewrite_form->ev_type - '0');
+		rule->enabled = rewrite_form->ev_enabled;
+		rule->isInstead = rewrite_form->is_instead;
+
+		/*
+		 * Must use heap_getattr to fetch ev_action and ev_qual.  Also, the
+		 * rule strings are often large enough to be toasted.  To avoid
+		 * leaking memory in the caller's context, do the detoasting here so
+		 * we can free the detoasted version.
+		 */
+		rule_datum = heap_getattr(rewrite_tuple,
+								  Anum_pg_rewrite_ev_action,
+								  rewrite_tupdesc,
+								  &isnull);
+		Assert(!isnull);
+		rule_str = TextDatumGetCString(rule_datum);
+		oldcxt = MemoryContextSwitchTo(rulescxt);
+		rule->actions = (List *) stringToNode(rule_str);
+		MemoryContextSwitchTo(oldcxt);
+		pfree(rule_str);
+
+		rule_datum = heap_getattr(rewrite_tuple,
+								  Anum_pg_rewrite_ev_qual,
+								  rewrite_tupdesc,
+								  &isnull);
+		Assert(!isnull);
+		rule_str = TextDatumGetCString(rule_datum);
+		oldcxt = MemoryContextSwitchTo(rulescxt);
+		rule->qual = (Node *) stringToNode(rule_str);
+		MemoryContextSwitchTo(oldcxt);
+		pfree(rule_str);
+
+		/*
+		 * We want the rule's table references to be checked as though by the
+		 * table owner, not the user referencing the rule.  Therefore, scan
+		 * through the rule's actions and set the checkAsUser field on all
+		 * rtable entries.  We have to look at the qual as well, in case it
+		 * contains sublinks.
+		 *
+		 * The reason for doing this when the rule is loaded, rather than when
+		 * it is stored, is that otherwise ALTER TABLE OWNER would have to
+		 * grovel through stored rules to update checkAsUser fields. Scanning
+		 * the rule tree during load is relatively cheap (compared to
+		 * constructing it in the first place), so we do it here.
+		 */
+		setRuleCheckAsUser((Node *) rule->actions, relation->rd_rel->relowner);
+		setRuleCheckAsUser(rule->qual, relation->rd_rel->relowner);
+
+		if (numlocks >= maxlocks)
+		{
+			maxlocks *= 2;
+			rules = (RewriteRule **)
+				repalloc(rules, sizeof(RewriteRule *) * maxlocks);
+		}
+		rules[numlocks++] = rule;
+	}
+
+	/*
+	 * We don't use those preloaded pg_rewrite partial-match lists anywhere else in the code,
+	 * so there's no point of keeping them in memory.
+	 * We mark them dead so that ReleaseCatCacheList would evict them.
+	 */
+	rewrite_list->dead = true;
+	ReleaseCatCacheList(rewrite_list);
+	heap_close(rewrite_desc, AccessShareLock);
+
+	/*
+	 * there might not be any rules (if relhasrules is out-of-date)
+	 */
+	if (numlocks == 0)
+	{
+		relation->rd_rules = NULL;
+		relation->rd_rulescxt = NULL;
+		MemoryContextDelete(rulescxt);
+		return;
+	}
+
+	/*
+	 * form a RuleLock and insert into relation
+	 */
+	rulelock = (RuleLock *) MemoryContextAlloc(rulescxt, sizeof(RuleLock));
+	rulelock->numLocks = numlocks;
+	rulelock->rules = rules;
+
+	relation->rd_rules = rulelock;
+}
+
+/*
+ * K2PG-mode only utility used to load up the relcache on initialization
+ * to minimize the number on K2 queries needed.
+ * It is based on (and similar to) RelationBuildDesc but does all relations
+ * at once.
+ * It works in two steps:
+ *  1. Load up all the data pg_class using one full scan iteration. The
+ *  relations after this point will all be loaded but incomplete (e.g. no
+ *  attribute info set).
+ *  2. Load all all the data from pg_attribute using one full scan. Then update
+ *  each the corresponding relation once all attributes for it were retrieved.
+ *
+ *  Note: We assume that any error happening here will fatal so as to not end
+ *  up with partial information in the cache.
+ */
+void K2PgPreloadRelCache()
+{
+	Relation    relation;
+	Oid         relid;
+	SysScanDesc scandesc;
+
+	/*
+	 * Make sure that the connection is still valid.
+	 * - If the name is already dropped from the cache, raise error.
+	 * - If the name is still in the cache, we look for the associated OID in the system.
+	 *   Raise error if that OID is not MyDatabaseId, which must be either invalid or new DB.
+	 */
+	Oid dboid = InvalidOid;
+	const char *dbname = get_database_name(MyDatabaseId);
+	if (dbname != NULL)
+	{
+		dboid = get_database_oid(dbname, true);
+	}
+	if (dboid != MyDatabaseId) {
+		ereport(FATAL,
+						(errcode(ERRCODE_CONNECTION_FAILURE),
+						 errmsg("Could not reconnect to database"),
+						 errhint("Database might have been dropped by another user")));
+	}
+
+	/*
+	 * Loading the relation cache requires per-relation lookups to a number of related system tables
+	 * to assemble the relation data (e.g. columns, indexes, foreign keys, etc).
+	 * This can cause a large number of master queries (since catalog caches are typically not
+	 * loaded when calling this).
+	 * To handle that we preload the catcaches here for the biggest offenders.
+	 *
+	 * Note: For historical reasons pg_attribute is currently handled separately below
+	 * by querying the entire table once and amending the relevant information into each relation.
+	 *
+	 * TODO(mihnea, alex): Consider simplifying pg_attribute handling by simply preloading
+	 *                     the catcache for that too.
+	 */
+
+	K2PgPreloadCatalogCache(INDEXRELID, -1); // pg_index
+	K2PgPreloadCatalogCache(RULERELNAME, -1); // pg_rewrite
+
+	/*
+	 * 1. Load up the (partial) relation info from pg_class.
+	 */
+	Relation pg_class_desc = heap_open(RelationRelationId, AccessShareLock);
+
+	scandesc = systable_beginscan(pg_class_desc,
+	                              RelationRelationId,
+	                              false /* indexOk */,
+	                              NULL,
+	                              0,
+	                              NULL);
+
+	/*
+	 * Must copy tuple before releasing buffer.
+	 */
+	HeapTuple pg_class_tuple;
+	while (HeapTupleIsValid(pg_class_tuple = systable_getnext(scandesc)))
+	{
+		pg_class_tuple = heap_copytuple(pg_class_tuple);
+
+		/*
+		 * get information from the pg_class_tuple
+		 */
+		relid               = HeapTupleGetOid(pg_class_tuple);
+		Form_pg_class relp  = (Form_pg_class) GETSTRUCT(pg_class_tuple);
+
+		/*
+		 * allocate storage for the relation descriptor, and copy pg_class_tuple
+		 * to relation->rd_rel.
+		 */
+		relation = AllocateRelationDesc(relp);
+
+		/*
+		 * initialize the relation's relation id (relation->rd_id)
+		 */
+		RelationGetRelid(relation) = relid;
+
+		/*
+		 * normal relations are not nailed into the cache; nor can a pre-existing
+		 * relation be new.  It could be temp though.  (Actually, it could be new
+		 * too, but it's okay to forget that fact if forced to flush the entry.)
+		 */
+		relation->rd_refcnt              = 0;
+		relation->rd_isnailed            = false;
+		relation->rd_createSubid         = InvalidSubTransactionId;
+		relation->rd_newRelfilenodeSubid = InvalidSubTransactionId;
+		switch (relation->rd_rel->relpersistence)
+		{
+			case RELPERSISTENCE_UNLOGGED:
+			case RELPERSISTENCE_PERMANENT:
+				relation->rd_backend     = InvalidBackendId;
+				relation->rd_islocaltemp = false;
+				break;
+			case RELPERSISTENCE_TEMP:
+				if (isTempOrToastNamespace(relation->rd_rel->relnamespace))
+				{
+					relation->rd_backend     = BackendIdForTempRelations;
+					relation->rd_islocaltemp = true;
+				}
+				else
+				{
+					/*
+					 * If it's a temp table, but not one of ours,
+					 * we set rd_backend to the invalid backend id.
+					 */
+					relation->rd_backend = InvalidBackendId;
+					relation->rd_islocaltemp = false;
+				}
+				break;
+			default:
+				elog(ERROR,
+				     "invalid relpersistence: %c",
+				     relation->rd_rel->relpersistence);
+				break;
+		}
+
+		/*
+		 * if it's an index, initialize index-related information
+		 */
+		if (OidIsValid(relation->rd_rel->relam))
+			RelationInitIndexAccessInfo(relation);
+
+		/* extract reloptions if any */
+		RelationParseRelOptions(relation, pg_class_tuple);
+
+		/*
+		 * initialize the relation lock manager information
+		 */
+		RelationInitLockInfo(relation); /* see lmgr.c */
+
+		/*
+		 * initialize physical addressing information for the relation
+		 */
+		RelationInitPhysicalAddr(relation);
+
+		/* make sure relation is marked as having no open file yet */
+		relation->rd_smgr = NULL;
+
+		/*
+		 * now we can free the memory allocated for pg_class_tuple
+		 */
+		heap_freetuple(pg_class_tuple);
+
+		/*
+		 * Insert newly created relation into relcache hash table if needed:
+		 * a. If it's not already there (e.g. new table or initialization).
+		 * b. If it's a regular (non-system) table it could be changed (e.g. by
+		 * an 'ALTER').
+		 */
+		Relation tmp_rel;
+		RelationIdCacheLookup(relation->rd_id, tmp_rel);
+		if (!tmp_rel || !IsSystemRelation(tmp_rel))
+		{
+			RelationCacheInsert(relation);
+		}
+
+		/* It's fully valid */
+		relation->rd_isvalid = true;
+	}
+
+	/* all done */
+	systable_endscan(scandesc);
+
+	/*
+	 * 2. Iterate over pg_attribute to update the attribute info and the other
+	 * missing metadata for the relations above.
+	 */
+
+	/* Build table descs */
+	TupleConstr *constr;
+	AttrDefault *attrdef = NULL;
+	Relation	pg_attribute_desc;
+	int			need = 0;
+	int			ndef = 0;
+	HeapTuple	pg_attribute_tuple = NULL;
+
+	relation = NULL;
+
+	/*
+	 * Open pg_attribute and begin a scan.  Force heap scan if we haven't yet
+	 * built the critical relcache entries (this includes initdb and startup
+	 * without a pg_internal.init file).
+	 */
+	pg_attribute_desc = heap_open(AttributeRelationId, AccessShareLock);
+
+	scandesc = systable_beginscan(pg_attribute_desc,
+								  AttributeRelationId,
+								  false /* indexOk */,
+								  NULL,
+								  0,
+								  NULL);
+
+	bool finish_processing_relation = false;
+
+	/*
+	 * We are scanning through the entire pg_attribute table to get all the attributes (columns)
+	 * for all the relations. All the attributes for a relation are contiguous, so we maintain the
+	 * current relation and, when we finish processing its attributes (detected when we read a
+	 * different relation_id which is first range key of pg_attribute), we load up the retrieved
+	 * info into the Relation entry, which among other things, sets up then constraint and default
+	 * info.
+	 */
+	while (true)
+	{
+		if (!finish_processing_relation)
+			pg_attribute_tuple = systable_getnext(scandesc);
+
+		if (!HeapTupleIsValid(pg_attribute_tuple)) {
+			if (!relation) {
+				break;
+			} else {
+				/* If the tuple is not valid, then we are done processing this relation */
+				finish_processing_relation = true;
+			}
+		}
+		else
+		{
+			Form_pg_attribute attp = (Form_pg_attribute) GETSTRUCT(pg_attribute_tuple);
+
+			if (!relation) {
+				/*
+				 * New (or first) relation, set up the needed variables before reading its
+				 * attributes.
+				 */
+
+				/* This will guarantee that the next tuple is read */
+				finish_processing_relation = false;
+
+				RelationIdCacheLookup(attp->attrelid, relation);
+				if (!relation) {
+					continue;
+				}
+				need = relation->rd_rel->relnatts;
+				ndef = 0;
+				attrdef = NULL;
+				constr = (TupleConstr*) MemoryContextAlloc(u_sess->cache_mem_cxt, sizeof(TupleConstr));
+				constr->has_not_null = false;
+			}
+
+			/*
+			 * relation->rd_id == attp->attrelid means that we are still reading attributes for
+			 * the current relation.
+			 */
+			if (relation->rd_id == attp->attrelid)
+			{
+				/* Skip system attributes */
+				if (attp->attnum <= 0)
+					continue;
+
+				if (attp->attnum > relation->rd_rel->relnatts)
+					elog(ERROR,
+						 "invalid attribute number %d for %s",
+						 attp->attnum,
+						 RelationGetRelationName(relation));
+
+				memcpy(TupleDescAttr(relation->rd_att, attp->attnum - 1),
+					   attp,
+					   ATTRIBUTE_FIXED_PART_SIZE);
+
+				/* Update constraint/default info */
+				if (attp->attnotnull)
+					constr->has_not_null = true;
+
+				if (attp->atthasdef)
+				{
+					if (attrdef == NULL)
+						attrdef = (AttrDefault*) MemoryContextAllocZero(
+								u_sess->cache_mem_cxt,
+								relation->rd_rel->relnatts * sizeof(AttrDefault));
+					attrdef[ndef].adnum = attp->attnum;
+					attrdef[ndef].adbin = NULL;
+					ndef++;
+				}
+
+				need--;
+			}
+			/*
+			 * When relation->rd_id != attp->attrelid, it means that we have read an attribute
+			 * for a different table.
+			 */
+			else if (relation->rd_id != attp->attrelid)
+			{
+				if (need != 0)
+					elog(ERROR, "catalog is missing %d attribute(s) for relid %u",
+						 need, RelationGetRelid(relation));
+				/*
+				 * By setting finish_processing_relation to true, we will avoid reading the next
+				 * tuple because we were not able to use the tuple since it belongs to a different
+				 * relation.
+				 */
+				finish_processing_relation = true;
+			}
+		}
+
+		/*
+		 * Load up the retrieved info into the Relation entry.
+		 * We only execute this after having processed all the attributes for a relation
+		 */
+		if (relation && finish_processing_relation)
+		{
+			if (need != 0)
+				elog(ERROR, "catalog is missing %d attribute(s) for relid %u",
+					 need, RelationGetRelid(relation));
+			/*
+			 * initialize the tuple descriptor (relation->rd_att).
+			 */
+			/* copy some fields from pg_class row to rd_att */
+			relation->rd_att->tdtypeid = relation->rd_rel->reltype;
+			relation->rd_att->tdtypmod = -1;	/* unnecessary, but... */
+			relation->rd_att->tdhasoid = relation->rd_rel->relhasoids;
+
+			/*
+			 * However, we can easily set the attcacheoff value for the first
+			 * attribute: it must be zero.  This eliminates the need for special cases
+			 * for attnum=1 that used to exist in fastgetattr() and index_getattr().
+			 */
+			if (RelationGetNumberOfAttributes(relation) > 0)
+				TupleDescAttr(RelationGetDescr(relation), 0)->attcacheoff = 0;
+
+			/*
+			 * Set up constraint/default info
+			 */
+			if (constr->has_not_null || ndef > 0 || relation->rd_rel->relchecks)
+			{
+				relation->rd_att->constr = constr;
+
+				if (ndef > 0)            /* DEFAULTs */
+				{
+					if (ndef < RelationGetNumberOfAttributes(relation))
+						constr->defval = (AttrDefault *) repalloc(attrdef,
+																  ndef *
+																  sizeof(AttrDefault));
+					else
+						constr->defval = attrdef;
+					constr->num_defval = ndef;
+					AttrDefaultFetch(relation);
+				}
+				else
+					constr->num_defval = 0;
+
+				if (relation->rd_rel->relchecks > 0)    /* CHECKs */
+				{
+					constr->num_check = relation->rd_rel->relchecks;
+					constr->check     = (ConstrCheck *) MemoryContextAllocZero(
+							u_sess->cache_mem_cxt,
+							constr->num_check * sizeof(ConstrCheck));
+					CheckConstraintFetch(relation);
+				}
+				else
+					constr->num_check = 0;
+			}
+			else
+			{
+				pfree(constr);
+				relation->rd_att->constr = NULL;
+			}
+
+			/*
+			 * Fetch rules and triggers that affect this relation
+			 */
+			if (relation->rd_rel->relhasrules)
+				K2PgRelationBuildRuleLock(relation);
+			else
+			{
+				relation->rd_rules    = NULL;
+				relation->rd_rulescxt = NULL;
+			}
+
+			if (relation->rd_rel->relhastriggers)
+				RelationBuildTriggers(relation);
+			else
+				relation->trigdesc = NULL;
+
+			// Reset relation.
+			relation = NULL;
+			need = 0;
+		}
+	}
+
+	/*
+	 * end the scan and close the attribute relation
+	 */
+	systable_endscan(scandesc);
+
+	heap_close(pg_attribute_desc, AccessShareLock);
+
+	heap_close(pg_class_desc, AccessShareLock);
+
+    u_sess->relcache_cxt.criticalRelcachesBuilt = true;
 }

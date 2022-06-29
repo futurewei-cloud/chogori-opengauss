@@ -21,6 +21,7 @@
 #include "executor/executor.h"
 #include "utils/rel.h"
 #include "utils/rel_gs.h"
+#include "utils/syscache.h"
 
 #include "access/k2/k2pg_aux.h"
 #include "access/k2/k2_table_ops.h"
@@ -271,9 +272,8 @@ void CatalogUpdateIndexes(Relation heapRel, HeapTuple heapTuple)
 		}
 
 		K2PgUpdateSysCatalogTuple(heapRel, oldtup, heapTuple);
-        // TODO: enable system cache
 		/* Update the local cache automatically */
-//		K2PgSetSysCacheTuple(heapRel, heapTuple);
+		K2PgSetSysCacheTuple(heapRel, heapTuple);
 
 		if (has_indices)
 			CatalogIndexInsert(indstate, heapTuple);
