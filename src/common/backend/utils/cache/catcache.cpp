@@ -1048,6 +1048,16 @@ void InitCatCachePhase2(CatCache* cache, bool touch_index)
 {
     if (cache->cc_tupdesc == NULL)
         CatalogCacheInitializeCache(cache);
+
+	/*
+	 * TODO: This could be enabled if we handle
+	 * "primary key as index" so that PG can open the primary indexes by id.
+	 */
+	if (IsK2PgEnabled())
+	{
+		return;
+	}
+
     /*
      * If the relcache of the underneath catalog has not been built,
      * nor can that of its index.
@@ -1604,6 +1614,24 @@ static HeapTuple SearchCatCacheMiss(
     if (ct == NULL) {
         if (IsBootstrapProcessingMode())
             return NULL;
+
+		/*
+		 * Disable negative entries for K2PG to handle case where the entry
+		 * was added by (running a command on) another node.
+		 * We also don't support tuple update
+		 */
+		if (IsK2PgEnabled())
+		{
+			bool allow_negative_entries = cache->id == CASTSOURCETARGET ||
+			                              (cache->id == RELNAMENSP &&
+			                               DatumGetObjectId(cur_skey[1].sk_argument) ==
+			                               PG_CATALOG_NAMESPACE &&
+			                               !K2PgIsPreparingTemplates());
+			if (!allow_negative_entries)
+			{
+				return NULL;
+			}
+		}
 
         ct = CatalogCacheCreateEntry(cache, NULL, arguments, hashValue, hashIndex, true);
 
@@ -2522,6 +2550,9 @@ CatCList* SearchCatCacheList(CatCache* cache, int nkeys, Datum v1, Datum v2, Dat
 
                 if (ct->hash_value != hashValue)
                     continue; /* quickly skip entry if wrong hash val */
+
+				if (IsK2PgEnabled())
+					continue; /* Cannot rely on ctid comparison in K2PG mode */
 
                 /* A built-in function is all in pg_proc, in upgrade senario, we skip searching
                  * the builtin functions from builtin function array. In non-upgrade mode, the function
