@@ -224,7 +224,7 @@ typedef struct {
 #define HAVE_DATABASE_TYPE
 /*Type of database; increase for sql compatibility*/
 
-typedef enum { 
+typedef enum {
     A_FORMAT = 0x0001,
     B_FORMAT = 0x0002,
     C_FORMAT = 0x0004,
@@ -606,7 +606,7 @@ typedef Datum* DatumPtr;
  */
 #ifndef PointerGetDatum
 #define PointerGetDatum(X) ((Datum)(X))
-#endif 
+#endif
 /*
  * DatumGetCString
  *		Returns C string (null-terminated string) value of a datum.

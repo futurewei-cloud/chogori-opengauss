@@ -181,6 +181,9 @@ extern int optreset; /* might not be declared by system headers */
 #endif
 #include "commands/sqladvisor.h"
 
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/pg_gate_api.h"
+
 THR_LOCAL VerifyCopyCommandIsReparsed copy_need_to_be_reparse = NULL;
 
 #define GSCGROUP_ATTACH_TASK()                                                                                   \
@@ -234,6 +237,18 @@ extern THR_LOCAL DistInsertSelectState* distInsertSelectState;
 extern void InitQueryHashTable(void);
 static THR_LOCAL void (*pre_receiveSlot_func)(TupleTableSlot*, DestReceiver*);
 static void get_query_result(TupleTableSlot* slot, DestReceiver* self);
+
+/* Flag to mark cache as invalid if discovered within a txn block. */
+static bool k2pg_need_cache_refresh = false;
+static void K2PgRefreshCache();
+static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
+                                          bool consider_retry,
+                                          bool *need_retry);
+static List* k2pg_parse_query_silently(const char *query_string);
+static const char* k2pg_parse_command_tag(const char *query_string);
+static bool k2pg_is_begin_transaction(const char *command_tag);
+static bool k2pg_check_retry_allowed(const char *query_string);
+static void K2PgCheckSharedCatalogCacheVersion();
 
 /*
  * @hdfs
@@ -508,7 +523,7 @@ static int SocketBackend(StringInfo inBuf)
             u_sess->tri_cxt.exec_row_trigger_on_datanode = false;
             return qtype;
         } else if (qtype == 'a') { /* on DN only */
-#ifdef ENABLE_MULTIPLE_NODES      
+#ifdef ENABLE_MULTIPLE_NODES
             if (aCount > MSG_A_REPEAT_NUM_MAX) {
                 ereport(DEBUG1, (errmsg("the character is repeat : %c", qtype)));
                 break;
@@ -883,7 +898,7 @@ List* pg_analyze_and_rewrite(Node* parsetree, const char* query_string, Oid* par
 
 #ifdef ENABLE_MULTIPLE_NODES
     if (IS_PGXC_COORDINATOR && !IsConnFromCoord() &&
-                IsA(parsetree, SelectStmt) && 
+                IsA(parsetree, SelectStmt) &&
                 !is_streaming_thread() &&
                 !streaming_context_is_ddl() &&
                 is_contquery_with_dict((Node *)((SelectStmt *) parsetree)->fromClause)) {
@@ -1018,7 +1033,7 @@ static List* pg_rewrite_query(Query* query)
                     }
                 }
             }
-             
+
             if (stmt->relkind == OBJECT_MATVIEW && IS_PGXC_DATANODE) {
                 querytree_list = list_make1(query);
             } else {
@@ -1283,9 +1298,9 @@ List* pg_plan_queries(List* querytrees, int cursorOptions, ParamListInfo boundPa
                 PG_RE_THROW();
             }
             PG_END_TRY();
-        
+
             recover_set_hint(nest_level);
- 
+
             /* When insert multiple values query is a generate plan,
              * we don't consider whether it can be executed on a single dn.
              * Because it can be executed on a single DN only in custom plan.
@@ -2448,8 +2463,8 @@ static void exec_simple_query(const char* query_string, MessageType messageType,
          */
         oldcontext = MemoryContextSwitchTo(OptimizerContext);
 
-        /* 
-         * sqladvisor check if it can be collected 
+        /*
+         * sqladvisor check if it can be collected
          * select into... only can be checked in parsetree, it will transfrom to insert into after rewrite.
          */
         bool isCollect = checkAdivsorState() && checkParsetreeTag(parsetree);
@@ -2502,7 +2517,7 @@ static void exec_simple_query(const char* query_string, MessageType messageType,
                     errmsg("Update of indexed column is not supported for memory table")));
         }
 #endif
-        
+
         /* Try using light proxy to execute query */
         if (runLightProxyCheck &&
             exec_query_through_light_proxy(querytree_list, parsetree, snapshot_set, msg, OptimizerContext)) {
@@ -3376,7 +3391,7 @@ static void exec_parse_message(const char* query_string, /* string to execute */
             if (!IsAbortedTransactionBlockState() && GetAccountPasswordExpired(current_user) == EXPIRED_STATUS) {
                 ForceModifyExpiredPwd((const char*)query_string, parsetree_list);
             }
-        } 
+        }
 
             /*
              * Create the CachedPlanSource before we do parse analysis, since it
@@ -7430,7 +7445,7 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
     t_thrd.postmaster_cxt.xc_lockForBackupKey1 = Int32GetDatum(XC_LOCK_FOR_BACKUP_KEY_1);
     t_thrd.postmaster_cxt.xc_lockForBackupKey2 = Int32GetDatum(XC_LOCK_FOR_BACKUP_KEY_2);
 
-#ifdef ENABLE_MULTIPLE_NODES 
+#ifdef ENABLE_MULTIPLE_NODES
     if (IS_PGXC_DATANODE) {
         /* If we exit, first try and clean connection to GTM */
         on_proc_exit(DataNodeShutdown, 0);
@@ -7814,6 +7829,10 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                 set_ps_display("idle in transaction", false);
                 pgstat_report_activity(STATE_IDLEINTRANSACTION, NULL);
             } else {
+                if (IsK2PgEnabled() && k2pg_need_cache_refresh)
+				{
+					K2PgRefreshCache();
+				}
                 ProcessCompletedNotifies();
                 pgstat_report_stat(false);
 
@@ -7968,6 +7987,11 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
          */
         if (u_sess->postgres_cxt.ignore_till_sync && firstchar != EOF)
             continue;
+
+		if (IsK2PgEnabled()) {
+			K2PgCheckSharedCatalogCacheVersion();
+		}
+
 #ifdef ENABLE_MULTIPLE_NODES
         // reset some flag related to stream
         ResetStreamEnv();
@@ -8091,7 +8115,7 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
 
             case 'u': /* Autonomous transaction */
             {
-                u_sess->is_autonomous_session = true; 
+                u_sess->is_autonomous_session = true;
                 Oid currentUserId = pq_getmsgint(&input_message, 4);
                 if (currentUserId != GetCurrentUserId()) {
                     /* Set Session Authorization */
@@ -8099,14 +8123,14 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                     currentOwner = t_thrd.utils_cxt.CurrentResourceOwner;
                     /* we use session memory context to remember all node info in this cluster. */
                     MemoryContext old = MemoryContextSwitchTo(SESS_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_EXECUTOR));
-                    
+
                     ResourceOwner tmpOwner =
                             ResourceOwnerCreate(t_thrd.utils_cxt.CurrentResourceOwner, "CheckUserOid",
                                 THREAD_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_SECURITY));
                     t_thrd.utils_cxt.CurrentResourceOwner = tmpOwner;
 
                     SetSessionAuthorization(currentUserId, superuser_arg(currentUserId));
-                    
+
                     if (u_sess->proc_cxt.MyProcPort->user_name)
                         pfree(u_sess->proc_cxt.MyProcPort->user_name);
 
@@ -8138,7 +8162,7 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                     if (session_options_ptr != NULL)
                         pfree(session_options_ptr);
                     MemoryContextSwitchTo(SESS_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_EXECUTOR));
-#endif                    
+#endif
                     ResourceOwnerRelease(tmpOwner, RESOURCE_RELEASE_BEFORE_LOCKS, true, true);
                     ResourceOwnerRelease(tmpOwner, RESOURCE_RELEASE_LOCKS, true, true);
                     ResourceOwnerRelease(tmpOwner, RESOURCE_RELEASE_AFTER_LOCKS, true, true);
@@ -8173,6 +8197,11 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                     u_sess->exec_cxt.RetryController->stub_.ECodeStubTest();
                 }
 #endif
+				bool need_retry = false;
+                MemoryContext oldcontext = GetCurrentMemoryContext();
+				K2PgPrepareCacheRefreshIfNeeded(oldcontext,
+                                                  k2pg_check_retry_allowed(query_string),
+                                                  &need_retry);
                 exec_simple_query(query_string, QUERY_MESSAGE, &input_message); /* @hdfs Add the second parameter */
 
                 if (MEMORY_TRACKING_QUERY_PEAK)
@@ -8367,7 +8396,7 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                     case 'C': {
                         /* set create command schema */
                         u_sess->catalog_cxt.setCurCreateSchema = true;
-                        u_sess->catalog_cxt.curCreateSchema = MemoryContextStrdup(u_sess->top_transaction_mem_cxt, 
+                        u_sess->catalog_cxt.curCreateSchema = MemoryContextStrdup(u_sess->top_transaction_mem_cxt,
                             schema_name);
                     } break;
                     case 'F': {
@@ -8538,6 +8567,16 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                     u_sess->exec_cxt.RetryController->CacheStmtName(stmt_name);
                 }
 
+                /*
+				* TODO Cannot retry parse statements yet (without
+				* aborting the followup bind/execute.
+				*/
+				bool need_retry = false;
+                MemoryContext oldcontext = GetCurrentMemoryContext();
+				K2PgPrepareCacheRefreshIfNeeded(oldcontext,
+						                        false /* consider_retry */,
+						                        &need_retry);
+
             } break;
 
             case 'B': /* bind */
@@ -8598,6 +8637,22 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                 pq_getmsgend(&input_message);
 
                 pgstatCountSQL4SessionLevel();
+
+				bool can_retry =
+					IsK2PgEnabled() &&
+					u_sess->pcache_cxt.unnamed_stmt_psrc &&
+					k2pg_check_retry_allowed(u_sess->pcache_cxt.unnamed_stmt_psrc->query_string);
+
+				bool need_retry = false;
+                MemoryContext oldcontext = GetCurrentMemoryContext();
+				/*
+				 * Execute may have been partially applied so need to
+				 * cleanup (and restart) the transaction.
+				*/
+				K2PgPrepareCacheRefreshIfNeeded(oldcontext,
+						                        can_retry,
+						                        &need_retry);
+
 #ifdef USE_RETRY_STUB
                 if (IsStmtRetryEnabled())
                     u_sess->exec_cxt.RetryController->stub_.StartOneStubTest(firstchar);
@@ -8636,7 +8691,7 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                         rc = memcpy_s(&origin_global_session_id, sizeof(uint64), pq_getmsgbytes(&input_message, sizeof(uint64)),
                                 sizeof(uint64));
                         securec_check(rc,"","");
-                        
+
                         rc = memcpy_s(&u_sess->sess_ident.cn_timeline, sizeof(uint32), pq_getmsgbytes(&input_message, sizeof(uint32)),
                                 sizeof(uint32));
                         securec_check(rc,"","");
@@ -9401,7 +9456,7 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
             {
                 if (!IS_PGXC_DATANODE)
                     ereport(
-                        ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), 
+                        ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                             errmsg("Only cn can receive the sequence update")));
 
                 int64 result;
@@ -9598,7 +9653,7 @@ void log_disconnections(int code, Datum arg)
     secs %= SECS_PER_HOUR;
     minutes = secs / SECS_PER_MINUTE;
     seconds = secs % SECS_PER_MINUTE;
-    if (port->user_name != NULL && port->database_name != NULL && port->remote_host != NULL && 
+    if (port->user_name != NULL && port->database_name != NULL && port->remote_host != NULL &&
         port->remote_port != NULL) {
         ereport(LOG,
                 (errmsg("disconnection: session time: %d:%02d:%02d.%03d "
@@ -9616,7 +9671,7 @@ void log_disconnections(int code, Datum arg)
         ereport(LOG,
                 (errmsg("disconnection: session time: %d:%02d:%02d.%03d ", hours, minutes, seconds, msecs)));
     }
-    
+
 }
 
 /* Aduit user logout */
@@ -9667,7 +9722,7 @@ static void ForceModifyInitialPwd(const char* query_string, List* parsetree_list
     if (current_user != BOOTSTRAP_SUPERUSERID || parsetree_list == NIL) {
         return;
     }
-    
+
     char* current_user_name = GetUserNameFromId(current_user);
     password_info pass_info = {NULL, 0, 0, false, false};
     /* return when the initial user's password is not empty */
@@ -9712,7 +9767,7 @@ static void ForceModifyInitialPwd(const char* query_string, List* parsetree_list
 }
 
 /*
- * Require user to modify password since password is expired, 
+ * Require user to modify password since password is expired,
  * all the commands from APP should be forbidden except the
  * "ALTER USER ***".
  */
@@ -9725,12 +9780,12 @@ static void ForceModifyExpiredPwd(const char* queryString, const List* parsetree
     if (!IsUnderPostmaster || !IsConnFromApp()) {
         return;
     }
-    
-    /* check if gsql use -U -W */ 
+
+    /* check if gsql use -U -W */
     if (strcmp(queryString, "SELECT intervaltonum(gs_password_deadline())") == 0 ||
         strcmp(queryString, "SELECT gs_password_notifytime()") == 0 ||
         strcmp(queryString, "SELECT VERSION()") == 0) {
-        return;    
+        return;
     }
 
     /* Check if the role in "AlterRoleStmt" matches the current_user. */
@@ -9744,17 +9799,17 @@ static void ForceModifyExpiredPwd(const char* queryString, const List* parsetree
             DefElem* defel = (DefElem*)lfirst(option);
             DefElem* dpassword = NULL;
 
-            if ((strcmp(defel->defname, "encryptedPassword") == 0 || 
+            if ((strcmp(defel->defname, "encryptedPassword") == 0 ||
                 strcmp(defel->defname, "unencryptedPassword") == 0 ||
-                strcmp(defel->defname, "password") == 0) && 
+                strcmp(defel->defname, "password") == 0) &&
                 strcasecmp(current_user_name, alter_name) == 0) {
                 dpassword = defel;
             }
 
             if (dpassword != NULL && dpassword->arg != NULL) {
                 return;
-            }            
-        }   
+            }
+        }
     }
 
     ereport(ERROR,
@@ -11436,7 +11491,7 @@ OM_ONLINE_STATE get_om_online_state()
 
 }
 
-/* 
+/*
  * check whether sql_compatibility is valid
  */
 bool checkCompArgs(const char *compFormat)
@@ -11465,4 +11520,281 @@ void ResetInterruptCxt()
 
     t_thrd.int_cxt.CritSectionCount = 0;
 
+}
+
+/*
+ * Reload the postgres caches and update the cache version.
+ * Note: if catalog changes sneaked in since getting the
+ * version it is unfortunate but ok. The master version will have
+ * changed too (making our version number obsolete) so we will just end
+ * up needing to do another cache refresh later.
+ * See the comment for k2pg_catalog_cache_version in 'pg_k2pg_utils.c' for
+ * more details.
+ */
+static void K2PgRefreshCache()
+{
+
+	/*
+	 * Check that we are not already inside a transaction or we might end up
+	 * leaking cache references for any open relations (i.e. relations in-use by
+	 * the current transaction).
+	 *
+	 * Caller(s) should have already ensured that this is the case.
+	 */
+	if (t_thrd.postgres_cxt.xact_started)
+	{
+		ereport(ERROR,
+		        (errcode(ERRCODE_INTERNAL_ERROR),
+				        errmsg("Cannot refresh cache within a transaction")));
+	}
+
+	/* Get the latest syscatalog version from the master */
+	uint64_t catalog_master_version = 0;
+	PgGate_GetCatalogMasterVersion(&catalog_master_version);
+
+	/* Need to execute some (read) queries internally so start a local txn. */
+	start_xact_command();
+
+	/* Clear and reload system catalog caches, including all callbacks. */
+	ResetCatalogCaches();
+	CallSystemCacheCallbacks();
+	K2PgPreloadRelCache();
+
+	/* Also invalidate the pggate cache. */
+	PgGate_InvalidateCache();
+
+	/* Set the new ysql cache version. */
+	k2pg_catalog_cache_version = catalog_master_version;
+	k2pg_need_cache_refresh = false;
+
+	finish_xact_command();
+}
+
+static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
+                                          bool consider_retry,
+                                          bool *need_retry)
+{
+	bool		need_global_cache_refresh = false;
+	bool		need_table_cache_refresh = false;
+	char	   *table_to_refresh;
+	const char *table_cache_refresh_search_str =
+		"schema version mismatch for table ";
+
+	*need_retry = false;
+
+	/*
+	 * A retry is only required if the transaction is handled by K2PG.
+	 */
+	if (!IsK2PgEnabled())
+		return;
+
+	/* Get error data */
+	ErrorData *edata;
+	MemoryContextSwitchTo(oldcontext);
+	edata = CopyErrorData();
+	bool is_retryable_err = K2PgNeedRetryAfterCacheRefresh(edata);
+	if ((table_to_refresh = strstr(edata->message,
+								   table_cache_refresh_search_str)) != NULL)
+	{
+		int size_of_uuid = 16; /* boost::uuids::uuid::static_size() */
+		int size_of_hex_uuid = size_of_uuid * 2;
+
+		/* Skip to the table id part of the error message. */
+		table_to_refresh += strlen(table_cache_refresh_search_str);
+		if (strlen(table_to_refresh) < size_of_hex_uuid)
+			/* Unexpected table id size; ignore table cache refreshing. */
+			table_to_refresh = NULL;
+		else
+		{
+			/* Trim off the rest of the message. */
+			*(table_to_refresh + size_of_hex_uuid) = '\0';
+			/* Duplicate the string to safely FreeErrorData below. */
+			table_to_refresh = pstrdup(table_to_refresh);
+		}
+	}
+	need_table_cache_refresh = table_to_refresh != NULL;
+
+	/*
+	 * Get the latest syscatalog version from the master to check if we need
+	 * to refresh the cache.
+	 */
+	uint64_t catalog_master_version = 0;
+	PgGate_GetCatalogMasterVersion(&catalog_master_version);
+	need_global_cache_refresh =
+		k2pg_catalog_cache_version != catalog_master_version;
+	if (!(need_global_cache_refresh || need_table_cache_refresh))
+		return;
+
+	/*
+	 * Reset catalog version so that the cache gets marked as invalid and
+	 * will be refreshed after the txn ends.
+	 */
+	if (need_global_cache_refresh)
+		k2pg_need_cache_refresh = true;
+
+	/*
+	 * Prepare to retry the query if possible.
+	 */
+	if (is_retryable_err)
+	{
+		/*
+		 * For single-query transactions we abort the current
+		 * transaction to undo any already-applied operations
+		 * and retry the query.
+		 *
+		 * For transaction blocks we would have to re-apply
+		 * all previous queries and also continue the
+		 * transaction for future queries (before commit).
+		 * So we just re-throw the error in that case.
+		 *
+		 */
+		if (consider_retry && !IsTransactionBlock())
+		{
+			/* Clear error state */
+			FlushErrorState();
+			FreeErrorData(edata);
+
+			/* Abort the transaction and clean up. */
+			AbortCurrentTransaction();
+//			if (AM_WAL_SENDER)
+//				WalSndErrorCleanup();
+
+//			if (MyReplicationSlot != NULL)
+//				ReplicationSlotRelease();
+
+//			ReplicationSlotCleanup();
+
+			if (u_sess->postgres_cxt.doing_extended_query_message)
+				u_sess->postgres_cxt.ignore_till_sync = true;
+
+			t_thrd.postgres_cxt.xact_started = false;
+
+			/* Refresh cache now so that the retry uses latest version. */
+			if (need_global_cache_refresh)
+				K2PgRefreshCache();
+			else
+			{
+				/* need_table_cache_refresh */
+				ereport(LOG,
+						(errmsg("invalidating table cache entry %s",
+								table_to_refresh)));
+				HandleK2PgStatus(PgGate_InvalidateTableCacheByTableId(table_to_refresh));
+			}
+
+			*need_retry = true;
+		}
+		else
+		{
+			if (need_global_cache_refresh)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("Catalog Version Mismatch: A DDL occurred "
+								"while processing this query. Try Again.")));
+			else
+			{
+				/* need_table_cache_refresh */
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("%s", edata->message)));
+			}
+		}
+	}
+	else
+	{
+		/* Clear error state */
+		FlushErrorState();
+		FreeErrorData(edata);
+	}
+}
+
+/*
+ * Parse query tree via pg_parse_query, suppressing log messages below ERROR level.
+ * This is useful e.g. for avoiding "not supported yet and will be ignored" warnings.
+ */
+static List* k2pg_parse_query_silently(const char *query_string)
+{
+	List* parsetree_list;
+
+	int prev_log_min_messages    = log_min_messages;
+	int prev_client_min_messages = client_min_messages;
+	PG_TRY();
+	{
+		log_min_messages    = ERROR;
+		client_min_messages = ERROR;
+		parsetree_list      = pg_parse_query(query_string);
+		log_min_messages    = prev_log_min_messages;
+		client_min_messages = prev_client_min_messages;
+	}
+	PG_CATCH();
+	{
+		log_min_messages    = prev_log_min_messages;
+		client_min_messages = prev_client_min_messages;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	return parsetree_list;
+}
+
+static const char* k2pg_parse_command_tag(const char *query_string)
+{
+	List* parsetree_list = k2pg_parse_query_silently(query_string);
+
+	if (list_length(parsetree_list) > 0) {
+        Node* raw_parse_tree = (Node*)linitial(parsetree_list);
+        return CreateCommandTag(raw_parse_tree);
+	} else {
+		return NULL;
+	}
+}
+
+static bool k2pg_is_begin_transaction(const char *command_tag)
+{
+	if (!command_tag)
+		return false;
+
+	return (strncmp(command_tag, "BEGIN", 5) == 0 ||
+	        strncmp(command_tag, "START TRANSACTION", 17) == 0);
+}
+
+/*
+ * Only retry SELECT, INSERT, UPDATE and DELETE commands.
+ * Do the minimum parsing to find out what the command is
+ */
+static bool k2pg_check_retry_allowed(const char *query_string)
+{
+	if (!query_string)
+		return false;
+
+	const char* command_tag = k2pg_parse_command_tag(query_string);
+	if (!command_tag)
+		return false;
+
+	return (strncmp(command_tag, "DELETE", 6) == 0 ||
+	        strncmp(command_tag, "INSERT", 6) == 0 ||
+	        strncmp(command_tag, "SELECT", 6) == 0 ||
+	        strncmp(command_tag, "UPDATE", 6) == 0);
+}
+
+static void K2PgCheckSharedCatalogCacheVersion() {
+	/*
+	 * We cannot refresh the cache if we are already inside a transaction, so don't
+	 * bother checking shared memory.
+	 */
+	if (t_thrd.postgres_cxt.xact_started)
+		return;
+
+	/*
+	 * Don't check shared memory if we are in initdb. E.g. during initial system
+	 * catalog snapshot creation, tablet servers may not be running.
+	 */
+	if (K2PgIsInitDbModeEnvVarSet())
+		return;
+
+	uint64_t shared_catalog_version;
+	HandleK2PgStatus(PgGate_GetSharedCatalogVersion(&shared_catalog_version));
+
+	if (k2pg_catalog_cache_version < shared_catalog_version) {
+		K2PgRefreshCache();
+	}
 }
