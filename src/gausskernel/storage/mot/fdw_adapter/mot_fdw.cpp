@@ -291,42 +291,42 @@ void TermMOT()
 Datum mot_fdw_handler(PG_FUNCTION_ARGS)
 {
     FdwRoutine* fdwroutine = makeNode(FdwRoutine);
-    fdwroutine->AddForeignUpdateTargets = MOTAddForeignUpdateTargets;
-    fdwroutine->GetForeignRelSize = MOTGetForeignRelSize;
-    fdwroutine->GetForeignPaths = MOTGetForeignPaths;
-    fdwroutine->GetForeignPlan = MOTGetForeignPlan;
+    fdwroutine->AddForeignUpdateTargets = NULL;
+    fdwroutine->GetForeignRelSize = k2GetForeignRelSize;
+    fdwroutine->GetForeignPaths = k2GetForeignPaths;
+    fdwroutine->GetForeignPlan = k2GetForeignPlan;
     fdwroutine->PlanForeignModify = NULL;
-    fdwroutine->ExplainForeignScan = MOTExplainForeignScan;
+    fdwroutine->ExplainForeignScan = NULL;
     fdwroutine->BeginForeignScan = k2BeginForeignScan;
     fdwroutine->IterateForeignScan = k2IterateForeignScan;
-    fdwroutine->ReScanForeignScan = MOTReScanForeignScan;
+    fdwroutine->ReScanForeignScan = NULL;
     fdwroutine->EndForeignScan = MOTEndForeignScan;
-    fdwroutine->AnalyzeForeignTable = MOTAnalyzeForeignTable;
-    fdwroutine->AcquireSampleRows = MOTAcquireSampleRowsFunc;
+    fdwroutine->AnalyzeForeignTable = NULL;
+    fdwroutine->AcquireSampleRows = NULL;
     fdwroutine->ValidateTableDef = MOTValidateTableDef;
     fdwroutine->PartitionTblProcess = NULL;
     fdwroutine->BuildRuntimePredicate = NULL;
     fdwroutine->BeginForeignModify = NULL;
     fdwroutine->ExecForeignInsert = k2ExecForeignInsert;
-    fdwroutine->ExecForeignUpdate = MOTExecForeignUpdate;
-    fdwroutine->ExecForeignDelete = MOTExecForeignDelete;
+    fdwroutine->ExecForeignUpdate = NULL;
+    fdwroutine->ExecForeignDelete = NULL;
     fdwroutine->EndForeignModify = NULL;
-    fdwroutine->IsForeignRelUpdatable = MOTIsForeignRelationUpdatable;
-    fdwroutine->GetFdwType = MOTGetFdwType;
-    fdwroutine->TruncateForeignTable = MOTTruncateForeignTable;
-    fdwroutine->VacuumForeignTable = MOTVacuumForeignTable;
-    fdwroutine->GetForeignRelationMemSize = MOTGetForeignRelationMemSize;
-    fdwroutine->GetForeignMemSize = MOTGetForeignMemSize;
-    fdwroutine->GetForeignSessionMemSize = MOTGetForeignSessionMemSize;
-    fdwroutine->NotifyForeignConfigChange = MOTNotifyForeignConfigChange;
-
+    fdwroutine->IsForeignRelUpdatable = NULL;
+    fdwroutine->GetFdwType = NULL;
+    fdwroutine->TruncateForeignTable = NULL;
+    fdwroutine->VacuumForeignTable = NULL;
+    fdwroutine->GetForeignRelationMemSize = NULL;
+    fdwroutine->GetForeignMemSize = NULL;
+    fdwroutine->GetForeignSessionMemSize = NULL;
+    fdwroutine->NotifyForeignConfigChange = NULL;
+    /*
     if (!u_sess->mot_cxt.callbacks_set) {
         GetCurrentTransactionIdIfAny();
         RegisterXactCallback(MOTXactCallback, NULL);
         RegisterSubXactCallback(MOTSubxactCallback, NULL);
         u_sess->mot_cxt.callbacks_set = true;
     }
-
+    */
     PG_TRY();
     {
         MOTAdaptor::InitTxnManager(__FUNCTION__);
@@ -1128,11 +1128,12 @@ static void MOTReScanForeignScan(ForeignScanState* node)
  */
 static void MOTEndForeignScan(ForeignScanState* node)
 {
-    MOTFdwStateSt* festate = (MOTFdwStateSt*)node->fdw_state;
-    if (festate->m_allocInScan) {
-        ReleaseFdwState(festate);
-        node->fdw_state = NULL;
-    }
+    (void) node;
+    //MOTFdwStateSt* festate = (MOTFdwStateSt*)node->fdw_state;
+    //if (festate->m_allocInScan) {
+    //    ReleaseFdwState(festate);
+    //    node->fdw_state = NULL;
+    //}
 }
 
 /*
