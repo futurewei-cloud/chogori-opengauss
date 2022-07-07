@@ -323,7 +323,6 @@ Datum mot_fdw_handler(PG_FUNCTION_ARGS)
         RegisterSubXactCallback(MOTSubxactCallback, NULL);
         u_sess->mot_cxt.callbacks_set = true;
     }
-    */
     PG_TRY();
     {
         MOTAdaptor::InitTxnManager(__FUNCTION__);
