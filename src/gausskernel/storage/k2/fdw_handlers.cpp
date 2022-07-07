@@ -177,7 +177,7 @@ struct K2FdwExecState
 
    PgExecParameters *exec_params; /* execution control parameters for K2 PG */
    bool is_exec_done; /* Each statement should be executed exactly one time */
-  skv::http::dto::Query query;
+  skv::http::dto::QueryRequest query;
 };
 
 struct K2FdwScanPlanData
@@ -202,7 +202,7 @@ struct K2FdwScanPlanData
 using skv::http::String;
 // Foreign Oid -> Schema
 static std::unordered_map<uint64_t, std::shared_ptr<skv::http::dto::Schema>> schemaCache;
-static skv::http::Client client;
+static skv::http::Client *client;
 static bool initialized=false;
 
 std::shared_ptr<skv::http::dto::Schema> getSchema(Oid foid) {
@@ -211,12 +211,12 @@ std::shared_ptr<skv::http::dto::Schema> getSchema(Oid foid) {
   if (it == schemaCache.end()) {
     String schemaName = std::to_string(foid);
 
-    auto&&[status, schemaResp] = client.getSchema("postgres", schemaName).get();
+    auto&&[status, schemaResp] = client->getSchema("postgres", schemaName).get();
     if (!status.is2xxOK()) {
       return nullptr;
     }
 
-    schemaCache[foid] = std::make_shared<skv::http::dto::Schema>(schemaResp);
+    schemaCache[foid] = schemaResp;
     it = schemaCache.find(foid);
   }
 
@@ -308,7 +308,7 @@ skv::http::dto::expression::Expression build_expr(K2FdwScanPlanData* scan_plan, 
 			return opr_expr;
 	}
 
-    expression::Value col_ref = expression::makeValueReference(scan_plan->schema->fields[K2_FIELD_OFFSET + opr_cond->ref->attr_num].name);
+    expression::Value col_ref = expression::makeValueReference(scan_plan->schema->fields[K2_FIELD_OFFSET + opr_cond->ref->attr_num - 1].name);
     // TODO k2 types, null?
  	int32_t k2val = (int32_t)(opr_cond->val->value & 0xffffffff);
     expression::Value constant = expression::makeValueLiteral<int32_t>(std::move(k2val));
@@ -338,9 +338,11 @@ static void AppendValueToRecord(skv::http::dto::expression::Value& value, skv::h
     typename std::remove_reference_t<decltype(afr)>::ValueT constant;
     skv::http::MPackReader reader(value.literal);
     if (reader.read(constant)) {
+        std::cout << constant << std::endl;
       builder.serializeNext(constant);
+    } else {
+        throw std::runtime_error("Unable to deserialize value literal");
     }
-    throw std::runtime_error("Unable to deserialize value literal");
   });
 }
 
@@ -350,10 +352,12 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
   using namespace skv::http::dto::expression;
   using namespace skv::http;
   if (range_conds.op == Operation::UNKNOWN) {
+      std::cout << "range_conds UNKNOWN" << std::endl;
         return;
     }
 
   if (range_conds.op != Operation::AND) {
+      std::cout << "range_conds not AND" << std::endl;
     std::string msg = "Only AND top-level condition is supported in range expression";
         //K2LOG_E(log::k2Adapter, "{}", msg);
         //return STATUS(InvalidCommand, msg);
@@ -361,6 +365,7 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
     }
 
     if (range_conds.expressionChildren.size() == 0) {
+      std::cout << "range_conds 0 children" << std::endl;
       //K2LOG_D(log::k2Adapter, "Child conditions are empty");
         return;
     }
@@ -405,10 +410,13 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
             case Operation::EQ: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
+                    std::cout << "Appending to start: ";
                     AppendValueToRecord(val, start);
+                    std::cout << "Appending to end: ";
                     AppendValueToRecord(val, end);
                 } else {
                     didBranch = true;
+                    std::cout << "Appending to leftover EQ else cur: " << cur_idx << " start: " << start_idx << std::endl;
                     leftover_exprs.emplace_back(pg_expr);
                 }
             } break;
@@ -416,21 +424,25 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
             case Operation::GT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
+                    std::cout << "Appending to start: ";
                     AppendValueToRecord(val, start);
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
+                    std::cout << "Appending to leftover GT" << std::endl;
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
+                    std::cout << "Appending to end: ";
                     AppendValueToRecord(val, end);
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
+                    std::cout << "Appending to leftover LT" << std::endl;
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LTE: {
@@ -446,12 +458,14 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
                     } else { */
               // Not pushing LTE to range record because end record is exclusive
                 didBranch = true;
+                    std::cout << "Appending to leftover LTE" << std::endl;
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             default: {
               //const char* msg = "Expression Condition must be one of [BETWEEN, EQ, GE, LE]";
               //K2LOG_W(log::k2Adapter, "{}", msg);
                 didBranch = true;
+                    std::cout << "Appending to leftover default" << std::endl;
                 leftover_exprs.emplace_back(pg_expr);
             } break;
         }
@@ -486,10 +500,11 @@ static void BindScanKeys(Relation relation,
 	/* Bind the scan keys */
 	for (int i = 0; i < nKeys; i++)
 	{
+        int attrNum = i + 1;
         // check if the key is in the Opr conditions
-        List *opr_conds = findOprCondition(context, i);
+        List *opr_conds = findOprCondition(context, attrNum);
         if (opr_conds != NIL) {
-            elog(DEBUG4, "FDW: binding key with attr_num %d for relation: %d", i, relation->rd_id);
+            elog(DEBUG4, "FDW: binding key with attr_num %d for relation: %d", attrNum, relation->rd_id);
             ListCell *lc = NULL;
             foreach (lc, opr_conds) {
                 FDWOprCond *opr_cond = (FDWOprCond *) lfirst(lc);
@@ -513,10 +528,11 @@ static void BindScanKeys(Relation relation,
 	// bind non-keys
 	for (int i = nKeys; i < nNonKeys + nNonKeys; i++)
 	{
+        int attrNum = i + 1;
 		// check if the column is in the Opr conditions
-		List *opr_conds = findOprCondition(context, i);
+		List *opr_conds = findOprCondition(context, attrNum);
 		if (opr_conds != NIL) {
-			elog(DEBUG4, "FDW: binding key with attr_num %d for relation: %d", i, relation->rd_id);
+			elog(DEBUG4, "FDW: binding key with attr_num %d for relation: %d", attrNum, relation->rd_id);
 			ListCell *lc = NULL;
 			foreach (lc, opr_conds) {
 				FDWOprCond *opr_cond = (FDWOprCond *) lfirst(lc);
@@ -538,6 +554,7 @@ static void BindScanKeys(Relation relation,
 void
 k2BeginForeignScan(ForeignScanState *node, int eflags)
 {
+    std::cout << "BeginForeignScan" << std::endl;
 	EState      *estate      = node->ss.ps.state;
 	Relation    relation     = node->ss.ss_currentRelation;
 	ForeignScan *foreignScan = (ForeignScan *) node->ss.ps.plan;
@@ -583,6 +600,7 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
 	//													k2pg_catalog_cache_version),
 	//													k2pg_state->handle,
 	//													k2pg_state->stmt_owner);
+    std::cout << "BeginForeignScan done" << std::endl;
 }
 
 /*
@@ -593,38 +611,50 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
 TupleTableSlot *
 k2IterateForeignScan(ForeignScanState *node)
 {
+    std::cout << "IterateForeignScan" << std::endl;
 	TupleTableSlot *slot;
 	K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
 	bool           has_data   = false;
+	Relation relation = node->ss.ss_currentRelation;
 
-    auto&& [status, txnHandle] = client.beginTxn(skv::http::dto::TxnOptions()).get();
+  auto&& [status, txnHandle] = client->beginTxn(skv::http::dto::TxnOptions()).get();
 
 	/* Execute the select statement one time. */
 	if (!k2pg_state->is_exec_done) {
       K2FdwScanPlanData scan_plan{};
 
-		Relation relation = node->ss.ss_currentRelation;
 		scan_plan.target_relation = relation;
 		scan_plan.paramLI = node->ss.ps.state->es_param_list_info;
 		LoadTableInfo(RelationGetRelid(relation), &scan_plan);
 		scan_plan.bind_desc = RelationGetDescr(relation);
 		BindScanKeys(relation, k2pg_state, &scan_plan);
-
-        auto&&[status, query] = txnHandle.createQuery("postgres", scan_plan.schema->name).get();
-        if (!status.is2xxOK()) {
-          // err
-        }
+        std::cout << "IterateForeignScan BindScanKeys done" << std::endl;
 
         skv::http::dto::SKVRecordBuilder startBuild("postgres", scan_plan.schema);
+        startBuild.serializeNext<String>(scan_plan.schema->name);
+        startBuild.serializeNext<int32_t>(0);
         skv::http::dto::SKVRecordBuilder endBuild("postgres", scan_plan.schema);
+        endBuild.serializeNext<String>(scan_plan.schema->name);
+        endBuild.serializeNext<int32_t>(0);
         std::vector<skv::http::dto::expression::Expression> leftovers;
         BuildRangeRecords(scan_plan.range_conds, leftovers, startBuild, endBuild, scan_plan.schema);
-        query.startScanRecord = startBuild.build().storage;
-        query.endScanRecord = endBuild.build().storage;
+        skv::http::dto::SKVRecord startScanRecord = startBuild.build();
+        skv::http::dto::SKVRecord endScanRecord = endBuild.build();
+        std::cout << "IterateForeignScan BuildRangeRecords done" << std::endl;
         for (skv::http::dto::expression::Expression& expr : leftovers) {
           scan_plan.where_conds.expressionChildren.push_back(std::move(expr));
         }
-        query.setFilterExpression(std::move(scan_plan.where_conds));
+        if (scan_plan.where_conds.expressionChildren.size() == 0) {
+            scan_plan.where_conds = skv::http::dto::expression::Expression{};
+        }
+        auto&&[status, query] = txnHandle.createQuery(startScanRecord, endScanRecord, std::move(scan_plan.where_conds)).get();
+        std::cout << "IterateForeignScan createQuery done" << std::endl;
+        if (!status.is2xxOK()) {
+            std::cout << "error on createQuery: " << status << std::endl;
+            return slot;
+          // err
+        }
+
         k2pg_state->query = std::move(query);
 		//k2SetupScanTargets(node);
 		//HandleK2PgStatusWithOwner(PgGate_ExecSelect(k2pg_state->handle, k2pg_state->exec_params),
@@ -641,11 +671,14 @@ k2IterateForeignScan(ForeignScanState *node)
 	Datum           *values = slot->tts_values;
 	bool            *isnull = slot->tts_isnull;
 	PgSysColumns syscols;
+        std::cout << "IterateForeignScan tuple prep done" << std::endl;
 
-    auto&& [statusQ, records] = txnHandle.query(k2pg_state->query).get();
+    auto&& [statusQ, result] = txnHandle.query(k2pg_state->query).get();
     if (!statusQ.is2xxOK()) {
-      //err
+        std::cout << "query error: " << statusQ.message << std::endl;
+        return slot;
     }
+    std::cout << "query done result size: " << result.records.size() << std::endl;
 	/* Fetch one row. */
 	//HandleK2PgStatusWithOwner(PgGate_DmlFetch(k2pg_state->handle,
 	//                                      tupdesc->natts,
@@ -657,19 +690,25 @@ k2IterateForeignScan(ForeignScanState *node)
 	//                        k2pg_state->stmt_owner);
 
 	/* If we have result(s) update the tuple slot. */
-	if (records.size())
+	if (result.records.size())
 	{
       // TODO
       //if (node->k2pg_fdw_aggs == NIL)
       //{
-      skv::http::dto::SKVRecord& record = records[0];
+        skv::http::dto::SKVRecord record("postgres", getSchema(RelationGetRelid(relation)), std::move(result.records[0]), true);
       record.seekField(K2_FIELD_OFFSET);
       std::optional<int32_t> value = record.deserializeNext<int32_t>();
-   std::cout << "K2FDW: scanned a record with val: " << *value << std::endl;
+      std::cout << "K2FDW: scanned a record with val: " << *value << std::endl;
+      std::optional<int32_t> value2 = record.deserializeNext<int32_t>();
+      std::cout << "K2FDW: scanned a record with val2: " << *value2 << std::endl;
+      std::cout << "IterateForeignScan deserialize done" << std::endl;
 
       //HeapTuple tuple = heap_form_tuple(tupdesc, values, isnull);
             slot->tts_isnull[0] = false;
             slot->tts_values[0] = NumericGetDatum(*value);
+            slot->tts_isnull[1] = false;
+            slot->tts_values[1] = NumericGetDatum(*value2);
+
 			//if (syscols.oid != InvalidOid)
 			//{
 			//	HeapTupleSetOid(tuple, syscols.oid);
@@ -908,12 +947,13 @@ k2GetForeignPlan(PlannerInfo *root,
 }
 
 static void createCollection() {
-  skv::http::dto::CollectionMetadata meta;
+  skv::http::dto::CollectionMetadata meta{};
   meta.name = "postgres";
   meta.hashScheme = skv::http::dto::HashScheme::Range;
   meta.storageDriver = skv::http::dto::StorageDriver::K23SI;
 
-    auto reqFut = client.createCollection(std::move(meta), std::vector<String>{"",""});
+    auto reqFut = client->createCollection(std::move(meta), std::vector<String>{""});
+    std::cout << "getting createCollection resp!" << std::endl;
     auto&&[status] = reqFut.get();
     if (!status.is2xxOK()) {
 	ereport(ERROR,
@@ -927,9 +967,12 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "Start create table" << std::endl;
 
   if (!initialized) {
+    client = new skv::http::Client("172.17.0.1");
     createCollection();
+    initialized = true;
   }
 
+    std::cout << "trying to get db name" << std::endl;
     char* dbname = NULL;
     bool failure = false;
     dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
@@ -1042,7 +1085,7 @@ void k2CreateIndex(IndexStmt* stmt) {
 	}
     }
 
-    auto reqFut = client.createSchema("postgres", *schema);
+    auto reqFut = client->createSchema("postgres", *schema);
     auto&&[status] = reqFut.get();
     if (!status.is2xxOK()) {
 	ereport(ERROR,
@@ -1099,7 +1142,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
   std::cout << "my record: " << record << std::endl;
 
   // TODO txn handling
-  auto beginFut = client.beginTxn(skv::http::dto::TxnOptions());
+  auto beginFut = client->beginTxn(skv::http::dto::TxnOptions());
   auto&& [status, txnHandle] = beginFut.get();
   if (status.is2xxOK()) {
     auto writeFut = txnHandle.write(record, false, skv::http::dto::ExistencePrecondition::NotExists);
@@ -1114,13 +1157,15 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
       return nullptr;
   }
 
-  auto endFut = txnHandle.endTxn(true);
+  auto endFut = txnHandle.endTxn(skv::http::dto::EndAction::Commit);
   auto&&[endStatus] = endFut.get();
   if (!endStatus.is2xxOK()) {
     // TODO error types
     report_pg_error(MOT::RC_TABLE_NOT_FOUND);
     return nullptr;
   }
+
+  std::cout << "write was committed!" << std::endl;
 
   return slot;
 }

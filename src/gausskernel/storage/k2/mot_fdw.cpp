@@ -25,6 +25,7 @@
 
 #include <ostream>
 #include <istream>
+
 #include "global.h"
 #include "mot_error.h"
 #include "funcapi.h"
@@ -82,6 +83,8 @@
 #include "redo_log_handler_type.h"
 #include "ext_config_loader.h"
 #include "utilities.h"
+
+#include "fdw_chogori.h"
 
 // allow MOT Engine logging facilities
 DECLARE_LOGGER(ExternalWrapper, FDW);
@@ -288,35 +291,35 @@ void TermMOT()
 Datum mot_fdw_handler(PG_FUNCTION_ARGS)
 {
     FdwRoutine* fdwroutine = makeNode(FdwRoutine);
-    fdwroutine->AddForeignUpdateTargets = MOTAddForeignUpdateTargets;
-    fdwroutine->GetForeignRelSize = MOTGetForeignRelSize;
-    fdwroutine->GetForeignPaths = MOTGetForeignPaths;
-    fdwroutine->GetForeignPlan = MOTGetForeignPlan;
-    fdwroutine->PlanForeignModify = MOTPlanForeignModify;
-    fdwroutine->ExplainForeignScan = MOTExplainForeignScan;
-    fdwroutine->BeginForeignScan = MOTBeginForeignScan;
-    fdwroutine->IterateForeignScan = MOTIterateForeignScan;
-    fdwroutine->ReScanForeignScan = MOTReScanForeignScan;
+    fdwroutine->AddForeignUpdateTargets = NULL;
+    fdwroutine->GetForeignRelSize = k2GetForeignRelSize;
+    fdwroutine->GetForeignPaths = k2GetForeignPaths;
+    fdwroutine->GetForeignPlan = k2GetForeignPlan;
+    fdwroutine->PlanForeignModify = NULL;
+    fdwroutine->ExplainForeignScan = NULL;
+    fdwroutine->BeginForeignScan = k2BeginForeignScan;
+    fdwroutine->IterateForeignScan = k2IterateForeignScan;
+    fdwroutine->ReScanForeignScan = NULL;
     fdwroutine->EndForeignScan = MOTEndForeignScan;
     fdwroutine->AnalyzeForeignTable = NULL;
     fdwroutine->AcquireSampleRows = NULL;
     fdwroutine->ValidateTableDef = MOTValidateTableDef;
     fdwroutine->PartitionTblProcess = NULL;
     fdwroutine->BuildRuntimePredicate = NULL;
-    fdwroutine->BeginForeignModify = MOTBeginForeignModify;
-    fdwroutine->ExecForeignInsert = MOTExecForeignInsert;
-    fdwroutine->ExecForeignUpdate = MOTExecForeignUpdate;
-    fdwroutine->ExecForeignDelete = MOTExecForeignDelete;
-    fdwroutine->EndForeignModify = MOTEndForeignModify;
-    fdwroutine->IsForeignRelUpdatable = MOTIsForeignRelationUpdatable;
-    fdwroutine->GetFdwType = MOTGetFdwType;
-    fdwroutine->TruncateForeignTable = MOTTruncateForeignTable;
-    fdwroutine->VacuumForeignTable = MOTVacuumForeignTable;
-    fdwroutine->GetForeignRelationMemSize = MOTGetForeignRelationMemSize;
-    fdwroutine->GetForeignMemSize = MOTGetForeignMemSize;
-    fdwroutine->GetForeignSessionMemSize = MOTGetForeignSessionMemSize;
-    fdwroutine->NotifyForeignConfigChange = MOTNotifyForeignConfigChange;
-
+    fdwroutine->BeginForeignModify = NULL;
+    fdwroutine->ExecForeignInsert = k2ExecForeignInsert;
+    fdwroutine->ExecForeignUpdate = NULL;
+    fdwroutine->ExecForeignDelete = NULL;
+    fdwroutine->EndForeignModify = NULL;
+    fdwroutine->IsForeignRelUpdatable = NULL;
+    fdwroutine->GetFdwType = NULL;
+    fdwroutine->TruncateForeignTable = NULL;
+    fdwroutine->VacuumForeignTable = NULL;
+    fdwroutine->GetForeignRelationMemSize = NULL;
+    fdwroutine->GetForeignMemSize = NULL;
+    fdwroutine->GetForeignSessionMemSize = NULL;
+    fdwroutine->NotifyForeignConfigChange = NULL;
+    /*
     if (!u_sess->mot_cxt.callbacks_set) {
         GetCurrentTransactionIdIfAny();
         RegisterXactCallback(MOTXactCallback, NULL);
@@ -421,6 +424,8 @@ static void MemoryEreportError()
  */
 static void MOTGetForeignRelSize(PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid)
 {
+  //k2GetForeignRelSize(root, baserel, foreigntableid);
+
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)palloc0(sizeof(MOTFdwStateSt));
     ForeignTable* ftable = GetForeignTable(foreigntableid);
     MOT::TxnManager* currTxn = GetSafeTxn(__FUNCTION__);
@@ -536,6 +541,8 @@ static bool IsOrderingApplicable(PathKey* pathKey, RelOptInfo* rel, MOT::Index* 
  */
 static void MOTGetForeignPaths(PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid)
 {
+  //k2GetForeignPaths(root, baserel, foreigntableid);
+
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)baserel->fdw_private;
     List* usablePathkeys = NIL;
     List* bestClause = nullptr;
@@ -724,6 +731,8 @@ static void MOTGetForeignPaths(PlannerInfo* root, RelOptInfo* baserel, Oid forei
 static ForeignScan* MOTGetForeignPlan(
     PlannerInfo* root, RelOptInfo* baserel, Oid foreigntableid, ForeignPath* best_path, List* tlist, List* scan_clauses)
 {
+  //(void)k2GetForeignPlan(root, baserel, foreigntableid, best_path, tlist, scan_clauses);
+
     ListCell* lc = nullptr;
     ::Index scanRelid = baserel->relid;
     MOTFdwStateSt* planstate = (MOTFdwStateSt*)baserel->fdw_private;
@@ -1792,12 +1801,14 @@ static void MOTValidateTableDef(Node* obj)
                         errmsg("Cannot create MOT tables while incremental checkpoint is enabled.")));
             }
 
-            MOTAdaptor::CreateTable((CreateForeignTableStmt*)obj, tid);
+	    k2CreateTable((CreateForeignTableStmt*)obj);
+            //MOTAdaptor::CreateTable((CreateForeignTableStmt*)obj, tid);
             break;
         }
         case T_IndexStmt: {
             isMemoryLimitReached();
-            MOTAdaptor::CreateIndex((IndexStmt*)obj, tid);
+	    k2CreateIndex((IndexStmt*) obj);
+            //MOTAdaptor::CreateIndex((IndexStmt*)obj, tid);
             break;
         }
         case T_ReindexStmt: {
