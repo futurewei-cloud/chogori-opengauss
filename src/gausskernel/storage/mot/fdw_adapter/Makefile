@@ -38,7 +38,7 @@ ENGINE_INC = $(top_builddir)/src/gausskernel/storage/mot/core
 include $(top_builddir)/src/Makefile.global
 
 OBJ_DIR = ./obj
-OBJS = $(OBJ_DIR)/mot_fdw.o $(OBJ_DIR)/mot_internal.o $(OBJ_DIR)/mot_fdw_xlog.o $(OBJ_DIR)/mot_match_index.o $(OBJ_DIR)/mot_fdw_error.o $(OBJ_DIR)/fdw_chogori.o $(OBJ_DIR)/fdw_chogori_parse.o
+OBJS = $(OBJ_DIR)/mot_fdw.o $(OBJ_DIR)/mot_internal.o $(OBJ_DIR)/mot_fdw_xlog.o $(OBJ_DIR)/mot_match_index.o $(OBJ_DIR)/mot_fdw_error.o
 
 DATA = mot_fdw.control mot_fdw--1.0.sql
 
@@ -77,7 +77,7 @@ buildrepo:
 	@$(call make-repo)
 
 $(OBJ_DIR)/%.o: %.cpp
-	$(COMPILE.cpp) -MMD -MP -MF"$(patsubst %.o,%.d,$@)" -MT"$@" -o $@ $<
+	$(COMPILE.cpp) -std=c++11 -MMD -MP -MF"$(patsubst %.o,%.d,$@)" -MT"$@" -o $@ $<
 
 show:
 	@echo "CC_VERSION=${CC_VERSION}"

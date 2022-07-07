@@ -415,6 +415,10 @@ static PGFunction load_plpgsql_function(char* funcname)
     } else if (!strcmp(funcname, "mot_fdw_handler")) {
         retval = &mot_fdw_handler;
 #endif
+    } else if (!strcmp(funcname, "k2_fdw_validator")) {
+        retval = &k2_fdw_validator;
+    } else if (!strcmp(funcname, "k2_fdw_handler")) {
+        retval = &k2_fdw_handler;
     } else if (!strcmp(funcname, "log_fdw_handler")) {
         retval = &log_fdw_handler;
     } else if (!strcmp(funcname, "log_fdw_validator")) {
@@ -557,7 +561,7 @@ static void fmgr_info_other_lang(Oid functionId, FmgrInfo* finfo, HeapTuple proc
      * RPCFencedUDF in RPCInitFencedUDFIfNeed, and return.
      */
     char* lname = get_language_name(language);
-    if ((language == JavalanguageId || strncmp(lname, "plpython", strlen("plpython")) == 0) 
+    if ((language == JavalanguageId || strncmp(lname, "plpython", strlen("plpython")) == 0)
                     && RPCInitFencedUDFIfNeed(functionId, finfo, procedureTuple)) {
         return;
     }
@@ -2476,7 +2480,7 @@ struct varlena* pg_detoast_datum(struct varlena* datum)
         ereport(ERROR, (errmodule(MOD_EXECUTOR), errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                 errmsg("NULL input for detoast datum")));
     }
-	
+
     if (VARATT_IS_EXTENDED(datum)) {
         return heap_tuple_untoast_attr(datum);
     } else {

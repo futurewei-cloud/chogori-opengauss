@@ -12,11 +12,11 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * ---------------------------------------------------------------------------------------
- * 
+ *
  * dist_fdw.h
- * 
- * 
- * 
+ *
+ *
+ *
  * IDENTIFICATION
  *        src/include/bulkload/dist_fdw.h
  *
@@ -43,6 +43,9 @@ extern "C" Datum file_fdw_validator(PG_FUNCTION_ARGS);
 
 extern "C" Datum hdfs_fdw_handler(PG_FUNCTION_ARGS);
 extern "C" Datum hdfs_fdw_validator(PG_FUNCTION_ARGS);
+
+extern "C" Datum k2_fdw_validator(PG_FUNCTION_ARGS);
+extern "C" Datum k2_fdw_handler(PG_FUNCTION_ARGS);
 
 #ifdef ENABLE_MOT
 extern "C" Datum mot_fdw_validator(PG_FUNCTION_ARGS);

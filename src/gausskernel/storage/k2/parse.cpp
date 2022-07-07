@@ -1,6 +1,27 @@
-#include "fdw_chogori_parse.h"
+/*
+MIT License
 
-#include "global.h"
+Copyright(c) 2022 Futurewei Cloud
+
+    Permission is hereby granted,
+    free of charge, to any person obtaining a copy of this software and associated documentation files(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and / or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions :
+
+    The above copyright notice and this permission notice shall be included in all copies
+    or
+    substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS",
+    WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER
+    LIABILITY,
+    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
+#include "k2_parse.h"
+
 #include "funcapi.h"
 #include "postgres.h"
 #include "catalog/pg_collation.h"
@@ -9,6 +30,7 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 
+namespace k2fdw {
 
 /*
 * Return true if given object is one of PostgreSQL's built-in objects.
@@ -479,7 +501,7 @@ bool foreign_expr_walker(Node *node,
    /* It looks OK */
    return true;
 }
- 
+
 
 bool is_foreign_expr(PlannerInfo *root,
 		RelOptInfo *baserel,
@@ -630,7 +652,7 @@ void parse_op_expr(OpExpr *node, FDWExprRefValues *ref_values) {
 			break;
 	}
 }
- 
+
 void parse_var(Var *node, FDWExprRefValues *ref_values) {
 	elog(DEBUG4, "FDW: parsing Var %s", nodeToString(node));
 	// the condition is at the current level
@@ -707,3 +729,5 @@ List *findOprCondition(foreign_expr_cxt context, int attr_num) {
 
 	return result;
 }
+
+} // ns

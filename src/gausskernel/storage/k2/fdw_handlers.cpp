@@ -1,15 +1,38 @@
+/*
+MIT License
+
+Copyright(c) 2022 Futurewei Cloud
+
+    Permission is hereby granted,
+    free of charge, to any person obtaining a copy of this software and associated documentation files(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and / or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions :
+
+    The above copyright notice and this permission notice shall be included in all copies
+    or
+    substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS",
+    WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER
+    LIABILITY,
+    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
 #include <cstdint>
 #include <iostream>
-#include <skvhttp/dto/SKVRecord.h>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <skvhttp/dto/SKVRecord.h>
+#include <skvhttp/client/SKVClient.h>
+#include <skvhttp/dto/Expression.h>
 
-#include "global.h"
+
 #include "funcapi.h"
 #include "access/reloptions.h"
 #include "access/transam.h"
-#include "mot_fdw_error.h"
 #include "postgres.h"
 
 #include "commands/dbcommands.h"
@@ -45,10 +68,10 @@
 #include "catalog/pg_proc.h"
 #include "utils/lsyscache.h"
 
-#include "fdw_chogori_parse.h"
+#include "k2_parse.h"
+#include "k2_fdw_handlers.h"
 
-#include <skvhttp/client/SKVClient.h>
-#include <skvhttp/dto/Expression.h>
+namespace k2fdw {
 
 class PgStatement;
 
@@ -187,9 +210,9 @@ std::shared_ptr<skv::http::dto::Schema> getSchema(Oid foid) {
   std::cout << "trying to get schema for foid: " << foid << std::endl;
   if (it == schemaCache.end()) {
     String schemaName = std::to_string(foid);
-    
+
     auto&&[status, schemaResp] = client.getSchema("postgres", schemaName).get();
-    if (!status.is2xxOK()) {    
+    if (!status.is2xxOK()) {
       return nullptr;
     }
 
@@ -210,7 +233,7 @@ static void LoadTableInfo(Oid foid, K2FdwScanPlanData* scan_plan)
   //Oid            relid          = relation->foreignOid;
 
   scan_plan->schema = getSchema(foid);
-  
+
     /*
 	K2PgTableDesc k2pg_table_desc = NULL;
 
@@ -291,7 +314,7 @@ skv::http::dto::expression::Expression build_expr(K2FdwScanPlanData* scan_plan, 
     expression::Value constant = expression::makeValueLiteral<int32_t>(std::move(k2val));
     opr_expr.valueChildren.push_back(std::move(col_ref));
     opr_expr.valueChildren.push_back(std::move(constant));
-    
+
 	return opr_expr;
 }
 
@@ -573,7 +596,7 @@ k2IterateForeignScan(ForeignScanState *node)
 	TupleTableSlot *slot;
 	K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
 	bool           has_data   = false;
-    
+
     auto&& [status, txnHandle] = client.beginTxn(skv::http::dto::TxnOptions()).get();
 
 	/* Execute the select statement one time. */
@@ -643,7 +666,7 @@ k2IterateForeignScan(ForeignScanState *node)
       record.seekField(K2_FIELD_OFFSET);
       std::optional<int32_t> value = record.deserializeNext<int32_t>();
    std::cout << "K2FDW: scanned a record with val: " << *value << std::endl;
-      
+
       //HeapTuple tuple = heap_form_tuple(tupdesc, values, isnull);
             slot->tts_isnull[0] = false;
             slot->tts_values[0] = NumericGetDatum(*value);
@@ -889,7 +912,7 @@ static void createCollection() {
   meta.name = "postgres";
   meta.hashScheme = skv::http::dto::HashScheme::Range;
   meta.storageDriver = skv::http::dto::StorageDriver::K23SI;
- 
+
     auto reqFut = client.createCollection(std::move(meta), std::vector<String>{"",""});
     auto&&[status] = reqFut.get();
     if (!status.is2xxOK()) {
@@ -906,7 +929,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
   if (!initialized) {
     createCollection();
   }
-  
+
     char* dbname = NULL;
     bool failure = false;
     dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
@@ -974,7 +997,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
   std::cout << "create table finishing" << std::endl;
     if (!failure) {
       std::cout << "creating table for foid: " << stmt->base.relation->foreignOid << std::endl;
-    
+
       schemaCache[stmt->base.relation->foreignOid] = std::make_shared<skv::http::dto::Schema>(std::move(schema));
     }
 
@@ -1026,7 +1049,7 @@ void k2CreateIndex(IndexStmt* stmt) {
 	    (errmodule(MOD_MOT),
 		errcode(ERRCODE_UNDEFINED_DATABASE),
 		errmsg("Could not create K2 collection")));
-    } 
+    }
     std::cout << "Made a K2 Schema for table: " << it->first << "with " << schema->fields.size()-2 << " fields and " << schema->partitionKeyFields.size() - 2 << " key fields" << std::endl;
 }
 
@@ -1038,10 +1061,10 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
     report_pg_error(MOT::RC_TABLE_NOT_FOUND);
     return nullptr;
   }
-  
+
   std::cout << "Insert row, got schema: " << schema->name << std::endl;
   skv::http::dto::SKVRecordBuilder build("postgres", schema);;
-  
+
     HeapTuple srcData = (HeapTuple)slot->tts_tuple;
     TupleDesc tupdesc = slot->tts_tupleDescriptor;
     uint64_t i = 0;
@@ -1084,7 +1107,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
     if (!writeStatus.is2xxOK()) {
       // TODO error types
        report_pg_error(MOT::RC_TABLE_NOT_FOUND);
-      return nullptr;     
+      return nullptr;
     }
   } else {
       report_pg_error(MOT::RC_TABLE_NOT_FOUND);
@@ -1098,6 +1121,8 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
     report_pg_error(MOT::RC_TABLE_NOT_FOUND);
     return nullptr;
   }
- 
+
   return slot;
 }
+
+} // ns

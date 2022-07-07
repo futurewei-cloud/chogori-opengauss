@@ -1455,12 +1455,12 @@ static void writezone(const char* name, const char* string)
         }
     }
     for (pass = 1; pass <= 2; ++pass) {
-        register int thistimei, thistimecnt;
-        register int thisleapi, thisleapcnt;
-        register int thistimelim, thisleaplim;
+        int thistimei, thistimecnt;
+        int thisleapi, thisleapcnt;
+        int thistimelim, thisleaplim;
         int writetype[TZ_MAX_TIMES];
         int typemap[TZ_MAX_TYPES];
-        register int thistypecnt;
+        int thistypecnt;
         char thischars[TZ_MAX_CHARS];
         char thischarcnt;
         int indmap[TZ_MAX_CHARS];
@@ -1512,7 +1512,7 @@ static void writezone(const char* name, const char* string)
         }
         thischarcnt = 0;
         for (i = 0; i < typecnt; ++i) {
-            register char* thisabbr = NULL;
+            char* thisabbr = NULL;
 
             if (!writetype[i]) {
                 continue;
@@ -1578,7 +1578,7 @@ static void writezone(const char* name, const char* string)
             (void)fwrite((void*)thischars, (size_t)sizeof(thischars[0]), (size_t)(unsigned int)thischarcnt, fp);
         }
         for (i = thisleapi; i < thisleaplim; ++i) {
-            register zic_t todo;
+            zic_t todo;
 
             if (roll[i]) {
                 if (timecnt == 0 || trans[i] < ats[0]) {

@@ -1,0 +1,5 @@
+# k2 extension
+comment = 'foreign-data wrapper for K2 servers'
+default_version = '1.0'
+module_pathname = '$libdir/k2'
+relocatable = true

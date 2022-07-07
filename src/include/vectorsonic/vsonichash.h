@@ -12,12 +12,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * ---------------------------------------------------------------------------------------
- * 
+ *
  * vsonichash.h
  *     Routines to handle vector sonic hash nodes.
  *     SonicHash is base class of SonicHashJoin and SonicHashAgg.
  *     This file also contains many hash functions.
- * 
+ *
  * IDENTIFICATION
  *        src/include/vectorsonic/vsonichash.h
  *
@@ -313,5 +313,5 @@ public:
 };
 
 extern uint64 hashfindprime(uint64 n);
-extern uint32 hashquickany(uint32 seed, register const unsigned char* data, register int len);
+extern uint32 hashquickany(uint32 seed, const unsigned char* data, int len);
 #endif /* SRC_INCLUDE_VECTORSONIC_VSONICHASH_H_ */

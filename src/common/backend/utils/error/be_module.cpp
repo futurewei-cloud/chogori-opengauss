@@ -67,6 +67,7 @@ const module_data module_map[] = {{MOD_ALL, "ALL"},
     {MOD_WLM_CP, "WLMCP"},
     {MOD_ACCELERATE, "ACCELERATE"},
     {MOD_MOT, "MOT"},
+    {MOD_K2, "K2"},
     {MOD_PLANHINT, "PLANHINT"},
     {MOD_PARQUET, "PARQUET"},
     {MOD_PGSTAT, "PGSTAT"},
@@ -250,4 +251,3 @@ module_logging_enable_comm(ModuleId module_id)
 {
     enable_module_logging(module_id);
 }
-
