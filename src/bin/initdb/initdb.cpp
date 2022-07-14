@@ -298,6 +298,7 @@ static void load_plpgsql(void);
 static void load_supported_extension(void);
 static void load_dist_fdw(void);
 static void load_hdfs_fdw(void);
+static void load_k2_fdw(void);
 #ifdef ENABLE_MOT
 static void load_mot_fdw(void); /* load MOT fdw */
 #endif
@@ -2598,6 +2599,30 @@ static void load_hdfs_fdw(void)
     check_ok();
 }
 
+/*@k2
+ *brief: Loading foreign-data wrapper for k2
+ */
+static void load_k2_fdw(void)
+{
+    int nRet = 0;
+    PG_CMD_DECL;
+
+    fputs(_("loading foreign-data wrapper for k2 access ... "), stdout);
+    (void)fflush(stdout);
+
+    nRet = snprintf_s(
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+    securec_check_ss_c(nRet, "\0", "\0");
+
+    PG_CMD_OPEN;
+
+    PG_CMD_PUTS("CREATE EXTENSION k2_fdw;\n");
+
+    PG_CMD_CLOSE;
+
+    check_ok();
+}
+
 #ifdef ENABLE_MULTIPLE_NODES
 static void load_gc_fdw(void)
 {
@@ -2823,6 +2848,8 @@ static void load_supported_extension(void)
     load_dist_fdw();
     /* loading foreign-data wrapper for hdfs access */
     load_hdfs_fdw();
+
+    load_k2_fdw();
 
     /* loading foreign-data wrapper for openGauss access */
 #ifdef ENABLE_MULTIPLE_NODES

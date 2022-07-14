@@ -65,5 +65,11 @@ RUN su - omm -c 'echo "export GAUSSHOME=/opt/opengauss" >> .bashrc' && \
     su - omm -c 'echo "export GAUSSLOG=/opt/opengauss/logs" >> .bashrc' && \
     su - omm -c 'echo "export PGDATA=/opt/opengauss/data" >> .bashrc'
 
+RUN cd /tmp && \
+    git clone https://github.com/nlohmann/json.git  && cd json && \
+    mkdir build && cd build && cmake -DCMAKE_CXX_FLAGS='-D_GLIBCXX_USE_CXX11_ABI=0' -DCMAKE_POSITION_INDEPENDENT_CODE=ON ../ && make -j install
+
+RUN pip3 install msgpack requests
+
 VOLUME [ "/sys/fs/cgroup" ]
 CMD ["/usr/bin/bash"]
