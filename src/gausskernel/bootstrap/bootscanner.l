@@ -107,7 +107,7 @@ insert			{ return(INSERT_TUPLE); }
 "on"			{ return(ON); }
 "using"			{ return(USING); }
 "toast"			{ return(XTOAST); }
-
+"k2pg_check_if_initdb_is_already_done" { return(K2PGCHECKINITDBDONE);}
 {arrayid}		{
 					yylval.str = pstrdup(MapArrayTypeName(yytext));
 					return(ID);

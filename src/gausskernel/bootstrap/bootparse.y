@@ -124,6 +124,7 @@ do_end(void)
 %token XDECLARE K2DECLARE INDEX ON USING XBUILD INDICES PRIMARY UNIQUE XTOAST
 %token COMMA EQUALS LPAREN RPAREN
 %token OBJ_ID XBOOTSTRAP XSHARED_RELATION XWITHOUT_OIDS XROWTYPE_OID NULLVAL
+%token K2PGCHECKINITDBDONE
 
 %start TopLevel
 
@@ -151,6 +152,7 @@ Boot_Query :
 		| Boot_DeclareUniqueIndexStmt
 		| Boot_DeclareToastStmt
 		| Boot_BuildIndsStmt
+		| Boot_CheckInitDbDone
 		;
 
 Boot_OpenStmt:
@@ -447,6 +449,13 @@ Boot_BuildIndsStmt:
 				}
 		;
 
+Boot_CheckInitDbDone:
+      	  K2PGCHECKINITDBDONE
+      			{
+					if (K2PgIsInitDbAlreadyDone())
+						exit(K2PG_INITDB_ALREADY_DONE_EXIT_CODE);
+				}
+		;
 
 boot_index_params:
 		boot_index_params COMMA boot_index_param	{ $$ = lappend($1, $3); }

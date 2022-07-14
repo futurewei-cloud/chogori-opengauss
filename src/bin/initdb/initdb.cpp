@@ -53,6 +53,7 @@
 
 #include "access/ustore/undo/knl_uundoapi.h"
 #include "access/ustore/undo/knl_uundotxn.h"
+#include "access/k2/k2pg_aux.h"
 #include "libpq/pqsignal.h"
 #include "mb/pg_wchar.h"
 #include "getaddrinfo.h"
@@ -263,6 +264,7 @@ static char** readfile(const char* path);
 static void writefile(char* path, char** lines);
 static FILE* popen_check(const char* command, const char* mode);
 static void exit_nicely(void);
+static void exit_nicely_with_code(int);
 static char* get_id(void);
 static char* get_encoding_id(char* encoding_name);
 static void set_input(char** dest, const char* filename);
@@ -329,6 +331,7 @@ static int CreateRestrictedProcess(char* cmd, PROCESS_INFORMATION* processInfo);
 #endif
 
 static void InitUndoSubsystemMeta();
+static int k2pg_pclose_check(FILE *stream);
 
 /*
  * macros for running pipes to openGauss
@@ -344,10 +347,12 @@ static void InitUndoSubsystemMeta();
             exit_nicely(); /* message already printed by popen_check */ \
     } while (0)
 
-#define PG_CMD_CLOSE                                                     \
-    do {                                                                 \
-        if (pclose_check(cmdfd))                                         \
-            exit_nicely(); /* message already printed by pclose_check */ \
+#define PG_CMD_CLOSE \
+    do { \
+        int exit_code = k2pg_pclose_check(cmdfd); \
+	    /* message already printed by k2pg_pclose_check */ \
+	    if (exit_code) \
+		    exit_nicely_with_code(exit_code == K2PG_INITDB_ALREADY_DONE_EXIT_CODE ? 0 : 1); \
     } while (0)
 
 #define PG_CMD_PUTS(line)                                \
@@ -583,7 +588,7 @@ static char** readfile(const char* path)
     if (linelen) {
         nlines++;
     }
-        
+
     if (linelen > maxlength) {
         maxlength = linelen;
     }
@@ -680,7 +685,12 @@ static FILE* popen_check(const char* command, const char* mode)
  * clean up any files we created on failure
  * if we created the data directory remove it too
  */
-static void exit_nicely(void)
+static void
+exit_nicely(void) {
+	exit_nicely_with_code(1);
+}
+
+static void exit_nicely_with_code(int final_exit_code)
 {
     if (!noclean) {
         if (made_new_pgdata) {
@@ -711,7 +721,7 @@ static void exit_nicely(void)
             write_stderr(_("%s: transaction log directory \"%s\" not removed at user's request\n"), progname, xlog_dir);
     }
 
-    exit(1);
+    exit(final_exit_code);
 }
 
 /*
@@ -1618,7 +1628,7 @@ static void get_set_pwd(void)
                 FREE_AND_RESET(pwd1);
             }
         }
-        
+
         if (i == 3) {
             exit_nicely();
         }
@@ -1968,9 +1978,9 @@ static bool is_valid_nodename(const char* nodename)
     /*
      * The node name must contain lowercase letters (a-z), underscores (_),
      * special characters #, digits (0-9), or dollar ($).
-     * 
+     *
      * The node name must start with a lowercase letter (a-z), or an underscore (_).
-     * 
+     *
      * The max length of nodename is 64.
      */
     int len = strlen(nodename);
@@ -2640,15 +2650,15 @@ static void load_packages_extension(void)
 
     PG_CMD_CLOSE;
 
-    check_ok();   
+    check_ok();
 }
 #endif
 
 #ifdef ENABLE_MULTIPLE_NODES
 /*
  * the gsredistribute extenstion used in OM command gs_expand, it will revoke kernel command gs_redis,
- * some function used in gs_redis, some functions for tsdb used in gs_expand, you can use 
- * drop extension gsredistribute cascade;create extension if not exists gsredistribute; 
+ * some function used in gs_redis, some functions for tsdb used in gs_expand, you can use
+ * drop extension gsredistribute cascade;create extension if not exists gsredistribute;
  * in upgrade sql file to upgrade it, add by upgrade version 20205
  */
 static void load_gsredistribute_extension(void)
@@ -2669,7 +2679,7 @@ static void load_gsredistribute_extension(void)
 
     PG_CMD_CLOSE;
 
-    check_ok();   
+    check_ok();
 }
 
 /*
@@ -2829,7 +2839,7 @@ static void load_supported_extension(void)
     load_gc_fdw();
 #endif
 
-#if ((defined(ENABLE_MULTIPLE_NODES)) || (defined(ENABLE_PRIVATEGAUSS)))    
+#if ((defined(ENABLE_MULTIPLE_NODES)) || (defined(ENABLE_PRIVATEGAUSS)))
     /* loading packages extension */
     load_packages_extension();
 #endif
@@ -3672,7 +3682,7 @@ int main(int argc, char* argv[])
                     write_stderr(_("%s: The parameter of -C is invalid.\n"), progname);
                     break;
                 }
-                
+
                 ret = snprintf_s(cipher_key_file, MAXPGPATH, MAXPGPATH - 1,
                                  "%s/server.key.cipher", encrypt_pwd_real_path);
                 securec_check_ss_c(ret, "\0", "\0");
@@ -3681,7 +3691,7 @@ int main(int argc, char* argv[])
                 securec_check_ss_c(ret, "\0", "\0");
                 if (!is_file_exist(cipher_key_file) || !is_file_exist(rand_file)) {
                     pwpasswd = NULL;
-                    printf(_("Read cipher or random parameter file failed." 
+                    printf(_("Read cipher or random parameter file failed."
                              "The password of the initial user is not set.\n"));
                     break;
                 }
@@ -5046,4 +5056,38 @@ static void InitUndoSubsystemMeta(void)
         printf("[INIT UNDO] Init undo subsystem meta failed, exit.\n");
         exit(1);
     }
+}
+
+/*
+ * K2PG-specific version of close_check() recognizes a special status indicating that initdb
+ * has already been run, or the cluster has been initialized from a sys catalog
+ * snapshot.
+ */
+static int
+k2pg_pclose_check(FILE *stream)
+{
+	int			exitstatus;
+	char	   *reason;
+
+	exitstatus = pclose(stream);
+
+	if (exitstatus == 0)
+		return 0;				/* all is well */
+
+	if (exitstatus == -1)
+	{
+		/* pclose() itself failed, and hopefully set errno */
+		fprintf(stderr, _("pclose failed: %s"), strerror(errno));
+		return 1;
+	}
+	else
+	{
+		if (WEXITSTATUS(exitstatus) == K2PG_INITDB_ALREADY_DONE_EXIT_CODE) {
+			fprintf(stderr, "initdb has already been run previously, nothing to do\n");
+		} else {
+		    fprintf(stderr, _("child process was terminated by signal %d"), WTERMSIG(exitstatus));
+		}
+	}
+
+	return WEXITSTATUS(exitstatus);
 }
