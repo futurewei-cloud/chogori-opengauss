@@ -159,6 +159,10 @@ static bool show_setting = false;
 static char* xlog_dir = "";
 static bool security = false;
 static char* dbcompatibility = "";
+
+/* whether to use k2 to store system catalog instead of local files */
+static bool k2_mode = false;
+
 #ifdef PGXC
 /* Name of the PGXC node initialized */
 static char* nodename = NULL;
@@ -1273,7 +1277,8 @@ static void setup_config(void)
 #endif
 
     /* gs_gazelle.conf */
-
+    // comm_proxy ?
+    // TODO: check if we need this file in k2_mode
     conflines = readfile(gazelle_conf_file);
     nRet = sprintf_s(path, sizeof(path), "%s/gs_gazelle.conf", pg_data);
     securec_check_ss_c(nRet, "\0", "\0");
@@ -1284,77 +1289,79 @@ static void setup_config(void)
     FREE_AND_RESET(conflines);
 
     /* pg_hba.conf */
+    // don't create pg_hba.conf in k2_mode
+    if (!k2_mode) {
+        conflines = readfile(hba_file);
 
-    conflines = readfile(hba_file);
+    #ifndef HAVE_UNIX_SOCKETS
+        conflines = filter_lines_with_token(conflines, "@remove-line-for-nolocal@");
+    #else
+        conflines = replace_token(conflines, "@remove-line-for-nolocal@", "");
+    #endif
 
-#ifndef HAVE_UNIX_SOCKETS
-    conflines = filter_lines_with_token(conflines, "@remove-line-for-nolocal@");
-#else
-    conflines = replace_token(conflines, "@remove-line-for-nolocal@", "");
-#endif
+    #ifdef HAVE_IPV6
 
-#ifdef HAVE_IPV6
+        /*
+        * Probe to see if there is really any platform support for IPv6, and
+        * comment out the relevant pg_hba line if not.  This avoids runtime
+        * warnings if getaddrinfo doesn't actually cope with IPv6.  Particularly
+        * useful on Windows, where executables built on a machine with IPv6 may
+        * have to run on a machine without.
+        */
+        {
+            struct addrinfo* gai_result = NULL;
+            struct addrinfo hints;
+            int err = 0;
 
-    /*
-     * Probe to see if there is really any platform support for IPv6, and
-     * comment out the relevant pg_hba line if not.  This avoids runtime
-     * warnings if getaddrinfo doesn't actually cope with IPv6.  Particularly
-     * useful on Windows, where executables built on a machine with IPv6 may
-     * have to run on a machine without.
-     */
-    {
-        struct addrinfo* gai_result = NULL;
-        struct addrinfo hints;
-        int err = 0;
+    #ifdef WIN32
+            /* need to call WSAStartup before calling getaddrinfo */
+            WSADATA wsaData;
 
-#ifdef WIN32
-        /* need to call WSAStartup before calling getaddrinfo */
-        WSADATA wsaData;
+            err = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    #endif
 
-        err = WSAStartup(MAKEWORD(2, 2), &wsaData);
-#endif
+            /* for best results, this code should match parse_hba() */
+            hints.ai_flags = AI_NUMERICHOST;
+            hints.ai_family = PF_UNSPEC;
+            hints.ai_socktype = 0;
+            hints.ai_protocol = 0;
+            hints.ai_addrlen = 0;
+            hints.ai_canonname = NULL;
+            hints.ai_addr = NULL;
+            hints.ai_next = NULL;
 
-        /* for best results, this code should match parse_hba() */
-        hints.ai_flags = AI_NUMERICHOST;
-        hints.ai_family = PF_UNSPEC;
-        hints.ai_socktype = 0;
-        hints.ai_protocol = 0;
-        hints.ai_addrlen = 0;
-        hints.ai_canonname = NULL;
-        hints.ai_addr = NULL;
-        hints.ai_next = NULL;
+            if (err != 0 || getaddrinfo("::1", NULL, &hints, &gai_result) != 0)
+                conflines = replace_token(conflines,
+                    "host    all             all             ::1",
+                    "#host    all             all             ::1");
 
-        if (err != 0 || getaddrinfo("::1", NULL, &hints, &gai_result) != 0)
-            conflines = replace_token(conflines,
-                "host    all             all             ::1",
-                "#host    all             all             ::1");
+            freeaddrinfo(gai_result);
+        }
+    #else  /* !HAVE_IPV6 */
+        /* If we didn't compile IPV6 support at all, always comment it out */
+        conflines = replace_token(
+            conflines, "host    all             all             ::1", "#host    all             all             ::1");
+    #endif /* HAVE_IPV6 */
 
-        freeaddrinfo(gai_result);
+        /* Replace default authentication methods */
+        conflines = replace_token(conflines, "@authmethodhost@", authmethodhost);
+        conflines = replace_token(conflines, "@authmethodlocal@", authmethodlocal);
+
+        conflines = replace_token(conflines,
+            "@authcomment@",
+            (strcmp(authmethodlocal, "trust") == 0 || strcmp(authmethodhost, "trust") == 0) ? AUTHTRUST_WARNING : "");
+
+        /* Replace username for replication */
+        conflines = replace_token(conflines, "@default_username@", username);
+
+        nRet = sprintf_s(path, sizeof(path), "%s/pg_hba.conf", pg_data);
+        securec_check_ss_c(nRet, "\0", "\0");
+
+        writefile(path, conflines);
+        (void)chmod(path, S_IRUSR | S_IWUSR);
+
+        FREE_AND_RESET(conflines);
     }
-#else  /* !HAVE_IPV6 */
-    /* If we didn't compile IPV6 support at all, always comment it out */
-    conflines = replace_token(
-        conflines, "host    all             all             ::1", "#host    all             all             ::1");
-#endif /* HAVE_IPV6 */
-
-    /* Replace default authentication methods */
-    conflines = replace_token(conflines, "@authmethodhost@", authmethodhost);
-    conflines = replace_token(conflines, "@authmethodlocal@", authmethodlocal);
-
-    conflines = replace_token(conflines,
-        "@authcomment@",
-        (strcmp(authmethodlocal, "trust") == 0 || strcmp(authmethodhost, "trust") == 0) ? AUTHTRUST_WARNING : "");
-
-    /* Replace username for replication */
-    conflines = replace_token(conflines, "@default_username@", username);
-
-    nRet = sprintf_s(path, sizeof(path), "%s/pg_hba.conf", pg_data);
-    securec_check_ss_c(nRet, "\0", "\0");
-
-    writefile(path, conflines);
-    (void)chmod(path, S_IRUSR | S_IWUSR);
-
-    FREE_AND_RESET(conflines);
 
     /* pg_ident.conf */
 
@@ -1751,8 +1758,13 @@ static void setup_depend(void)
 
     PG_CMD_OPEN;
 
-    for (line = pg_depend_setup; *line != NULL; line++)
-        PG_CMD_PUTS(*line);
+    for (line = pg_depend_setup; *line != NULL; line++) {
+ 		// Skip VACUUM commands in k2_mode
+        // this is partially correct if we don't allow local file storage of tables
+		if (k2_mode && strncmp(*line, "VACUUM", 6) == 0)
+			continue;
+		PG_CMD_PUTS(*line);
+    }
 
     PG_CMD_CLOSE;
 
@@ -2107,6 +2119,8 @@ static bool normalize_locale_name(char* newm, const char* old)
  */
 static void setup_collation(void)
 {
+ // TODO: should we disable the way to use locale -a to add collation to pg_collation in k2 mode?
+
 #if defined(HAVE_LOCALE_T) && !defined(WIN32)
     int i;
     FILE* locale_a_handle = NULL;
@@ -2969,8 +2983,17 @@ static void make_template0(void)
 
     PG_CMD_OPEN;
 
-    for (line = template0_setup; *line != NULL; line++)
-        PG_CMD_PUTS(*line);
+    if (k2_mode) {
+        // skip some commands that we don't support
+		PG_CMD_PUTS(template0_setup[0]);
+        PG_CMD_PUTS(template0_setup[1]);
+		PG_CMD_PUTS(template0_setup[3]);
+		PG_CMD_PUTS(template0_setup[4]);
+		PG_CMD_PUTS(template0_setup[5]);
+    } else {
+        for (line = template0_setup; *line != NULL; line++)
+            PG_CMD_PUTS(*line);
+    }
 
     PG_CMD_CLOSE;
 
@@ -3252,6 +3275,21 @@ static void setlocales(void)
 
     char* canonname = NULL;
 
+	// Use LC_COLLATE=C with everything else as en_US.UTF-8 as default locale in k2_mode.
+	// This is because we don't support collation-aware string comparisons and want to support storing UTF-8 strings.
+	if (!locale && k2_mode) {
+		const char *kPgDefaultLocaleForSortOrder = "C";
+		const char *kPgDefaultLocaleForEncoding = "en_US.UTF-8";
+
+		locale = xstrdup(kPgDefaultLocaleForEncoding);
+		lc_collate = xstrdup(kPgDefaultLocaleForSortOrder);
+		fprintf(
+			stderr,
+			_("In k2_mode, setting LC_COLLATE to %s and all other locale settings to %s "
+			  "by default. Locale support will be enhanced as part of addressing "),
+			lc_collate, locale);
+	}
+
     /* set empty lc_* values to locale config if set */
 
     if (strlen(locale) > 0) {
@@ -3440,6 +3478,7 @@ static void usage(const char* prog_name)
     printf(_("  -E, --encoding=ENCODING   set default encoding for new databases\n"));
     printf(_("      --locale=LOCALE       set default locale for new databases\n"));
     printf(_("      --dbcompatibility=DBCOMPATIBILITY   set default dbcompatibility for new database\n"));
+    printf(_("  -K, --k2-mode             store system catalog in K2\n"));
     printf(_("      --lc-collate=, --lc-ctype=, --lc-messages=LOCALE\n"
              "      --lc-monetary=, --lc-numeric=, --lc-time=LOCALE\n"
              "                            set default locale in the respective category for\n"
@@ -3557,6 +3596,7 @@ int main(int argc, char* argv[])
 #endif
         {"dbcompatibility", required_argument, NULL, 13},
         {"bucketlength", required_argument, NULL, 14},
+        {"k2-mode", no_argument, NULL, 'K'},
         {NULL, 0, NULL, 0}};
 
     int c, i, ret;
@@ -3626,7 +3666,7 @@ int main(int argc, char* argv[])
 
     /* process command-line options */
 
-    while ((c = getopt_long(argc, argv, "cdD:E:L:nU:WA:SsT:X:C:w:H:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "cdD:E:L:nU:WA:SsT:X:C:w:H:K:", long_options, &option_index)) != -1) {
 #define FREE_NOT_STATIC_ZERO_STRING(s)        \
     do {                                      \
         if ((s) && (char*)(s) != (char*)"") { \
@@ -3780,6 +3820,9 @@ int main(int argc, char* argv[])
             case 'H':
                 FREE_NOT_STATIC_ZERO_STRING(host_ip);
                 host_ip = xstrdup(optarg);
+                break;
+            case 'K':
+                k2_mode = true;
                 break;
 #ifdef PGXC
             case 12:
@@ -4457,13 +4500,16 @@ int main(int argc, char* argv[])
     setup_nodeself();
 #endif
 
+    // TODO: should we exclude this step for k2_mode?
     setup_description();
 
     setup_collation();
 
-    setup_conversion();
+    if (!k2_mode) {
+        setup_conversion();
 
-    setup_dictionary();
+        setup_dictionary();
+    }
 
     setup_privileges();
 
@@ -4479,7 +4525,9 @@ int main(int argc, char* argv[])
     setup_snapshots();
 #endif
 
-    vacuum_db();
+    if (!k2_mode) {
+        vacuum_db();
+    }
 
     make_template0();
 
