@@ -47,7 +47,7 @@ private:
 
     // share the client among all threads
     static inline std::shared_ptr<sh::Client> _client;
-    static inline Config _config;
+    static inline thread_local Config _config;
 };
 
 // the thread-local TxnManager. It allows access to k2 from any thread in opengauss,
