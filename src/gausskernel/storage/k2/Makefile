@@ -4,7 +4,7 @@ MODULE_big = k2_fdw
 EXTENSION = k2_fdw
 REGRESS = k2_fdw
 DATA = k2_fdw--1.0.sql k2_fdw.control
-
+SHLIB_LINK = -lfmt
 subdir = src/gausskernel/storage/k2
 top_builddir = ../../../..
 
