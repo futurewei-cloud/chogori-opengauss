@@ -336,6 +336,8 @@ static int CreateRestrictedProcess(char* cmd, PROCESS_INFORMATION* processInfo);
 
 static void InitUndoSubsystemMeta();
 static int k2pg_pclose_check(FILE *stream);
+static void initdb_set_env_var(const char* name);
+static bool initdb_is_env_set(const char* name);
 
 /*
  * macros for running pipes to openGauss
@@ -3823,6 +3825,8 @@ int main(int argc, char* argv[])
                 break;
             case 'K':
                 k2_mode = true;
+                // set environment variable so that other components know we are in k2 mode
+		        initdb_set_env_var("K2PG_INITDB_MODE");
                 break;
 #ifdef PGXC
             case 12:
@@ -3849,6 +3853,14 @@ int main(int argc, char* argv[])
                 exit(1);
         }
 #undef FREE_NOT_STATIC_ZERO_STRING
+    }
+
+    // check environment variable for k2_mode
+    if (!k2_mode) {
+        k2_mode = initdb_is_env_set("K2PG_ENABLED_IN_POSTGRES");
+        if (k2_mode) {
+            initdb_set_env_var("K2PG_INITDB_MODE");
+        }
     }
 
     if (default_text_search_config_tmp != NULL)
@@ -5138,4 +5150,21 @@ k2pg_pclose_check(FILE *stream)
 	}
 
 	return WEXITSTATUS(exitstatus);
+}
+
+void initdb_set_env_var(const char* name) {
+	int setenv_retval = setenv(name, "1", /* overwrite */ true);
+	if (setenv_retval != 0)
+	{
+		perror("Could not set environment variable in InitDB");
+		exit(EXIT_FAILURE);
+	}
+}
+
+bool initdb_is_env_set(const char* name) {
+	const char* value = getenv(name);
+	if (!value || strlen(value) == 0 || strcmp(value, "auto") == 0) {
+		return false;
+	}
+	return strcmp(value, "1") == 0 || strcmp(value, "true") == 0;
 }

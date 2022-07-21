@@ -967,7 +967,6 @@ K2PgUnsupportedFeatureSignalLevel()
 {
 	static int cached_value = -1;
 	if (cached_value == -1) {
-		// TODO(dmitry): Remove 'K2PG_SUPPRESS_UNSUPPORTED_ERROR'
 		cached_value = K2PgIsEnvVarTrue("K2PG_SUPPRESS_UNSUPPORTED_ERROR") ||
 									 K2PgIsEnvVarTrue("FLAGS_psql_suppress_unsupported_error") ? WARNING : ERROR;
 	}
