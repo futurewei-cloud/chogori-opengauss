@@ -20,15 +20,16 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-#include "k2_parse.h"
 
-#include "funcapi.h"
 #include "postgres.h"
+#include "funcapi.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_proc.h"
 #include "optimizer/clauses.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+
+#include "parse.h"
 
 namespace k2fdw {
 

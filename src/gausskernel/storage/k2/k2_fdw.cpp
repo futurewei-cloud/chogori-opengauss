@@ -26,14 +26,15 @@ Copyright(c) 2022 Futurewei Cloud
 #include "session.h"
 #include "error_reporting.h"
 
+#include "postgres.h"
 #include "foreign/fdwapi.h"
 #include "funcapi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "access/reloptions.h"
 #include "catalog/pg_foreign_table.h"
-#include "libintl.h"
-#include "postgres.h"
+
+#include "fdw_handlers.h"
 
 PG_MODULE_MAGIC;
 
@@ -62,11 +63,11 @@ Datum k2_fdw_handler(PG_FUNCTION_ARGS)
     FdwRoutine *routine = makeNode(FdwRoutine);
 
     /* Functions for scanning foreign tables */
-    routine->GetForeignRelSize = NULL;
-    routine->GetForeignPaths = NULL;
-    routine->GetForeignPlan = NULL;
-    routine->BeginForeignScan = NULL;
-    routine->IterateForeignScan = NULL;
+    routine->GetForeignRelSize = k2GetForeignRelSize ;
+    routine->GetForeignPaths = k2GetForeignPaths ;
+    routine->GetForeignPlan = k2GetForeignPlan ;
+    routine->BeginForeignScan = k2BeginForeignScan ;
+    routine->IterateForeignScan = k2IterateForeignScan ;
     routine->ReScanForeignScan = NULL;
     routine->EndForeignScan = NULL;
 
@@ -74,7 +75,7 @@ Datum k2_fdw_handler(PG_FUNCTION_ARGS)
     routine->AddForeignUpdateTargets = NULL;
     routine->PlanForeignModify = NULL;
     routine->BeginForeignModify = NULL;
-    routine->ExecForeignInsert = NULL;
+    routine->ExecForeignInsert = k2ExecForeignInsert;
     routine->ExecForeignUpdate = NULL;
     routine->ExecForeignDelete = NULL;
     routine->EndForeignModify = NULL;
@@ -88,7 +89,7 @@ Datum k2_fdw_handler(PG_FUNCTION_ARGS)
     routine->AnalyzeForeignTable = NULL;
     routine->AcquireSampleRows = NULL;
 
-    routine->ValidateTableDef = NULL;
+    routine->ValidateTableDef = k2ValidateTableDef;
     routine->PartitionTblProcess = NULL;
     routine->BuildRuntimePredicate = NULL;
     routine->GetFdwType = NULL;

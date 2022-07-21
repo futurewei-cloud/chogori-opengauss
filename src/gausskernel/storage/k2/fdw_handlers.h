@@ -21,6 +21,9 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 #pragma once
+
+
+
 namespace k2fdw {
 
 void
@@ -48,4 +51,6 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
 void k2BeginForeignScan(ForeignScanState *node, int eflags);
 
 TupleTableSlot * k2IterateForeignScan(ForeignScanState *node);
+
+    void k2ValidateTableDef(Node* obj);
 } // ns

@@ -20,6 +20,13 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
+
+#include "libintl.h"
+#include "postgres.h"
+#include "funcapi.h"
+#include "access/reloptions.h"
+#include "access/transam.h"
+
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -28,12 +35,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include <skvhttp/dto/SKVRecord.h>
 #include <skvhttp/client/SKVClient.h>
 #include <skvhttp/dto/Expression.h>
-
-
-#include "funcapi.h"
-#include "access/reloptions.h"
-#include "access/transam.h"
-#include "postgres.h"
 
 #include "commands/dbcommands.h"
 #include "catalog/pg_foreign_table.h"
@@ -68,8 +69,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include "catalog/pg_proc.h"
 #include "utils/lsyscache.h"
 
-#include "k2_parse.h"
-#include "k2_fdw_handlers.h"
+#include "error_reporting.h"
+#include "parse.h"
 
 namespace k2fdw {
 
@@ -957,7 +958,7 @@ static void createCollection() {
     auto&&[status] = reqFut.get();
     if (!status.is2xxOK()) {
 	ereport(ERROR,
-	    (errmodule(MOD_MOT),
+	    (errmodule(MOD_K2),
 		errcode(ERRCODE_UNDEFINED_DATABASE),
 		errmsg("Could not create K2 collection")));
     }
@@ -978,7 +979,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
     dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
     if (dbname == nullptr) {
 	ereport(ERROR,
-	    (errmodule(MOD_MOT),
+	    (errmodule(MOD_K2),
 		errcode(ERRCODE_UNDEFINED_DATABASE),
 		errmsg("database with OID %u does not exist", u_sess->proc_cxt.MyDatabaseId)));
 	return;
@@ -1005,7 +1006,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
       ColumnDef* colDef = (ColumnDef*)lfirst(cell);
       if (colDef == nullptr || colDef->typname == nullptr) {
 	ereport(ERROR,
-	    (errmodule(MOD_MOT),
+	    (errmodule(MOD_K2),
 		errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
 		errmsg("Column definition is not complete"),
 		errdetail("target table is a foreign table")));
@@ -1026,7 +1027,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
 	schema.fields[fieldIdx].type = skv::http::dto::FieldType::INT32T;
       } else {
 	ereport(ERROR,
-	    (errmodule(MOD_MOT),
+	    (errmodule(MOD_K2),
 		errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
 		errmsg("Column type is not supported"),
 		errdetail("target table is a foreign table")));
@@ -1054,7 +1055,7 @@ void k2CreateIndex(IndexStmt* stmt) {
   std::cout << "creating index for foid: " << stmt->relation->foreignOid << std::endl;
   if (it == schemaCache.end()) {
         ereport(ERROR,
-            (errmodule(MOD_MOT),
+            (errmodule(MOD_K2),
                 errcode(ERRCODE_UNDEFINED_TABLE),
                 errmsg("Table not found for oid %u", stmt->relation->foreignOid)));
 	return;
@@ -1089,7 +1090,7 @@ void k2CreateIndex(IndexStmt* stmt) {
     auto&&[status] = reqFut.get();
     if (!status.is2xxOK()) {
 	ereport(ERROR,
-	    (errmodule(MOD_MOT),
+	    (errmodule(MOD_K2),
 		errcode(ERRCODE_UNDEFINED_DATABASE),
 		errmsg("Could not create K2 collection")));
     }
@@ -1101,7 +1102,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
   Oid foid = RelationGetRelid(resultRelInfo->ri_RelationDesc);
   auto schema = getSchema(foid);
   if (schema == nullptr) {
-    report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+      reportRC(RCStatus::RC_TABLE_NOT_FOUND, "Schema not found for insert op");
     return nullptr;
   }
 
@@ -1149,11 +1150,11 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
     auto&& [writeStatus] = writeFut.get();
     if (!writeStatus.is2xxOK()) {
       // TODO error types
-       report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+        reportRC(RCStatus::RC_ERROR, "K2 Write failed");
       return nullptr;
     }
   } else {
-      report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+      reportRC(RCStatus::RC_ERROR, "K2 begin txn failed");
       return nullptr;
   }
 
@@ -1161,13 +1162,55 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
   auto&&[endStatus] = endFut.get();
   if (!endStatus.is2xxOK()) {
     // TODO error types
-    report_pg_error(MOT::RC_TABLE_NOT_FOUND);
+      reportRC(RCStatus::RC_ERROR, "K2 end txn failed");
     return nullptr;
   }
 
   std::cout << "write was committed!" << std::endl;
 
   return slot;
+}
+
+void k2ValidateTableDef(Node* obj)
+{
+    if (obj == nullptr) {
+        return;
+    }
+
+    switch (nodeTag(obj)) {
+        case T_AlterTableStmt: {
+            ereport(ERROR,
+                (errcode(ERRCODE_FDW_OPERATION_NOT_SUPPORTED),
+                    errmodule(MOD_K2),
+                    errmsg("Alter table operation is not supported for chogori.")));
+            break;
+        }
+        case T_CreateForeignTableStmt: {
+            k2CreateTable((CreateForeignTableStmt*)obj);
+            break;
+        }
+        case T_IndexStmt: {
+            k2CreateIndex((IndexStmt*) obj);
+            break;
+        }
+        case T_ReindexStmt: {
+            ereport(ERROR,
+                (errcode(ERRCODE_FDW_OPERATION_NOT_SUPPORTED),
+                    errmodule(MOD_K2),
+                    errmsg("Reindex is not supported for chogori.")));
+            break;
+        }
+        case T_DropForeignStmt: {
+            ereport(ERROR,
+                (errcode(ERRCODE_FDW_OPERATION_NOT_SUPPORTED),
+                    errmodule(MOD_K2),
+                    errmsg("Drop table is not supported for chogori.")));
+
+            break;
+        }
+        default:
+            elog(ERROR, "unrecognized node type: %u", nodeTag(obj));
+    }
 }
 
 } // ns

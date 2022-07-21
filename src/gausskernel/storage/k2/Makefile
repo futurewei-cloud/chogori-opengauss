@@ -12,8 +12,8 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/src/gausskernel/common.mk
 
 OBJ_DIR = ./obj
-OBJS = $(OBJ_DIR)/k2_fdw.o $(OBJ_DIR)/config.o $(OBJ_DIR)/session.o $(OBJ_DIR)/error_reporting.o
-DEPS := $(OBJ_DIR)/k2_fdw.d $(OBJ_DIR)/config.d $(OBJ_DIR)/session.d $(OBJ_DIR)/error_reporting.d
+OBJS = $(OBJ_DIR)/k2_fdw.o $(OBJ_DIR)/config.o $(OBJ_DIR)/session.o $(OBJ_DIR)/error_reporting.o $(OBJ_DIR)/fdw_handlers.o $(OBJ_DIR)/parse.o
+DEPS := $(OBJ_DIR)/k2_fdw.d $(OBJ_DIR)/config.d $(OBJ_DIR)/session.d $(OBJ_DIR)/error_reporting.d $(OBJ_DIR)/fdw_handlers.d $(OBJ_DIR)/parse.d
 
 exclude_option=-fPIE
 override CPPFLAGS := $(filter-out $(exclude_option),$(CPPFLAGS))
