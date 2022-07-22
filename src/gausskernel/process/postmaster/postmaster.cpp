@@ -1031,6 +1031,7 @@ int PostmasterMain(int argc, char* argv[])
     OptParseContext optCtxt;
     errno_t rc = 0;
     Port port;
+    bool k2_mode_enabled = false;
 
     t_thrd.proc_cxt.MyProcPid = PostmasterPid = gs_thread_self();
 
@@ -1108,7 +1109,7 @@ int PostmasterMain(int argc, char* argv[])
      * common help() function in main/main.c.
      */
     initOptParseContext(&optCtxt);
-    while ((opt = getopt_r(argc, argv, "A:B:bc:C:D:d:EeFf:h:ijk:lM:N:nOo:Pp:Rr:S:sTt:u:W:-:", &optCtxt)) != -1) {
+    while ((opt = getopt_r(argc, argv, "A:B:bc:C:D:d:EeFf:h:ijk:lM:N:nOo:Pp:Rr:S:sTt:u:W:K:-:", &optCtxt)) != -1) {
         switch (opt) {
             case 'A':
                 SetConfigOption("debug_assertions", optCtxt.optarg, PGC_POSTMASTER, PGC_S_ARGV);
@@ -1288,6 +1289,9 @@ int PostmasterMain(int argc, char* argv[])
                 SetConfigOption("post_auth_delay", optCtxt.optarg, PGC_POSTMASTER, PGC_S_ARGV);
                 break;
 
+            case 'K':
+                k2_mode_enabled = true;
+                break;
             case 'c':
             case '-': {
                 char* name = NULL;
@@ -1350,6 +1354,16 @@ int PostmasterMain(int argc, char* argv[])
                 write_stderr("Try \"%s --help\" for more information.\n", progname);
                 ExitPostmaster(1);
         }
+    }
+
+    if (k2_mode_enabled || K2PgIsEnabledInPostgresEnvVar()) {
+        g_instance.k2_cxt.isK2ModelEnabled = true;
+        u_sess->k2_cxt.isK2ModelEnabled = true;
+        ereport(LOG, (errmsg("K2_Mode is ENABLED in PostgreSQL.")));
+    } else {
+        g_instance.k2_cxt.isK2ModelEnabled = false;
+        u_sess->k2_cxt.isK2ModelEnabled = false;
+        ereport(LOG, (errmsg("K2_Mode is NOT ENABLED in PostgreSQL.")));
     }
 
 #ifndef ENABLE_MULTIPLE_NODES
