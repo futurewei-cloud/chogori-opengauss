@@ -461,7 +461,7 @@ ResourceOwner ResourceOwnerCreate(ResourceOwner parent, const char* name, Memory
         IsolatedResourceOwner = owner;
     }
 
-	if (IsK2ProcessingMode()) {
+	if (IsK2Mode()) {
 		ResourceArrayInit(&(owner->k2stmtarr), PointerGetDatum(NULL));
     }
 
@@ -694,7 +694,7 @@ static void ResourceOwnerReleaseInternal(
             MemoryContextDelete(memContext);
             ResourceOwnerForgetGMemContext(t_thrd.utils_cxt.TopTransactionResourceOwner, memContext);
         }
-		if (IsK2ProcessingMode())
+		if (IsK2Mode())
 		{
 			/* Ditto for K2PG statements */
 	        Datum		foundres;

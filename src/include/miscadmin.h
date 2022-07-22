@@ -355,14 +355,14 @@ extern bool CheckExecDirectPrivilege(const char* query); /* check user have priv
 #define IsNormalProcessingMode() (u_sess->misc_cxt.Mode == NormalProcessing)
 #define IsPostUpgradeProcessingMode() (u_sess->misc_cxt.Mode == PostUpgradeProcessing)
 #define IsFencedProcessingMode() (u_sess->misc_cxt.Mode == FencedProcessing)
-#define IsK2ProcessingMode() (u_sess->misc_cxt.Mode == K2Processing)
+#define IsK2Mode() (u_sess->k2_cxt.isK2ModelEnabled)
 
 #define GetProcessingMode() u_sess->misc_cxt.Mode
 
 #define SetProcessingMode(mode)                                                                              \
     do {                                                                                                     \
         AssertArg((mode) == BootstrapProcessing || (mode) == InitProcessing || (mode) == NormalProcessing || \
-                  (mode) == PostUpgradeProcessing ||  (mode) == FencedProcessing ||  (mode) == K2Processing);                                                          \
+                  (mode) == PostUpgradeProcessing ||  (mode) == FencedProcessing);                                                          \
         u_sess->misc_cxt.Mode = (mode);                                                                      \
     } while (0)
 

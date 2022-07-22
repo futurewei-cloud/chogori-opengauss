@@ -71,7 +71,7 @@ static TupleTableSlot* ForeignNext(ForeignScanState* node)
 
         tup->t_tableOid = RelationGetRelid(node->ss.ss_currentRelation);
         tup->t_bucketId = RelationGetBktid(node->ss.ss_currentRelation);
- 		if (IsK2ProcessingMode()) {
+ 		if (IsK2Mode()) {
 			tup->t_k2pgctid = slot->tts_k2pgctid;
 		}
 #ifdef PGXC

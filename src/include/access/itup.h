@@ -145,7 +145,7 @@ extern IndexTuple CopyIndexTupleAndReserveSpace(IndexTuple source, Size reserved
 
 #define HEAPTUPLE_COPY_K2PGTID(src, dest)                            \
     do {                                                            \
-        if (IsK2ProcessingMode()) {                                  \
+        if (IsK2Mode()) {                                  \
             dest = (src == 0) ? 0 :                                 \
                 PointerGetDatum(cstring_to_text_with_len(VARDATA_ANY(src), \
                                                          VARSIZE_ANY_EXHDR(src))); \

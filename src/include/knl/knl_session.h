@@ -976,8 +976,7 @@ typedef enum ProcessingMode {
     InitProcessing,       /* initializing system */
     NormalProcessing,     /* normal processing */
     PostUpgradeProcessing, /* Post upgrade to run script */
-    FencedProcessing,
-    K2Processing /* k2 distributed mode */
+    FencedProcessing
 } ProcessingMode;
 
 /*
@@ -2490,6 +2489,10 @@ typedef struct knl_u_hook_context {
     void *analyzerRoutineHook;
 } knl_u_hook_context;
 
+typedef struct knl_u_k2_context {
+    bool isK2ModelEnabled;
+} knl_u_k2_context;
+
 typedef struct knl_session_context {
     volatile knl_session_status status;
     Dlelem elem;
@@ -2596,6 +2599,8 @@ typedef struct knl_session_context {
     knl_u_gtt_context gtt_ctx;
     /* extension streaming */
     knl_u_streaming_context streaming_cxt;
+
+    knl_u_k2_context k2_cxt;
 
     /* comm_cn_dn_logic_conn */
     SessionInfo *session_info_ptr;
