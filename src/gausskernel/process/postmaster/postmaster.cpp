@@ -2926,7 +2926,7 @@ static int ServerLoop(void)
          * fails, we'll just try again later.  Likewise for the checkpointer.
          */
         if (pmState == PM_RUN || pmState == PM_RECOVERY || pmState == PM_HOT_STANDBY) {
-            if (g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
+            if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
                 g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
 
             if (g_instance.pid_cxt.BgWriterPID == 0 && !dummyStandbyMode && !ENABLE_INCRE_CKPT) {
@@ -2992,7 +2992,7 @@ static int ServerLoop(void)
          * autovacuum might update relfrozenxid64 for empty tables before the
          * physical files are put in place.
          */
-        if (!u_sess->proc_cxt.IsBinaryUpgrade && g_instance.pid_cxt.AutoVacPID == 0 &&
+        if (!g_instance.k2_cxt.isK2ModelEnabled && !u_sess->proc_cxt.IsBinaryUpgrade && g_instance.pid_cxt.AutoVacPID == 0 &&
             (AutoVacuumingActive() || t_thrd.postmaster_cxt.start_autovac_launcher) && pmState == PM_RUN &&
             !dummyStandbyMode && u_sess->attr.attr_common.upgrade_mode != 1) {
             g_instance.pid_cxt.AutoVacPID = initialize_util_thread(AUTOVACUUM_LAUNCHER);
