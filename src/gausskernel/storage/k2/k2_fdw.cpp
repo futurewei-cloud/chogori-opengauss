@@ -36,8 +36,6 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "fdw_handlers.h"
 
-PG_MODULE_MAGIC;
-
 #define TXNFMT(txn) (txn ? "null" : fmt::format("{}", *txn).c_str())
 
 namespace k2fdw {

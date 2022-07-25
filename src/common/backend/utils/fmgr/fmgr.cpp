@@ -506,6 +506,7 @@ static void fmgr_info_C_lang(Oid functionId, FmgrInfo* finfo, HeapTuple procedur
         if (strcmp(probinstring, "$libdir/plpgsql") && strcmp(probinstring, "$libdir/dist_fdw") &&
             strcmp(probinstring, "$libdir/file_fdw") && strcmp(probinstring, "$libdir/log_fdw") &&
             strcmp(probinstring, "$libdir/hdfs_fdw") &&
+            strcmp(probinstring,  "$libdir/k2_fdw") &&
 #ifdef ENABLE_MULTIPLE_NODES
             strcmp(probinstring, "$libdir/postgres_fdw")
 #else
