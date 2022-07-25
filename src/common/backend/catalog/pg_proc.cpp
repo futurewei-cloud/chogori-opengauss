@@ -1677,6 +1677,7 @@ Datum fmgr_c_validator(PG_FUNCTION_ARGS)
         ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("null probin for C function %u", funcoid)));
     probin = TextDatumGetCString(tmp);
     if (strcmp(probin, "$libdir/plpgsql") && strcmp(probin, "$libdir/dist_fdw") && strcmp(probin, "$libdir/file_fdw") &&
+    strcmp(probin, "$libdir/k2_fdw") &&
 #ifdef ENABLE_MOT
         strcmp(probin, "$libdir/mot_fdw") &&
 #endif
