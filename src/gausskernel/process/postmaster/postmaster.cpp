@@ -5411,7 +5411,7 @@ static void reaper(SIGNAL_ARGS)
              * when we entered consistent recovery state.  It doesn't matter
              * if this fails, we'll just try again later.
              */
-            if (g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
+            if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
                 g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
 
             if (g_instance.pid_cxt.BgWriterPID == 0 && !dummyStandbyMode && !ENABLE_INCRE_CKPT) {
@@ -5450,7 +5450,7 @@ static void reaper(SIGNAL_ARGS)
              * Likewise, start other special children as needed.  In a restart
              * situation, some of them may be alive already.
              */
-            if (!u_sess->proc_cxt.IsBinaryUpgrade && AutoVacuumingActive() && g_instance.pid_cxt.AutoVacPID == 0 &&
+            if (!g_instance.k2_cxt.isK2ModelEnabled && !u_sess->proc_cxt.IsBinaryUpgrade && AutoVacuumingActive() && g_instance.pid_cxt.AutoVacPID == 0 &&
                 !dummyStandbyMode && u_sess->attr.attr_common.upgrade_mode != 1)
                 g_instance.pid_cxt.AutoVacPID = initialize_util_thread(AUTOVACUUM_LAUNCHER);
 
@@ -6657,7 +6657,7 @@ static void PostmasterStateMachine(void)
                 Assert(g_instance.status > NoShutdown || g_instance.demotion > NoDemote);
 
                 /* Start the checkpointer if not running */
-                if (g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
+                if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
                     g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
 
                 if (g_instance.pid_cxt.PageWriterPID != NULL) {
@@ -7633,7 +7633,9 @@ static void handle_recovery_started()
          * we'll just try again later.
          */
         Assert(g_instance.pid_cxt.CheckpointerPID == 0);
-        g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
+        if (!g_instance.k2_cxt.isK2ModelEnabled) {
+            g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
+        }
         Assert(g_instance.pid_cxt.BgWriterPID == 0);
         if (!ENABLE_INCRE_CKPT) {
             g_instance.pid_cxt.BgWriterPID = initialize_util_thread(BGWRITER);
