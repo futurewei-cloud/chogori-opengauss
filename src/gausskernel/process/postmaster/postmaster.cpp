@@ -8128,7 +8128,7 @@ static void sigusr1_handler(SIGNAL_ARGS)
         signal_child(g_instance.pid_cxt.SysLoggerPID, SIGUSR1);
     }
 
-    if (CheckPostmasterSignal(PMSIGNAL_START_AUTOVAC_LAUNCHER) && g_instance.status == NoShutdown) {
+    if (!g_instance.k2_cxt.isK2ModelEnabled && CheckPostmasterSignal(PMSIGNAL_START_AUTOVAC_LAUNCHER) && g_instance.status == NoShutdown) {
         /*
          * Start one iteration of the autovacuum daemon, even if autovacuuming
          * is nominally not enabled.  This is so we can have an active defense
