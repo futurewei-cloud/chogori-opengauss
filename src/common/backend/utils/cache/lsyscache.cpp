@@ -77,6 +77,8 @@
 #include "catalog/pgxc_group.h"
 #include "catalog/pg_proc_fn.h"
 
+#include "access/k2/k2pg_aux.h"
+
 /*				---------- AMOP CACHES ----------						 */
 
 /*
@@ -2033,7 +2035,7 @@ Oid get_rel_tablespace(Oid relid)
  */
 char get_rel_persistence(Oid relid)
 {
-    HeapTuple    tp;    
+    HeapTuple    tp;
     Form_pg_class reltup;
 
     tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
@@ -2045,7 +2047,7 @@ char get_rel_persistence(Oid relid)
     } else {
         /*
          * for partition table.
-         * global temp table does not support partitioning. 
+         * global temp table does not support partitioning.
          */
         return '\0';
     }
@@ -3537,7 +3539,7 @@ static List* GetSliceBoundary(Relation rel, Datum boundaries, List* distKeyPosLi
     Value* boundaryValue = NULL;
     Node* boundaryNode = NULL;
     bool isFirstDefault = true;
-        
+
     if (attIsNull) {
         resultBoundaryList = NIL;
     } else {
@@ -3569,7 +3571,7 @@ static List* GetSliceBoundary(Relation rel, Datum boundaries, List* distKeyPosLi
     return resultBoundaryList;
 }
 
-static DistState* BuildDistStateHelper(DistributionType distType, List* sliceDefinitions) 
+static DistState* BuildDistStateHelper(DistributionType distType, List* sliceDefinitions)
 {
     DistState* distState = makeNode(DistState);
     distState->strategy = (distType == DISTTYPE_RANGE) ? 'r' : 'l';
@@ -3706,7 +3708,7 @@ DistributeBy* getTableHBucketDistribution(Relation rel)
         result = makeNode(DistributeBy);
         result->disttype = DISTTYPE_HASH;
         for (int i = 0; i < rel->rd_bucketkey->bucketKey->dim1; i++) {
-            result->colname = lappend(result->colname, 
+            result->colname = lappend(result->colname,
                                       makeString(get_attname(rel->rd_id, rel->rd_bucketkey->bucketKey->values[i])));
         }
     }
@@ -4453,6 +4455,11 @@ int32 get_attavgwidth(Oid relid, AttrNumber attnum, bool ispartition)
 {
     HeapTuple tp;
     int32 stawidth;
+
+    /* avg width stats are not supported for K2PG tables */
+	if (IsK2PgEnabled())
+		return 0;
+
     char stakind = ispartition ? STARELKIND_PARTITION : STARELKIND_CLASS;
 
     if (!ispartition && get_rel_persistence(relid) == RELPERSISTENCE_GLOBAL_TEMP) {
@@ -5034,7 +5041,7 @@ Oid get_func_oid(const char* funcname, Oid funcnamespace, Expr* expr)
 
         /*
          * User will define their own function (UDF).
-         * 
+         *
          * GaussDB compares the number of input parameters, the type of each parameters, and return type
          * to find the corresponding function.
          *
@@ -5058,7 +5065,7 @@ Oid get_func_oid(const char* funcname, Oid funcnamespace, Expr* expr)
         /*
          * Support the same function name, same number of arguments and different argument type
          */
-        if (expr != NULL && IsA(expr, FuncExpr) 
+        if (expr != NULL && IsA(expr, FuncExpr)
 #ifdef ENABLE_MULTIPLE_NODES
             && !is_streaming_hash_group_func(funcname, funcnamespace)
 #endif   /* ENABLE_MULTIPLE_NODES */

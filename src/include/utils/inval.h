@@ -86,6 +86,7 @@ extern void CacheRegisterSyscacheCallback(int cacheid, SyscacheCallbackFunction 
 extern void CacheRegisterRelcacheCallback(RelcacheCallbackFunction func, Datum arg);
 
 extern void CallSyscacheCallbacks(int cacheid, uint32 hashvalue);
+extern void CallSystemCacheCallbacks(void);
 
 extern void inval_twophase_postcommit(TransactionId xid, uint16 info, void* recdata, uint32 len);
 extern void CacheRegisterPartcacheCallback(PartcacheCallbackFunction func, Datum arg);

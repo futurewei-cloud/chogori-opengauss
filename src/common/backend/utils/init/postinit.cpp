@@ -106,6 +106,8 @@
 static void AlterPgxcNodePort(void);
 #endif
 
+#include "access/k2/k2pg_aux.h"
+
 #ifdef ENABLE_UT
 #define static
 #endif
@@ -764,12 +766,12 @@ static void process_startup_options(Port* port, bool am_superuser)
     /* sanity check for inner maintenance tools */
     if (u_sess->proc_cxt.IsInnerMaintenanceTools) {
         /* check 1 -- forbid outer-cluster connections, except for resizing and replace with gs_ctl build */
-        if (((IS_PGXC_COORDINATOR && !is_cluster_internal_connection(port)) || 
+        if (((IS_PGXC_COORDINATOR && !is_cluster_internal_connection(port)) ||
             (IS_SINGLE_NODE && !is_node_internal_connection(port))) &&
             !(u_sess->proc_cxt.clientIsGsCtl && AM_WAL_SENDER)) {
-            /* 
+            /*
              * Database Security: Support database audit Audit user login
-             * it's unsafe to deal with plugins hooks as dynamic lib may be released 
+             * it's unsafe to deal with plugins hooks as dynamic lib may be released
              */
             if (!(g_instance.status > NoShutdown) && user_login_hook) {
                 user_login_hook(port->database_name, port->user_name, false, true);
@@ -1756,7 +1758,7 @@ void PostgresInitializer::InitWAL()
 
     LoadSysCache();
 
-    InitDatabase();    
+    InitDatabase();
 
     InitPGXCPort();
 
@@ -2150,7 +2152,7 @@ void PostgresInitializer::CheckConnLimitation()
     if (u_sess->libpq_cxt.IsConnFromCmAgent) {
         if (currentCMAConn >= NUM_CMAGENT_PROCS) {
             tooManyConn = true;
-        } 
+        }
     } else {
          if (currentConn >= maxConn) {
              if (AM_WAL_SENDER || u_sess->proc_cxt.IsInnerMaintenanceTools) {
@@ -2231,7 +2233,7 @@ void PostgresInitializer::SetFencedMasterDatabase()
 {
     m_fullpath = GetDatabasePath(u_sess->proc_cxt.MyDatabaseId, u_sess->proc_cxt.MyDatabaseTableSpace);
     u_sess->utils_cxt.RecentGlobalXmin = FirstNormalTransactionId;
-    u_sess->proc_cxt.DatabasePath = 
+    u_sess->proc_cxt.DatabasePath =
 		MemoryContextStrdup(SESS_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_EXECUTOR), m_fullpath);
 }
 
@@ -2303,6 +2305,10 @@ void PostgresInitializer::SetDatabaseByOid()
     u_sess->proc_cxt.MyDatabaseTableSpace = dbform->dattablespace;
     Assert(u_sess->proc_cxt.MyDatabaseId == m_dboid);
     strlcpy(m_dbname, NameStr(dbform->datname), sizeof(m_dbname));
+
+    // TODO: rollback the global variable MyDatabaseId to use the one in the u_sess instead
+    // otherwise, it might cause race condition in multi-thread environment
+    MyDatabaseId = u_sess->proc_cxt.MyDatabaseId;
 }
 
 void PostgresInitializer::LockDatabase()
@@ -2416,6 +2422,15 @@ void PostgresInitializer::LoadSysCache()
      */
     RelationCacheInitializePhase3();
 
+	/*
+	 * Also cache whather the database is colocated for optimization purposes.
+	 */
+	if (IsK2PgEnabled() && !IsBootstrapProcessingMode())
+	{
+		HandleK2PgStatus(PgGate_IsDatabaseColocated(MyDatabaseId,
+												&MyDatabaseColocated));
+	}
+
     /* set up ACL framework (so CheckMyDatabase can check permissions) */
     initialize_acl();
 }
@@ -2499,7 +2514,7 @@ void PostgresInitializer::InitExtensionVariable()
 
     DynamicFileList* file_scanner = NULL;
     for (file_scanner = file_list; file_scanner != NULL; file_scanner = file_scanner->next) {
-        /* 
+        /*
         * If the library has a init_session_vars() function, call it for
         * initializing extension session variables.
         */
@@ -2530,9 +2545,9 @@ void PostgresInitializer::FinishInit()
 void PostgresInitializer::AuditUserLogin()
 {
     if (NULL != m_username) {
-        /* 
-         * Audit user login 
-         * it's unsafe to deal with plugins hooks as dynamic lib may be released 
+        /*
+         * Audit user login
+         * it's unsafe to deal with plugins hooks as dynamic lib may be released
          */
         if (!(g_instance.status > NoShutdown) && user_login_hook) {
             /* audit policy need databaseid to store policy info */
@@ -2611,7 +2626,7 @@ void PostgresInitializer::InitBarrierCreator()
     SetProcessExitCallback();
 
     StartXact();
-    
+
     SetSuperUserAndDatabase();
 
     SetDatabase();
@@ -2622,5 +2637,3 @@ void PostgresInitializer::InitBarrierCreator()
 
     return;
 }
-
-

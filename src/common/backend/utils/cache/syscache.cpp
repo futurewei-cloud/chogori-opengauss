@@ -35,6 +35,7 @@
 #include "catalog/gs_encrypted_proc.h"
 #include "catalog/pg_amop.h"
 #include "catalog/pg_amproc.h"
+#include "catalog/pg_attrdef.h"
 #include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_obsscaninfo.h"
@@ -99,6 +100,7 @@
 #include "utils/rel_gs.h"
 #include "utils/syscache.h"
 #include "catalog/pg_user_status.h"
+#include <vector>
 
 /* ---------------------------------------------------------------------------
 
@@ -742,7 +744,7 @@ static const struct cachedesc cacheinfo[] = {{AggregateRelationId, /* AGGFNOID *
     {AggregateRelationId, /* STREAMINGGATHERAGGOID */
         StreamingGatherAggIndexId,
         3,
-        {Anum_pg_aggregate_aggtransfn, Anum_pg_aggregate_aggcollectfn, 
+        {Anum_pg_aggregate_aggtransfn, Anum_pg_aggregate_aggcollectfn,
          Anum_pg_aggregate_aggfinalfn, 0},
         128},
     {PackageRelationId, /* PACKAGEOID */
@@ -758,6 +760,8 @@ static const struct cachedesc cacheinfo[] = {{AggregateRelationId, /* AGGFNOID *
 };
 
 int SysCacheSize = lengthof(cacheinfo);
+
+static std::vector<CatCache *> SysCache(SysCacheSize);
 
 /*
  * InitCatalogCache - initialize the caches
@@ -1066,10 +1070,336 @@ uint32 GetSysCacheHashValue(int cacheId, Datum key1, Datum key2, Datum key3, Dat
  */
 struct catclist* SearchSysCacheList(int cacheId, int nkeys, Datum key1, Datum key2, Datum key3, Datum key4)
 {
-    
+
     if (cacheId < 0 || cacheId >= SysCacheSize || !PointerIsValid(u_sess->syscache_cxt.SysCache[cacheId])) {
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("invalid cache ID: %d", cacheId)));
     }
 
     return SearchCatCacheList(u_sess->syscache_cxt.SysCache[cacheId], nkeys, key1, key2, key3, key4);
+}
+
+Bitmapset *
+K2PgSysTablePrimaryKey(Oid relid)
+{
+	Bitmapset *pkey = NULL;
+
+#define K2PgPkAddAttribute(attid) \
+	do { pkey = bms_add_member(pkey, attid - FirstLowInvalidHeapAttributeNumber); } while (false)
+
+	switch (relid)
+	{
+		case AccessMethodOperatorRelationId:
+		case AccessMethodProcedureRelationId:
+		case AccessMethodRelationId:
+		case AggregateRelationId:
+		case AttrDefaultRelationId:
+		case AuthIdRelationId:
+		case CastRelationId:
+		case CollationRelationId:
+		case ConstraintRelationId:
+		case ConversionRelationId:
+		case DatabaseRelationId:
+		case DefaultAclRelationId:
+		case EnumRelationId:
+		case ForeignDataWrapperRelationId:
+		case ForeignServerRelationId:
+		case ForeignTableRelationId:
+		case LanguageRelationId:
+		case NamespaceRelationId:
+		case OperatorClassRelationId:
+		case OperatorFamilyRelationId:
+		case OperatorRelationId:
+		case ProcedureRelationId:
+		case RelationRelationId:
+		case RewriteRelationId:
+		case StatisticExtRelationId:
+		case TSConfigRelationId:
+		case TSDictionaryRelationId:
+		case TSParserRelationId:
+		case TSTemplateRelationId:
+		case TableSpaceRelationId:
+		case TypeRelationId:
+		case UserMappingRelationId:
+			K2PgPkAddAttribute(ObjectIdAttributeNumber);
+			break;
+		case AttributeRelationId:
+			K2PgPkAddAttribute(Anum_pg_attribute_attrelid);
+			K2PgPkAddAttribute(Anum_pg_attribute_attnum);
+			break;
+		case AuthMemRelationId:
+			K2PgPkAddAttribute(Anum_pg_auth_members_roleid);
+			K2PgPkAddAttribute(Anum_pg_auth_members_member);
+			break;
+		case IndexRelationId:
+			K2PgPkAddAttribute(Anum_pg_index_indexrelid);
+			break;
+		case RangeRelationId:
+			K2PgPkAddAttribute(Anum_pg_range_rngtypid);
+			break;
+		case StatisticRelationId:
+			K2PgPkAddAttribute(Anum_pg_statistic_starelid);
+			break;
+		case TSConfigMapRelationId:
+			K2PgPkAddAttribute(Anum_pg_ts_config_map_mapcfg);
+			K2PgPkAddAttribute(Anum_pg_ts_config_map_maptokentype);
+			K2PgPkAddAttribute(Anum_pg_ts_config_map_mapseqno);
+			break;
+		default: break;
+	}
+
+#undef K2PgPkAddAttribute
+
+	return pkey;
+}
+
+/*
+ * Utility function for K2PG mode. Is used to automatically add entries
+ * from common catalog tables to the cache immediately after they are inserted.
+ */
+void K2PgSetSysCacheTuple(Relation rel, HeapTuple tup)
+{
+	TupleDesc tupdesc = RelationGetDescr(rel);
+	switch (RelationGetRelid(rel))
+	{
+		case RelationRelationId:
+			SetCatCacheTuple(SysCache[RELOID], tup, tupdesc);
+			SetCatCacheTuple(SysCache[RELNAMENSP], tup, tupdesc);
+			break;
+		case TypeRelationId:
+			SetCatCacheTuple(SysCache[TYPEOID], tup, tupdesc);
+			SetCatCacheTuple(SysCache[TYPENAMENSP], tup, tupdesc);
+			break;
+		case ProcedureRelationId:
+			SetCatCacheTuple(SysCache[PROCOID], tup, tupdesc);
+			SetCatCacheTuple(SysCache[PROCNAMEARGSNSP], tup, tupdesc);
+			break;
+		case AttributeRelationId:
+			SetCatCacheTuple(SysCache[ATTNUM], tup, tupdesc);
+			SetCatCacheTuple(SysCache[ATTNAME], tup, tupdesc);
+			break;
+
+		default:
+			/* For non-critical tables/indexes nothing to do */
+			return;
+	}
+}
+
+/*
+ * In K2PG mode preload the given cache with data from master.
+ * If no index cache is associated with the given cache (most of the time), its id should be -1.
+ */
+void
+K2PgPreloadCatalogCache(int cache_id, int idx_cache_id)
+{
+
+	CatCache* cache         = SysCache[cache_id];
+	CatCache* idx_cache     = idx_cache_id != -1 ? SysCache[idx_cache_id] : NULL;
+	List*     current_list  = NIL;
+	List*     list_of_lists = NIL;
+	HeapTuple ntp;
+	Relation  relation      = heap_open(cache->cc_reloid, AccessShareLock);
+	TupleDesc tupdesc       = RelationGetDescr(relation);
+
+	SysScanDesc scandesc = systable_beginscan(relation,
+	                                          cache->cc_indexoid,
+	                                          false /* indexOK */,
+	                                          NULL /* snapshot */,
+	                                          0  /* nkeys */,
+	                                          NULL /* key */);
+
+	while (HeapTupleIsValid(ntp = systable_getnext(scandesc)))
+	{
+		SetCatCacheTuple(cache, ntp, RelationGetDescr(relation));
+		if (idx_cache)
+			SetCatCacheTuple(idx_cache, ntp, RelationGetDescr(relation));
+
+		/*
+		 * Special handling for the common case of looking up
+		 * functions (procedures) by name (i.e. partial key).
+		 * We set up the partial cache list for function by-name
+		 * lookup on initialization to avoid scanning the large
+		 * pg_proc table each time.
+		 */
+		if (cache_id == PROCOID)
+		{
+			ListCell *lc;
+			bool     found_match = false;
+			bool     is_null     = false;
+			ScanKeyData key      = idx_cache->cc_skey[0];
+
+			Datum ndt = heap_getattr(ntp, key.sk_attno, tupdesc, &is_null);
+
+			if (is_null)
+			{
+				elog(WARNING,"Ignoring unexpected null "
+				                "entry while initializing proc "
+				                "cache list");
+				continue;
+			}
+
+			char *fname          = NameStr(*DatumGetName(ndt));
+			char *internal_fname = TextDatumGetCString(heap_getattr(ntp,
+			                                                        Anum_pg_proc_prosrc,
+			                                                        tupdesc,
+			                                                        &is_null));
+
+			/*
+			 * The internal name must be unique so if this is the
+			 * same as the function name, then this must be the only
+			 * or at least first occurrence of this function name.
+			 * TODO this assumption holds for standard procs (i.e.
+			 * initdb) but we should clean this up when enabling
+			 * CREATE PROCEDURE.
+			 */
+			bool is_canonical = strcmp(fname, internal_fname) == 0;
+
+			if (!is_canonical)
+			{
+				/*
+				 * Look for an existing list for functions with
+				 * this name.
+				 */
+				foreach(lc, list_of_lists)
+				{
+					List      *fnlist = (List *)lfirst(lc);
+					HeapTuple otp     = (HeapTuple) linitial(fnlist);
+					Datum     odt     = heap_getattr(otp,
+					                                 key.sk_attno,
+					                                 tupdesc,
+					                                 &is_null);
+
+					Datum test = FunctionCall2Coll(&key.sk_func,
+					                               key.sk_collation,
+					                               ndt,
+					                               odt);
+					found_match = DatumGetBool(test);
+					if (found_match)
+					{
+						fnlist = lappend(fnlist, ntp);
+						lc->data.ptr_value = fnlist;
+						break;
+					}
+				}
+			}
+			if (!found_match)
+			{
+				List *new_list = lappend(NIL, ntp);
+				list_of_lists = lappend(list_of_lists, new_list);
+			}
+		}
+
+		/*
+		 * Special handling for pg_rewrite: preload rules list by relation oid.
+		 * Note that rules should be ordered by name - which is achieved using
+		 * RewriteRelRulenameIndexId index.
+		 */
+		if (cache_id == RULERELNAME)
+		{
+			if (!current_list)
+			{
+				current_list = list_make1(ntp);
+			}
+			else
+			{
+				HeapTuple       ltp        = (HeapTuple) llast(current_list);
+				Form_pg_rewrite ltp_struct = (Form_pg_rewrite) GETSTRUCT(ltp);
+				Form_pg_rewrite ntp_struct = (Form_pg_rewrite) GETSTRUCT(ntp);
+				if (ntp_struct->ev_class == ltp_struct->ev_class)
+				{
+					// This rule is for the same table as the last one, continuing the list
+					current_list  = lappend(current_list, ntp);
+				}
+				else
+				{
+					// This rule is for another table, changing current list
+					list_of_lists = lappend(list_of_lists, current_list);
+					current_list  = list_make1(ntp);
+				}
+			}
+		}
+	}
+
+	if (current_list)
+	{
+		list_of_lists = lappend(list_of_lists, current_list);
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(relation, AccessShareLock);
+
+	/* Load up the lists computed above - if any - into the catalog cache. */
+	ListCell *lc;
+	foreach (lc, list_of_lists)
+	{
+		List *current_list = (List *) lfirst(lc);
+		if (cache_id == PROCOID)
+		{
+			SetCatCacheList(idx_cache, 1, current_list);
+		}
+		if (cache_id == RULERELNAME)
+		{
+			SetCatCacheList(cache, 1, current_list);
+		}
+	}
+	list_free_deep(list_of_lists);
+}
+
+/*
+ * In K2PG mode load up the caches with data from some essential tables
+ * that are looked up often during regular usage.
+ *
+ * Used during initdb.
+ */
+static void
+K2PgPreloadCatalogCacheIfEssential(int cache_id)
+{
+	int idx_cache_id = -1;
+
+	switch (cache_id)
+	{
+		case RELOID:
+			idx_cache_id = RELNAMENSP;
+			break;
+		case TYPEOID:
+			idx_cache_id = TYPENAMENSP;
+			break;
+		case ATTNAME:
+			idx_cache_id = ATTNUM;
+			break;
+		case PROCOID:
+			idx_cache_id = PROCNAMEARGSNSP;
+			break;
+		case OPEROID:
+			idx_cache_id = OPERNAMENSP;
+			break;
+		case CASTSOURCETARGET:
+			/* No index cache */
+			break;
+		default:
+			/* non-essential table -- nothing to do */
+			return;
+	}
+
+	K2PgPreloadCatalogCache(cache_id, idx_cache_id);
+}
+
+/*
+ * Preload catalog caches with data from the master to avoid master lookups
+ * later.
+ *
+ * Used during initdb.
+ */
+void
+K2PgPreloadCatalogCaches(void)
+{
+	int			cacheId;
+
+	Assert(CacheInitialized);
+
+	/* Ensure individual caches are initialized */
+	InitCatalogCachePhase2();
+
+	for (cacheId = 0; cacheId < SysCacheSize; cacheId++)
+		K2PgPreloadCatalogCacheIfEssential(cacheId);
 }

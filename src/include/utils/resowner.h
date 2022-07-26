@@ -26,6 +26,8 @@
 #include "utils/partcache.h"
 #include "storage/cucache_mgr.h"
 
+#include "access/k2/pg_gate_typedefs.h"
+
 /*
  * ResourceOwner objects are an opaque data structure known only within
  * resowner.c.
@@ -162,5 +164,14 @@ extern void ResourceOwnerEnlargeGMemContext(ResourceOwner owner);
 extern void ResourceOwnerRememberGMemContext(ResourceOwner owner, MemoryContext memcontext);
 extern void ResourceOwnerForgetGMemContext(ResourceOwner owner, MemoryContext memcontext);
 extern void PrintGMemContextLeakWarning(MemoryContext memcontext);
+
+/* support for K2PG statement refcount management */
+extern void ResourceOwnerEnlargeK2PgStmts(ResourceOwner owner);
+extern void ResourceOwnerRememberK2PgStmt(
+	ResourceOwner owner,
+	K2PgStatement k2pg_stmt);
+extern void ResourceOwnerForgetK2PgStmt(
+	ResourceOwner owner,
+	K2PgStatement k2pg_stmt);
 
 #endif /* RESOWNER_H */

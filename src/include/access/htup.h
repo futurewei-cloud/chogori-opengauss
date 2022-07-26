@@ -594,6 +594,7 @@ typedef struct HeapTupleData {
     int2   t_bucketId;
     ItemPointerData t_self; /* SelfItemPointer */
     Oid t_tableOid;         /* table the tuple came from */
+    Datum 		t_k2pgctid;		/* virtual column k2pgctid */
     TransactionId t_xid_base;
     TransactionId t_multi_base;
 #ifdef PGXC

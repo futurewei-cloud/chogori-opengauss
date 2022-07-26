@@ -356,7 +356,7 @@ Datum nocachegetattr(HeapTuple tuple, uint32 attnum, TupleDesc tupleDesc)
      * See the comments in heap_deform_tuple() for more information.
      */
     slow = heapToUHeap;
-    
+
     /* ----------------
      *	 Three cases:
      *
@@ -578,6 +578,10 @@ Datum heap_getsysattr(HeapTuple tup, int attnum, TupleDesc tupleDesc, bool *isnu
         case TableOidAttributeNumber:
             result = ObjectIdGetDatum(tup->t_tableOid);
             break;
+		case K2PgTupleIdAttributeNumber:
+			result = tup->t_k2pgctid;
+			break;
+
 #ifdef PGXC
         case BucketIdAttributeNumber:
             result = ObjectIdGetDatum((uint2)tup->t_bucketId);
@@ -627,6 +631,7 @@ HeapTuple heap_copytuple(HeapTuple tuple)
     newTuple->t_self = tuple->t_self;
     newTuple->t_tableOid = tuple->t_tableOid;
     newTuple->t_bucketId = tuple->t_bucketId;
+    HEAPTUPLE_COPY_K2PGTID(tuple->t_k2pgctid, newTuple->t_k2pgctid);
     HeapTupleCopyBase(newTuple, tuple);
 
 #ifdef PGXC
@@ -669,6 +674,7 @@ void heap_copytuple_with_tuple(HeapTuple src, HeapTuple dest)
     dest->t_self = src->t_self;
     dest->t_tableOid = src->t_tableOid;
     dest->t_bucketId = src->t_bucketId;
+    HEAPTUPLE_COPY_K2PGTID(src->t_k2pgctid, dest->t_k2pgctid);
     HeapTupleCopyBase(dest, src);
 #ifdef PGXC
     dest->t_xc_node_id = src->t_xc_node_id;
@@ -755,6 +761,7 @@ HeapTuple heap_form_tuple(TupleDesc tupleDescriptor, Datum *values, bool *isnull
     ItemPointerSetInvalid(&(tuple->t_self));
     tuple->t_tableOid = InvalidOid;
     tuple->t_bucketId = InvalidBktId;
+    tuple->t_k2pgctid = 0;
     HeapTupleSetZeroBase(tuple);
 #ifdef PGXC
     tuple->t_xc_node_id = 0;
@@ -867,6 +874,7 @@ HeapTuple heap_modify_tuple(HeapTuple tuple, TupleDesc tupleDesc, Datum *replVal
     newTuple->t_self = tuple->t_self;
     newTuple->t_tableOid = tuple->t_tableOid;
     newTuple->t_bucketId = tuple->t_bucketId;
+    HEAPTUPLE_COPY_K2PGTID(tuple->t_k2pgctid, newTuple->t_k2pgctid);
     HeapTupleCopyBase(newTuple, tuple);
 #ifdef PGXC
     newTuple->t_xc_node_id = tuple->t_xc_node_id;
@@ -1098,7 +1106,7 @@ static void slot_deform_tuple(TupleTableSlot *slot, uint32 natts)
     bits8 *bp = tup->t_bits; /* ptr to null bitmap in tuple */
     bool slow = false;       /* can we use/set attcacheoff? */
     bool heapToUHeap = tupleDesc->tdTableAmType == TAM_USTORE;
-	
+
     /*
      * Check whether the first call for this tuple, and initialize or restore
      * loop state.
@@ -1833,6 +1841,7 @@ HeapTuple heap_tuple_from_minimal_tuple(MinimalTuple mtup)
     ItemPointerSetInvalid(&(result->t_self));
     result->t_tableOid = InvalidOid;
     result->t_bucketId = InvalidBktId;
+    result->t_k2pgctid = 0;
     HeapTupleSetZeroBase(result);
 #ifdef PGXC
     result->t_xc_node_id = 0;

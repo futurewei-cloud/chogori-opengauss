@@ -1412,3 +1412,33 @@ void CallSyscacheCallbacks(int cacheid, uint32 hashvalue)
         }
     }
 }
+
+/*
+ *		CallSystemCacheCallbacks
+ *
+ *		Calls all syscache and relcache invalidation callbacks.
+ *		This is useful when the entire cache is being reloaded or
+ *		invalidated, rather than a single cache entry.
+ */
+void
+CallSystemCacheCallbacks(void)
+{
+    int			i;
+    for (i = 0; i < u_sess->inval_cxt.syscache_callback_count; i++) {
+        struct SYSCACHECALLBACK* ccitem = u_sess->inval_cxt.syscache_callback_list + i;
+
+        (*ccitem->function)(ccitem->arg, ccitem->id, 0);
+    }
+
+    for (i = 0; i < u_sess->inval_cxt.relcache_callback_count; i++) {
+        struct RELCACHECALLBACK* ccitem = u_sess->inval_cxt.relcache_callback_list + i;
+
+        (*ccitem->function)(ccitem->arg, InvalidOid);
+    }
+
+    for (i = 0; i < u_sess->inval_cxt.partcache_callback_count; i++) {
+        struct PARTCACHECALLBACK* ccitem = u_sess->inval_cxt.partcache_callback_list + i;
+
+        (*ccitem->function)(ccitem->arg, InvalidOid);
+    }
+}

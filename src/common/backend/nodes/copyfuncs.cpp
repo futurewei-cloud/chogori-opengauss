@@ -313,6 +313,8 @@ static ModifyTable* _copyModifyTable(const ModifyTable* from)
     COPY_SCALAR_FIELD(exclRelRTIndex);
     COPY_SCALAR_FIELD(partKeyUpsert);
 
+	COPY_NODE_FIELD(k2PushdownTlist);
+
     return newnode;
 }
 
@@ -3942,6 +3944,7 @@ static Constraint* _copyConstraint(const Constraint* from)
     COPY_SCALAR_FIELD(skip_validation);
     COPY_SCALAR_FIELD(initially_valid);
     COPY_NODE_FIELD(inforConstraint);
+	COPY_NODE_FIELD(k2pg_index_params);
 
     return newnode;
 }
@@ -6298,7 +6301,7 @@ static BloomFilterSet* _copyBloomFilterSet(const BloomFilterSet* from)
     BloomFilterSet* newnode = makeNode(BloomFilterSet);
 
     /* copy uint64 array
-     * first palloc memory for array 
+     * first palloc memory for array
      */
     COPY_POINTER_FIELD(data, sizeof(uint64) * from->length);
     COPY_SCALAR_FIELD(length);

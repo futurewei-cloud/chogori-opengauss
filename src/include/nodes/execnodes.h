@@ -375,7 +375,7 @@ typedef struct JunkFilter {
     AttrNumber jf_xc_node_id;
     AttrNumber jf_xc_wholerow;
     AttrNumber jf_xc_part_id;
-    AttrNumber jf_xc_bucket_id;	
+    AttrNumber jf_xc_bucket_id;
     List* jf_primary_keys;
 #endif
 } JunkFilter;
@@ -477,7 +477,7 @@ typedef struct ResultRelInfo {
     List** ri_ConstraintExprs;
     JunkFilter* ri_junkFilter;
     AttrNumber ri_partOidAttNum;
-    AttrNumber ri_bucketIdAttNum;	
+    AttrNumber ri_bucketIdAttNum;
     ProjectionInfo* ri_projectReturning;
 
     /* for running MERGE on this result relation */
@@ -498,7 +498,7 @@ typedef struct ResultRelInfo {
      */
     Index ri_mergeTargetRTI;
     ProjectionInfo* ri_updateProj;
-    
+
     /* array of stored generated columns expr states */
     ExprState **ri_GeneratedExprs;
 
@@ -613,7 +613,7 @@ typedef struct EState {
     List* es_subplan_ids;
     bool es_skip_early_free;            /* true if we don't apply early free mechanisim, especially for subplan */
     /* true if we don't apply early-free-consumer mechanisim, especially for subplan */
-    bool es_skip_early_deinit_consumer; 
+    bool es_skip_early_deinit_consumer;
     bool es_under_subplan;              /* true if operator is under a subplan */
     List* es_material_of_subplan;       /* List of Materialize operator of subplan */
     bool es_recursive_next_iteration;   /* true if under recursive-stream and need to rescan. */
@@ -635,6 +635,17 @@ typedef struct EState {
 #endif
 
     PruningResult* pruningResult;
+
+ 	/*
+	 * K2PG-specific fields
+	 */
+
+	bool es_k2pg_is_single_row_modify_txn; /* Is this query a single-row modify
+																				* and the only stmt in this txn. */
+	TupleTableSlot *k2pg_conflict_slot; /* If a conflict is to be resolved when inserting data,
+																		 * we cache the conflict tuple here when processing and
+																		 * then free the slot after the conflict is resolved. */
+//	K2PgExecParameters k2pg_exec_params;
 } EState;
 
 /*
@@ -1388,6 +1399,9 @@ typedef struct ModifyTableState {
     UpsertState* mt_upsert;                /*  DUPLICATE KEY UPDATE evaluation state */
     instr_time first_tuple_modified; /* record the end time for the first tuple inserted, deleted, or updated */
     ExprContext* limitExprContext; /* for limit expresssion */
+    
+ 	/* K2PG specific attributes. */
+	bool k2pg_mt_is_single_row_update_or_delete;
 } ModifyTableState;
 
 typedef struct CopyFromManagerData* CopyFromManager;
@@ -2517,7 +2531,7 @@ typedef struct GradientDescentState {
     GradientDescentAlgorithm* algorithm;
     OptimizerGD*            optimizer;
     ShuffleGD*              shuffle;
-        
+
     // tuple description
     TupleDesc               tupdesc;
     int                     n_features; // number of features
@@ -2560,12 +2574,12 @@ class IncrementalStatistics {
     double s = 0;
 
 public:
-    
+
     IncrementalStatistics operator+(IncrementalStatistics const& rhs) const;
     IncrementalStatistics operator-(IncrementalStatistics const& rhs) const;
     IncrementalStatistics& operator+=(IncrementalStatistics const& rhs);
     IncrementalStatistics& operator-=(IncrementalStatistics const& rhs);
-    
+
     double getMin() const;
     void setMin(double);
     double getMax() const;
@@ -2596,9 +2610,9 @@ typedef struct KMeansStateDescription {
     Centroid* centroids[2] = {nullptr};
     ArrayType* bbox_min = nullptr;
     ArrayType* bbox_max = nullptr;
-    
+
     double (* distance)(double const*, double const*, uint32_t const dimension) = nullptr;
-    
+
     double execution_time = 0.;
     double seeding_time = 0.;
     IncrementalStatistics solution_statistics[2];
@@ -2632,4 +2646,3 @@ typedef struct GSPoint {
 } GSPoint;
 
 #endif /* EXECNODES_H */
-

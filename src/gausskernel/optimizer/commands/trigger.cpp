@@ -194,7 +194,7 @@ Oid CreateTrigger(CreateTrigStmt* stmt, const char* queryString, Oid relOid, Oid
                 (errcode(ERRCODE_WRONG_OBJECT_TYPE),
                     errmsg("\"%s\" is a table", RelationGetRelationName(rel)),
                     errdetail("Tables cannot have INSTEAD OF triggers.")));
-        
+
 #ifdef ENABLE_MULTIPLE_NODES
         /* Triggers must be created on replicated table with primary key or unique index. */
         AttrNumber* indexed_col = NULL;
@@ -849,7 +849,7 @@ static void ConvertTriggerToFK(CreateTrigStmt* stmt, Oid funcoid)
             continue;
         }
         if (i % divided_num) {
-            fk_attrs = lappend(fk_attrs, arg); 
+            fk_attrs = lappend(fk_attrs, arg);
         } else {
             pk_attrs = lappend(pk_attrs, arg);
         }
@@ -1066,7 +1066,7 @@ void RemoveTriggerById(Oid trigOid)
     relid = ((Form_pg_trigger)GETSTRUCT(tup))->tgrelid;
 
     rel = heap_open(relid, AccessExclusiveLock);
-    if (rel->rd_rel->relkind != RELKIND_RELATION && rel->rd_rel->relkind != RELKIND_VIEW && 
+    if (rel->rd_rel->relkind != RELKIND_RELATION && rel->rd_rel->relkind != RELKIND_VIEW &&
         rel->rd_rel->relkind != RELKIND_CONTQUERY)
         ereport(ERROR,
             (errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -1158,7 +1158,7 @@ static void RangeVarCallbackForRenameTrigger(
         return; /* concurrently dropped */
     form = (Form_pg_class)GETSTRUCT(tuple);
     /* only tables and views can have triggers */
-    if (form->relkind != RELKIND_RELATION && form->relkind != RELKIND_VIEW && 
+    if (form->relkind != RELKIND_RELATION && form->relkind != RELKIND_VIEW &&
         form->relkind != RELKIND_CONTQUERY)
         ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE), errmsg("\"%s\" is not a table or view", rv->relname)));
 
@@ -2911,6 +2911,7 @@ ltrmark:;
             tuple.t_self = *tid;
             tuple.t_tableOid = RelationGetRelid(fakeRelation);
             tuple.t_bucketId = RelationGetBktid(fakeRelation);
+ 		    tuple.t_k2pgctid = PointerGetDatum(NULL);
             HeapTupleCopyBaseFromPage(&tuple, page);
 #ifdef PGXC
             tuple.t_xc_node_id = u_sess->pgxc_cxt.PGXCNodeIdentifier;
@@ -4011,7 +4012,7 @@ void AfterTriggerBeginXact(void)
     u_sess->tri_cxt.afterTriggers->events.tail = NULL;
     u_sess->tri_cxt.afterTriggers->events.tailfree = NULL;
     u_sess->tri_cxt.afterTriggers->query_depth = -1;
-    
+
     u_sess->tri_cxt.afterTriggers->maxquerydepth = max_query_depth;
 
     /* Context for events is created only when needed */
@@ -5052,7 +5053,7 @@ static void AfterTriggerSaveEvent(EState* estate, ResultRelInfo* relinfo, uint32
                 default:
                     ereport(ERROR,
                         (errcode(ERRCODE_UNRECOGNIZED_NODE_TYPE),
-                            errmsg("unrecognized RI_FKey_trigger_type: %d", RI_FKey_trigger_type(trigger->tgfoid))));             
+                            errmsg("unrecognized RI_FKey_trigger_type: %d", RI_FKey_trigger_type(trigger->tgfoid))));
             }
         }
 
@@ -5327,7 +5328,7 @@ static void pgxc_ARNextNewRowpos(RowPointerData* rpid)
         /* At least of the first tuplestore has rows */
         rpid->rp_posid = rowpos1;
         if (rowpos2 >= 0) {
-            /* Both OLD and NEW are present 
+            /* Both OLD and NEW are present
              *
              * Both of them should have the same current row position.
              */

@@ -443,7 +443,7 @@ void ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
     }
     exec_explain_plan(queryDesc);
     if (u_sess->attr.attr_resource.use_workload_manager &&
-        u_sess->attr.attr_resource.resource_track_level == RESOURCE_TRACK_OPERATOR && 
+        u_sess->attr.attr_resource.resource_track_level == RESOURCE_TRACK_OPERATOR &&
         queryDesc != NULL && queryDesc->plannedstmt != NULL &&
         queryDesc->plannedstmt->is_stream_plan && u_sess->exec_cxt.need_track_resource) {
 #ifdef STREAMPLAN
@@ -2443,7 +2443,23 @@ void ExecConstraints(ResultRelInfo *resultRelInfo, TupleTableSlot *slot, EState 
         int natts = tupdesc->natts;
         int attrChk;
 
+
         for (attrChk = 1; attrChk <= natts; attrChk++) {
+
+        // TODO: do we need some logic similar to the below?
+        //		// 	Form_pg_attribute att = TupleDescAttr(tupdesc, attrChk - 1);
+
+		// 	if (mtstate && mtstate->k2pg_mt_is_single_row_update_or_delete &&
+		// 	    !bms_is_member(att->attnum - K2PgGetFirstLowInvalidAttributeNumber(rel), modifiedCols))
+		// 	{
+		// 		/*
+		// 		 * For single-row-updates, we only know the values of the
+		// 		 * modified columns. But in this case it is safe to skip the
+		// 		 * unmodified columns anyway.
+		// 		 */
+		// 		continue;
+		// 	}
+
             if (tupdesc->attrs[attrChk - 1]->attnotnull && tableam_tslot_attisnull(slot, attrChk)) {
                 char *val_desc = NULL;
                 bool rel_masked = u_sess->attr.attr_security.Enable_Security_Policy &&
@@ -2485,7 +2501,7 @@ void ExecConstraints(ResultRelInfo *resultRelInfo, TupleTableSlot *slot, EState 
     }
     /* client_min_messages < NOTICE show error details. */
     if (client_min_messages < NOTICE) {
-        ereport(ERROR, 
+        ereport(ERROR,
             (errmodule(MOD_EXECUTOR), errcode(ERRCODE_CHECK_VIOLATION),
                 errmsg("new row for relation \"%s\" violates check constraint \"%s\"",
                     RelationGetRelationName(rel), failed),
@@ -2493,7 +2509,7 @@ void ExecConstraints(ResultRelInfo *resultRelInfo, TupleTableSlot *slot, EState 
                 errcause("some rows copy failed"),
                 erraction("check table defination")));
     } else {
-        ereport(ERROR, 
+        ereport(ERROR,
             (errmodule(MOD_EXECUTOR), errcode(ERRCODE_CHECK_VIOLATION),
                 errmsg("new row for relation \"%s\" violates check constraint \"%s\"",
                     RelationGetRelationName(rel), failed),
@@ -2980,7 +2996,7 @@ HeapTuple heap_lock_updated(CommandId cid, Relation relation, int lockmode, Item
             /*
              * This is a live tuple, so now try to lock it.
              */
-            test = tableam_tuple_lock(relation, &tuple, &buffer, 
+            test = tableam_tuple_lock(relation, &tuple, &buffer,
                                       cid, (LockTupleMode)lockmode, false, &tmfd,
                                       false, false, false,InvalidSnapshot, NULL, false);
             /* We now have two pins on the buffer, get rid of one */

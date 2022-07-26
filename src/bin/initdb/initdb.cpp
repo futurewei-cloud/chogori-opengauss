@@ -53,6 +53,7 @@
 
 #include "access/ustore/undo/knl_uundoapi.h"
 #include "access/ustore/undo/knl_uundotxn.h"
+#include "access/k2/k2pg_aux.h"
 #include "libpq/pqsignal.h"
 #include "mb/pg_wchar.h"
 #include "getaddrinfo.h"
@@ -158,6 +159,10 @@ static bool show_setting = false;
 static char* xlog_dir = "";
 static bool security = false;
 static char* dbcompatibility = "";
+
+/* whether to use k2 to store system catalog instead of local files */
+static bool k2_mode = false;
+
 #ifdef PGXC
 /* Name of the PGXC node initialized */
 static char* nodename = NULL;
@@ -263,6 +268,7 @@ static char** readfile(const char* path);
 static void writefile(char* path, char** lines);
 static FILE* popen_check(const char* command, const char* mode);
 static void exit_nicely(void);
+static void exit_nicely_with_code(int);
 static char* get_id(void);
 static char* get_encoding_id(char* encoding_name);
 static void set_input(char** dest, const char* filename);
@@ -330,6 +336,9 @@ static int CreateRestrictedProcess(char* cmd, PROCESS_INFORMATION* processInfo);
 #endif
 
 static void InitUndoSubsystemMeta();
+static int k2pg_pclose_check(FILE *stream);
+static void initdb_set_env_var(const char* name);
+static bool initdb_is_env_set(const char* name);
 
 /*
  * macros for running pipes to openGauss
@@ -345,10 +354,12 @@ static void InitUndoSubsystemMeta();
             exit_nicely(); /* message already printed by popen_check */ \
     } while (0)
 
-#define PG_CMD_CLOSE                                                     \
-    do {                                                                 \
-        if (pclose_check(cmdfd))                                         \
-            exit_nicely(); /* message already printed by pclose_check */ \
+#define PG_CMD_CLOSE \
+    do { \
+        int exit_code = k2pg_pclose_check(cmdfd); \
+	    /* message already printed by k2pg_pclose_check */ \
+	    if (exit_code) \
+		    exit_nicely_with_code(exit_code == K2PG_INITDB_ALREADY_DONE_EXIT_CODE ? 0 : 1); \
     } while (0)
 
 #define PG_CMD_PUTS(line)                                \
@@ -584,7 +595,7 @@ static char** readfile(const char* path)
     if (linelen) {
         nlines++;
     }
-        
+
     if (linelen > maxlength) {
         maxlength = linelen;
     }
@@ -681,7 +692,12 @@ static FILE* popen_check(const char* command, const char* mode)
  * clean up any files we created on failure
  * if we created the data directory remove it too
  */
-static void exit_nicely(void)
+static void
+exit_nicely(void) {
+	exit_nicely_with_code(1);
+}
+
+static void exit_nicely_with_code(int final_exit_code)
 {
     if (!noclean) {
         if (made_new_pgdata) {
@@ -712,7 +728,7 @@ static void exit_nicely(void)
             write_stderr(_("%s: transaction log directory \"%s\" not removed at user's request\n"), progname, xlog_dir);
     }
 
-    exit(1);
+    exit(final_exit_code);
 }
 
 /*
@@ -1264,7 +1280,8 @@ static void setup_config(void)
 #endif
 
     /* gs_gazelle.conf */
-
+    // comm_proxy ?
+    // TODO: check if we need this file in k2_mode
     conflines = readfile(gazelle_conf_file);
     nRet = sprintf_s(path, sizeof(path), "%s/gs_gazelle.conf", pg_data);
     securec_check_ss_c(nRet, "\0", "\0");
@@ -1275,77 +1292,79 @@ static void setup_config(void)
     FREE_AND_RESET(conflines);
 
     /* pg_hba.conf */
+    // don't create pg_hba.conf in k2_mode
+    if (!k2_mode) {
+        conflines = readfile(hba_file);
 
-    conflines = readfile(hba_file);
+    #ifndef HAVE_UNIX_SOCKETS
+        conflines = filter_lines_with_token(conflines, "@remove-line-for-nolocal@");
+    #else
+        conflines = replace_token(conflines, "@remove-line-for-nolocal@", "");
+    #endif
 
-#ifndef HAVE_UNIX_SOCKETS
-    conflines = filter_lines_with_token(conflines, "@remove-line-for-nolocal@");
-#else
-    conflines = replace_token(conflines, "@remove-line-for-nolocal@", "");
-#endif
+    #ifdef HAVE_IPV6
 
-#ifdef HAVE_IPV6
+        /*
+        * Probe to see if there is really any platform support for IPv6, and
+        * comment out the relevant pg_hba line if not.  This avoids runtime
+        * warnings if getaddrinfo doesn't actually cope with IPv6.  Particularly
+        * useful on Windows, where executables built on a machine with IPv6 may
+        * have to run on a machine without.
+        */
+        {
+            struct addrinfo* gai_result = NULL;
+            struct addrinfo hints;
+            int err = 0;
 
-    /*
-     * Probe to see if there is really any platform support for IPv6, and
-     * comment out the relevant pg_hba line if not.  This avoids runtime
-     * warnings if getaddrinfo doesn't actually cope with IPv6.  Particularly
-     * useful on Windows, where executables built on a machine with IPv6 may
-     * have to run on a machine without.
-     */
-    {
-        struct addrinfo* gai_result = NULL;
-        struct addrinfo hints;
-        int err = 0;
+    #ifdef WIN32
+            /* need to call WSAStartup before calling getaddrinfo */
+            WSADATA wsaData;
 
-#ifdef WIN32
-        /* need to call WSAStartup before calling getaddrinfo */
-        WSADATA wsaData;
+            err = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    #endif
 
-        err = WSAStartup(MAKEWORD(2, 2), &wsaData);
-#endif
+            /* for best results, this code should match parse_hba() */
+            hints.ai_flags = AI_NUMERICHOST;
+            hints.ai_family = PF_UNSPEC;
+            hints.ai_socktype = 0;
+            hints.ai_protocol = 0;
+            hints.ai_addrlen = 0;
+            hints.ai_canonname = NULL;
+            hints.ai_addr = NULL;
+            hints.ai_next = NULL;
 
-        /* for best results, this code should match parse_hba() */
-        hints.ai_flags = AI_NUMERICHOST;
-        hints.ai_family = PF_UNSPEC;
-        hints.ai_socktype = 0;
-        hints.ai_protocol = 0;
-        hints.ai_addrlen = 0;
-        hints.ai_canonname = NULL;
-        hints.ai_addr = NULL;
-        hints.ai_next = NULL;
+            if (err != 0 || getaddrinfo("::1", NULL, &hints, &gai_result) != 0)
+                conflines = replace_token(conflines,
+                    "host    all             all             ::1",
+                    "#host    all             all             ::1");
 
-        if (err != 0 || getaddrinfo("::1", NULL, &hints, &gai_result) != 0)
-            conflines = replace_token(conflines,
-                "host    all             all             ::1",
-                "#host    all             all             ::1");
+            freeaddrinfo(gai_result);
+        }
+    #else  /* !HAVE_IPV6 */
+        /* If we didn't compile IPV6 support at all, always comment it out */
+        conflines = replace_token(
+            conflines, "host    all             all             ::1", "#host    all             all             ::1");
+    #endif /* HAVE_IPV6 */
 
-        freeaddrinfo(gai_result);
+        /* Replace default authentication methods */
+        conflines = replace_token(conflines, "@authmethodhost@", authmethodhost);
+        conflines = replace_token(conflines, "@authmethodlocal@", authmethodlocal);
+
+        conflines = replace_token(conflines,
+            "@authcomment@",
+            (strcmp(authmethodlocal, "trust") == 0 || strcmp(authmethodhost, "trust") == 0) ? AUTHTRUST_WARNING : "");
+
+        /* Replace username for replication */
+        conflines = replace_token(conflines, "@default_username@", username);
+
+        nRet = sprintf_s(path, sizeof(path), "%s/pg_hba.conf", pg_data);
+        securec_check_ss_c(nRet, "\0", "\0");
+
+        writefile(path, conflines);
+        (void)chmod(path, S_IRUSR | S_IWUSR);
+
+        FREE_AND_RESET(conflines);
     }
-#else  /* !HAVE_IPV6 */
-    /* If we didn't compile IPV6 support at all, always comment it out */
-    conflines = replace_token(
-        conflines, "host    all             all             ::1", "#host    all             all             ::1");
-#endif /* HAVE_IPV6 */
-
-    /* Replace default authentication methods */
-    conflines = replace_token(conflines, "@authmethodhost@", authmethodhost);
-    conflines = replace_token(conflines, "@authmethodlocal@", authmethodlocal);
-
-    conflines = replace_token(conflines,
-        "@authcomment@",
-        (strcmp(authmethodlocal, "trust") == 0 || strcmp(authmethodhost, "trust") == 0) ? AUTHTRUST_WARNING : "");
-
-    /* Replace username for replication */
-    conflines = replace_token(conflines, "@default_username@", username);
-
-    nRet = sprintf_s(path, sizeof(path), "%s/pg_hba.conf", pg_data);
-    securec_check_ss_c(nRet, "\0", "\0");
-
-    writefile(path, conflines);
-    (void)chmod(path, S_IRUSR | S_IWUSR);
-
-    FREE_AND_RESET(conflines);
 
     /* pg_ident.conf */
 
@@ -1619,7 +1638,7 @@ static void get_set_pwd(void)
                 FREE_AND_RESET(pwd1);
             }
         }
-        
+
         if (i == 3) {
             exit_nicely();
         }
@@ -1742,8 +1761,13 @@ static void setup_depend(void)
 
     PG_CMD_OPEN;
 
-    for (line = pg_depend_setup; *line != NULL; line++)
-        PG_CMD_PUTS(*line);
+    for (line = pg_depend_setup; *line != NULL; line++) {
+ 		// Skip VACUUM commands in k2_mode
+        // this is partially correct if we don't allow local file storage of tables
+		if (k2_mode && strncmp(*line, "VACUUM", 6) == 0)
+			continue;
+		PG_CMD_PUTS(*line);
+    }
 
     PG_CMD_CLOSE;
 
@@ -1969,9 +1993,9 @@ static bool is_valid_nodename(const char* nodename)
     /*
      * The node name must contain lowercase letters (a-z), underscores (_),
      * special characters #, digits (0-9), or dollar ($).
-     * 
+     *
      * The node name must start with a lowercase letter (a-z), or an underscore (_).
-     * 
+     *
      * The max length of nodename is 64.
      */
     int len = strlen(nodename);
@@ -2098,6 +2122,8 @@ static bool normalize_locale_name(char* newm, const char* old)
  */
 static void setup_collation(void)
 {
+ // TODO: should we disable the way to use locale -a to add collation to pg_collation in k2 mode?
+
 #if defined(HAVE_LOCALE_T) && !defined(WIN32)
     int i;
     FILE* locale_a_handle = NULL;
@@ -2665,15 +2691,15 @@ static void load_packages_extension(void)
 
     PG_CMD_CLOSE;
 
-    check_ok();   
+    check_ok();
 }
 #endif
 
 #ifdef ENABLE_MULTIPLE_NODES
 /*
  * the gsredistribute extenstion used in OM command gs_expand, it will revoke kernel command gs_redis,
- * some function used in gs_redis, some functions for tsdb used in gs_expand, you can use 
- * drop extension gsredistribute cascade;create extension if not exists gsredistribute; 
+ * some function used in gs_redis, some functions for tsdb used in gs_expand, you can use
+ * drop extension gsredistribute cascade;create extension if not exists gsredistribute;
  * in upgrade sql file to upgrade it, add by upgrade version 20205
  */
 static void load_gsredistribute_extension(void)
@@ -2694,7 +2720,7 @@ static void load_gsredistribute_extension(void)
 
     PG_CMD_CLOSE;
 
-    check_ok();   
+    check_ok();
 }
 
 /*
@@ -2856,7 +2882,7 @@ static void load_supported_extension(void)
     load_gc_fdw();
 #endif
 
-#if ((defined(ENABLE_MULTIPLE_NODES)) || (defined(ENABLE_PRIVATEGAUSS)))    
+#if ((defined(ENABLE_MULTIPLE_NODES)) || (defined(ENABLE_PRIVATEGAUSS)))
     /* loading packages extension */
     load_packages_extension();
 #endif
@@ -2986,8 +3012,17 @@ static void make_template0(void)
 
     PG_CMD_OPEN;
 
-    for (line = template0_setup; *line != NULL; line++)
-        PG_CMD_PUTS(*line);
+    if (k2_mode) {
+        // skip some commands that we don't support
+		PG_CMD_PUTS(template0_setup[0]);
+        PG_CMD_PUTS(template0_setup[1]);
+		PG_CMD_PUTS(template0_setup[3]);
+		PG_CMD_PUTS(template0_setup[4]);
+		PG_CMD_PUTS(template0_setup[5]);
+    } else {
+        for (line = template0_setup; *line != NULL; line++)
+            PG_CMD_PUTS(*line);
+    }
 
     PG_CMD_CLOSE;
 
@@ -3269,6 +3304,21 @@ static void setlocales(void)
 
     char* canonname = NULL;
 
+	// Use LC_COLLATE=C with everything else as en_US.UTF-8 as default locale in k2_mode.
+	// This is because we don't support collation-aware string comparisons and want to support storing UTF-8 strings.
+	if (!locale && k2_mode) {
+		const char *kPgDefaultLocaleForSortOrder = "C";
+		const char *kPgDefaultLocaleForEncoding = "en_US.UTF-8";
+
+		locale = xstrdup(kPgDefaultLocaleForEncoding);
+		lc_collate = xstrdup(kPgDefaultLocaleForSortOrder);
+		fprintf(
+			stderr,
+			_("In k2_mode, setting LC_COLLATE to %s and all other locale settings to %s "
+			  "by default. Locale support will be enhanced as part of addressing "),
+			lc_collate, locale);
+	}
+
     /* set empty lc_* values to locale config if set */
 
     if (strlen(locale) > 0) {
@@ -3457,6 +3507,7 @@ static void usage(const char* prog_name)
     printf(_("  -E, --encoding=ENCODING   set default encoding for new databases\n"));
     printf(_("      --locale=LOCALE       set default locale for new databases\n"));
     printf(_("      --dbcompatibility=DBCOMPATIBILITY   set default dbcompatibility for new database\n"));
+    printf(_("  -K, --k2-mode             store system catalog in K2\n"));
     printf(_("      --lc-collate=, --lc-ctype=, --lc-messages=LOCALE\n"
              "      --lc-monetary=, --lc-numeric=, --lc-time=LOCALE\n"
              "                            set default locale in the respective category for\n"
@@ -3574,6 +3625,7 @@ int main(int argc, char* argv[])
 #endif
         {"dbcompatibility", required_argument, NULL, 13},
         {"bucketlength", required_argument, NULL, 14},
+        {"k2-mode", no_argument, NULL, 'K'},
         {NULL, 0, NULL, 0}};
 
     int c, i, ret;
@@ -3643,7 +3695,7 @@ int main(int argc, char* argv[])
 
     /* process command-line options */
 
-    while ((c = getopt_long(argc, argv, "cdD:E:L:nU:WA:SsT:X:C:w:H:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "cdD:E:L:nU:WA:SsT:X:C:w:H:K:", long_options, &option_index)) != -1) {
 #define FREE_NOT_STATIC_ZERO_STRING(s)        \
     do {                                      \
         if ((s) && (char*)(s) != (char*)"") { \
@@ -3699,7 +3751,7 @@ int main(int argc, char* argv[])
                     write_stderr(_("%s: The parameter of -C is invalid.\n"), progname);
                     break;
                 }
-                
+
                 ret = snprintf_s(cipher_key_file, MAXPGPATH, MAXPGPATH - 1,
                                  "%s/server.key.cipher", encrypt_pwd_real_path);
                 securec_check_ss_c(ret, "\0", "\0");
@@ -3708,7 +3760,7 @@ int main(int argc, char* argv[])
                 securec_check_ss_c(ret, "\0", "\0");
                 if (!is_file_exist(cipher_key_file) || !is_file_exist(rand_file)) {
                     pwpasswd = NULL;
-                    printf(_("Read cipher or random parameter file failed." 
+                    printf(_("Read cipher or random parameter file failed."
                              "The password of the initial user is not set.\n"));
                     break;
                 }
@@ -3798,6 +3850,11 @@ int main(int argc, char* argv[])
                 FREE_NOT_STATIC_ZERO_STRING(host_ip);
                 host_ip = xstrdup(optarg);
                 break;
+            case 'K':
+                k2_mode = true;
+                // set environment variable so that other components know we are in k2 mode
+		        initdb_set_env_var("K2PG_INITDB_MODE");
+                break;
 #ifdef PGXC
             case 12:
                 FREE_NOT_STATIC_ZERO_STRING(nodename);
@@ -3823,6 +3880,14 @@ int main(int argc, char* argv[])
                 exit(1);
         }
 #undef FREE_NOT_STATIC_ZERO_STRING
+    }
+
+    // check environment variable for k2_mode
+    if (!k2_mode) {
+        k2_mode = initdb_is_env_set("K2PG_ENABLED_IN_POSTGRES");
+        if (k2_mode) {
+            initdb_set_env_var("K2PG_INITDB_MODE");
+        }
     }
 
     if (default_text_search_config_tmp != NULL)
@@ -4474,13 +4539,16 @@ int main(int argc, char* argv[])
     setup_nodeself();
 #endif
 
+    // TODO: should we exclude this step for k2_mode?
     setup_description();
 
     setup_collation();
 
-    setup_conversion();
+    if (!k2_mode) {
+        setup_conversion();
 
-    setup_dictionary();
+        setup_dictionary();
+    }
 
     setup_privileges();
 
@@ -4496,7 +4564,9 @@ int main(int argc, char* argv[])
     setup_snapshots();
 #endif
 
-    vacuum_db();
+    if (!k2_mode) {
+        vacuum_db();
+    }
 
     make_template0();
 
@@ -5073,4 +5143,55 @@ static void InitUndoSubsystemMeta(void)
         printf("[INIT UNDO] Init undo subsystem meta failed, exit.\n");
         exit(1);
     }
+}
+
+/*
+ * K2PG-specific version of close_check() recognizes a special status indicating that initdb
+ * has already been run, or the cluster has been initialized from a sys catalog
+ * snapshot.
+ */
+static int
+k2pg_pclose_check(FILE *stream)
+{
+	int			exitstatus;
+	char	   *reason;
+
+	exitstatus = pclose(stream);
+
+	if (exitstatus == 0)
+		return 0;				/* all is well */
+
+	if (exitstatus == -1)
+	{
+		/* pclose() itself failed, and hopefully set errno */
+		fprintf(stderr, _("pclose failed: %s"), strerror(errno));
+		return 1;
+	}
+	else
+	{
+		if (WEXITSTATUS(exitstatus) == K2PG_INITDB_ALREADY_DONE_EXIT_CODE) {
+			fprintf(stderr, "initdb has already been run previously, nothing to do\n");
+		} else {
+		    fprintf(stderr, _("child process was terminated by signal %d"), WTERMSIG(exitstatus));
+		}
+	}
+
+	return WEXITSTATUS(exitstatus);
+}
+
+void initdb_set_env_var(const char* name) {
+	int setenv_retval = setenv(name, "1", /* overwrite */ true);
+	if (setenv_retval != 0)
+	{
+		perror("Could not set environment variable in InitDB");
+		exit(EXIT_FAILURE);
+	}
+}
+
+bool initdb_is_env_set(const char* name) {
+	const char* value = getenv(name);
+	if (!value || strlen(value) == 0 || strcmp(value, "auto") == 0) {
+		return false;
+	}
+	return strcmp(value, "1") == 0 || strcmp(value, "true") == 0;
 }

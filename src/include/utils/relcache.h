@@ -63,6 +63,7 @@ extern List* RelationGetLocalCbiList(Relation relation);
 extern List* RelationGetIndexInfoList(Relation relation);
 extern int RelationGetIndexNum(Relation relation);
 extern Oid RelationGetOidIndex(Relation relation);
+extern Oid RelationGetPrimaryKeyIndex(Relation relation);
 extern Oid RelationGetReplicaIndex(Relation relation);
 extern List* RelationGetIndexExpressions(Relation relation);
 extern List* RelationGetIndexExpressions(Relation relation);
@@ -101,6 +102,8 @@ extern void RelationInitIndexAccessInfo(Relation relation, HeapTuple index_tuple
 extern void RelationCacheInitialize(void);
 extern void RelationCacheInitializePhase2(void);
 extern void RelationCacheInitializePhase3(void);
+
+extern void K2PgPreloadRelCache();
 
 /*
  * Routine to create a relcache entry for an about-to-be-created relation

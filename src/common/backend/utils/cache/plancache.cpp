@@ -87,6 +87,8 @@
 #include "pgxc/execRemote.h"
 #include "pgxc/pgxc.h"
 
+#include "access/k2/k2_plan.h"
+
 static void drop_datanode_statements(Plan* plannode);
 #endif
 
@@ -589,7 +591,7 @@ void SaveCachedPlan(CachedPlanSource* plansource)
 
     plansource->is_saved = true;
     END_CRIT_SECTION();
-    
+
 }
 
 /*
@@ -1223,7 +1225,7 @@ static CachedPlan* BuildCachedPlan(CachedPlanSource* plansource, List* qlist, Pa
         /* We must track shared memory context for handling exception */
         ResourceOwnerEnlargeGMemContext(t_thrd.utils_cxt.TopTransactionResourceOwner);
         ResourceOwnerRememberGMemContext(t_thrd.utils_cxt.TopTransactionResourceOwner, plan_context);
-        
+
         /*
          * Copy plan into the new context.
          */
@@ -1359,7 +1361,7 @@ static void GPCFillPlanCache(CachedPlanSource* plansource, bool isBuildingCustom
 }
 
 #ifdef ENABLE_MULTIPLE_NODES
-/* If is stream plan, do not share it. 
+/* If is stream plan, do not share it.
  * We need different plannodeid for dn's stream consumer. */
 static void GPCCheckStreamPlan(CachedPlanSource *plansource, List* plist)
 {
@@ -1607,6 +1609,20 @@ static bool ChooseCustomPlan(CachedPlanSource* plansource, ParamListInfo boundPa
         return true;
     }
 
+	/* For single row modify operations, use a custom plan so as to push down
+	 * the update to the K2 platform without performing the read. This involves
+	 * faking the read results in postgres. However the boundParams needs to be
+	 * passed for the creation of the plan and hence we would need to enforce a
+	 * custom plan.
+	 */
+	if (plansource->gplan && list_length(plansource->gplan->stmt_list)) {
+		PlannedStmt *pstmt =
+			linitial_node(PlannedStmt, plansource->gplan->stmt_list);
+		if (K2PgIsSingleRowModify(pstmt)) {
+			return true;
+		}
+	}
+
     avg_custom_cost = plansource->total_custom_cost / plansource->num_custom_plans;
 
     /*
@@ -1687,7 +1703,7 @@ CachedPlan* GetCachedPlan(CachedPlanSource* plansource, ParamListInfo boundParam
 
     /* Decide whether to use a custom plan */
     customplan = ChooseCustomPlan(plansource, boundParams);
-    
+
     if (!customplan) {
         if (CheckCachedPlan(plansource)) {
             /* We want a generic plan, and we already have a valid one */
@@ -1812,7 +1828,7 @@ CachedPlan* GetCachedPlan(CachedPlanSource* plansource, ParamListInfo boundParam
         plansource->cplan = plan;
         plan->refcount++;
         ResourceOwnerForgetGMemContext(t_thrd.utils_cxt.TopTransactionResourceOwner, plan->context);
-        
+
         if (plansource->is_saved) {
             if (plansource->gpc.status.IsPrivatePlan()) {
                 /* saved plans all live under CacheMemoryContext */

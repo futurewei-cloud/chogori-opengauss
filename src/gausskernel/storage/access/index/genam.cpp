@@ -34,6 +34,9 @@
 #include "utils/snapmgr.h"
 #include "catalog/heap.h"
 
+#include "access/k2/k2catam.h"
+#include "access/k2/k2pg_aux.h"
+
 /* ----------------------------------------------------------------
  *		general access method routines
  *
@@ -134,6 +137,8 @@ IndexScanDesc RelationGetIndexScan(Relation index_relation, int nkeys, int norde
 
     scan->xs_itup = NULL;
     scan->xs_itupdesc = NULL;
+	scan->xs_hitup = NULL;
+	scan->xs_hitupdesc = NULL;
 
     scan->xs_ctup.tupTableType = HEAP_TUPLE;
     ItemPointerSetInvalid(&scan->xs_ctup.t_self);
@@ -321,6 +326,15 @@ SysScanDesc systable_beginscan(Relation heap_relation, Oid index_id, bool index_
     Relation irel;
     int2 bucketid = InvalidBktId;
 
+	if (IsK2PgEnabled())
+	{
+		return cam_systable_beginscan(heap_relation,
+		                              index_id,
+		                              index_ok,
+		                              snapshot,
+		                              nkeys,
+		                              key);
+	}
 
     if (index_ok && !u_sess->attr.attr_common.IgnoreSystemIndexes && !ReindexIsProcessingIndex(index_id)) {
         /*
@@ -392,6 +406,11 @@ HeapTuple systable_getnext(SysScanDesc sysscan)
 {
     HeapTuple htup;
 
+	if (IsK2PgEnabled())
+	{
+		return cam_systable_getnext(sysscan);
+	}
+
     if (sysscan->irel) {
         htup = (HeapTuple)index_getnext(sysscan->iscan, ForwardScanDirection);
         /*
@@ -452,6 +471,11 @@ bool systable_recheck_tuple(SysScanDesc sysscan, HeapTuple tup)
  */
 void systable_endscan(SysScanDesc sysscan)
 {
+    if (IsK2PgEnabled())
+	{
+		return cam_systable_endscan(sysscan);
+	}
+
     if (sysscan->irel) {
         index_endscan(sysscan->iscan);
         index_close(sysscan->irel, AccessShareLock);

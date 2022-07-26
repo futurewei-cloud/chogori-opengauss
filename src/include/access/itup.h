@@ -18,6 +18,8 @@
 #include "access/tupmacs.h"
 #include "storage/buf/bufpage.h"
 #include "storage/item/itemptr.h"
+#include "utils/relcache.h"
+#include "miscadmin.h"
 
 /*
  * Index tuple header structure
@@ -34,6 +36,7 @@
 
 typedef struct IndexTupleData {
     ItemPointerData t_tid; /* reference TID to heap tuple */
+	Datum 			t_k2pgctid;	/* virtual column k2pgctid */
 
     /* ---------------
      * t_info is laid out in the following fashion:
@@ -138,5 +141,17 @@ extern IndexTuple CopyIndexTuple(IndexTuple source);
 extern Oid index_getattr_tableoid(Relation irel, IndexTuple itup);
 extern int2 index_getattr_bucketid(Relation irel, IndexTuple itup);
 extern IndexTuple CopyIndexTupleAndReserveSpace(IndexTuple source, Size reserved_size);
+/* Copy k2pgctid from a source tuple to a new / destination tuple */
+
+#define HEAPTUPLE_COPY_K2PGTID(src, dest)                            \
+    do {                                                            \
+        if (IsK2Mode()) {                                  \
+            dest = (src == 0) ? 0 :                                 \
+                PointerGetDatum(cstring_to_text_with_len(VARDATA_ANY(src), \
+                                                         VARSIZE_ANY_EXHDR(src))); \
+        } else {                                                    \
+            dest = 0;                                               \
+        }                                                           \
+    } while (false)
 
 #endif /* ITUP_H */

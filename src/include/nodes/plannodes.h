@@ -421,6 +421,8 @@ typedef struct ModifyTable {
     bool partKeyUpsert;
 
     OpMemInfo mem_info;    /*  Memory info for modify node */
+
+ 	List	   *k2PushdownTlist; /* tlist for the pushed down SET expressions */
 } ModifyTable;
 
 /* ----------------
@@ -1390,7 +1392,7 @@ static inline bool IsJoinPlan(Node* node)
 /*
  * DB4AI
  */
- 
+
 
 // GD optimizers
 typedef enum {
@@ -1414,7 +1416,7 @@ typedef struct GradientDescent {
     Plan        plan;
     AlgorithmML algorithm;
     int         targetcol;
-    
+
     // generic hyperparameters
     OptimizerML optimizer;      // default GD/mini-batch
     int         max_seconds;    // 0 to disable
@@ -1425,7 +1427,7 @@ typedef struct GradientDescent {
     double      decay;          // (0:1], learning rate decay
     double      tolerance;      // [0:1], 0 means to run all iterations
     int         seed;           // [0:N], random seed
-    
+
     // for SVM
     double      lambda;         // regularization strength
 } GradientDescent;
@@ -1494,4 +1496,3 @@ typedef struct KMeans {
 } KMeans;
 
 #endif /* PLANNODES_H */
-
