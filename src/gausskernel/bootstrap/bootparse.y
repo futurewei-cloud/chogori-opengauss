@@ -55,6 +55,9 @@
 #include "utils/rel.h"
 #include "utils/catcache.h"
 
+#include "access/k2/k2_bootstrap.h"
+#include "access/k2/k2pg_aux.h"
+
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
@@ -103,6 +106,7 @@ do_end(void)
 {
 	List		*list;
 	IndexElem	*ielem;
+	IndexStmt	*istmt;  /* Used for K2 index/pkey clauses */
 	char		*str;
 	int			ival;
 	Oid			oidval;
@@ -110,15 +114,17 @@ do_end(void)
 
 %type <list>  boot_index_params
 %type <ielem> boot_index_param
+%type <istmt> Boot_K2Index
 %type <str>   boot_const boot_ident
 %type <ival>  optbootstrap optorder optsharedrelation optwithoutoids
 %type <oidval> oidspec optoideq optrowtypeoid
 
 %token <str> CONST_P ID
 %token ASC DESC OPEN XCLOSE XCREATE INSERT_TUPLE
-%token XDECLARE INDEX ON USING XBUILD INDICES UNIQUE XTOAST
+%token XDECLARE K2DECLARE INDEX ON USING XBUILD INDICES PRIMARY UNIQUE XTOAST
 %token COMMA EQUALS LPAREN RPAREN
 %token OBJ_ID XBOOTSTRAP XSHARED_RELATION XWITHOUT_OIDS XROWTYPE_OID NULLVAL
+%token K2PGCHECKINITDBDONE
 
 %start TopLevel
 
@@ -146,6 +152,7 @@ Boot_Query :
 		| Boot_DeclareUniqueIndexStmt
 		| Boot_DeclareToastStmt
 		| Boot_BuildIndsStmt
+		| Boot_CheckInitDbDone
 		;
 
 Boot_OpenStmt:
@@ -171,6 +178,38 @@ Boot_CloseStmt:
 					do_end();
 				}
 		;
+Boot_K2Index:
+          /* EMPTY */ { $$ = NULL; }
+          | K2DECLARE PRIMARY INDEX boot_ident oidspec ON boot_ident USING boot_ident
+            LPAREN boot_index_params RPAREN
+				{
+					IndexStmt *stmt = makeNode(IndexStmt);
+
+					do_start();
+
+					stmt->idxname = $4;
+					stmt->relation = makeRangeVar(NULL, $7, -1);
+					stmt->accessMethod = $9;
+					stmt->tableSpace = NULL;
+					stmt->indexParams = $11;
+					stmt->options = NIL;
+					stmt->whereClause = NULL;
+					stmt->excludeOpNames = NIL;
+					stmt->idxcomment = NULL;
+					stmt->indexOid = $5;
+					stmt->oldNode = InvalidOid;
+					stmt->unique = true;
+					stmt->primary = true;
+					stmt->isconstraint = false;
+					stmt->deferrable = false;
+					stmt->initdeferred = false;
+					stmt->concurrent = false;
+
+					do_end();
+
+					$$ = stmt;
+				}
+		;
 
 Boot_CreateStmt:
 		  XCREATE boot_ident oidspec optbootstrap optsharedrelation optwithoutoids optrowtypeoid LPAREN
@@ -187,7 +226,7 @@ Boot_CreateStmt:
 				{
 					do_end();
 				}
-		  RPAREN
+		  RPAREN Boot_K2Index
 				{
 					TupleDesc tupdesc;
 					bool	shared_relation;
@@ -223,7 +262,7 @@ Boot_CreateStmt:
 												   shared_relation ? GLOBALTABLESPACE_OID : 0,
 												   $3,
 												   InvalidOid,
-                                                                                                   InvalidOid,						
+                                                                                                   InvalidOid,
 												   tupdesc,
 												   RELKIND_RELATION,
 												   RELPERSISTENCE_PERMANENT,
@@ -238,10 +277,10 @@ Boot_CreateStmt:
 												   TAM_HEAP,
 												   HEAP_DISK);
 						ereport(DEBUG4, (errmsg("bootstrap relation created")));
-						
+
 						/*
 						 * because we put builtin functions in array, and pg_proc.h
-						 * has not insert items, so we should insert builtin functions 
+						 * has not insert items, so we should insert builtin functions
 						 * by traversing the array.
 						 */
 						 if (IsProcRelation(t_thrd.bootstrap_cxt.boot_reldesc)) {
@@ -277,6 +316,12 @@ Boot_CreateStmt:
 													  NULL);
 						ereport(DEBUG4, (errmsg("relation created with OID %u", id)));
 					}
+
+					if (IsK2PgEnabled())
+					{
+						K2PgCreateSysCatalogTable($2, $3, tupdesc, shared_relation, $13);
+					}
+
 					do_end();
 				}
 		;
@@ -404,6 +449,13 @@ Boot_BuildIndsStmt:
 				}
 		;
 
+Boot_CheckInitDbDone:
+      	  K2PGCHECKINITDBDONE
+      			{
+					if (K2PgIsInitDbAlreadyDone())
+						exit(K2PG_INITDB_ALREADY_DONE_EXIT_CODE);
+				}
+		;
 
 boot_index_params:
 		boot_index_params COMMA boot_index_param	{ $$ = lappend($1, $3); }

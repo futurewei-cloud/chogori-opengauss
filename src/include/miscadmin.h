@@ -207,6 +207,9 @@ extern const uint32 BACKUP_SLOT_VERSION_NUM;
 #define DEBUG_MODE 1
 #define LLT_MODE 2
 
+extern PGDLLIMPORT Oid MyDatabaseId;
+extern PGDLLIMPORT bool MyDatabaseColocated;
+
 /*
  * Date/Time Configuration
  *
@@ -352,6 +355,7 @@ extern bool CheckExecDirectPrivilege(const char* query); /* check user have priv
 #define IsNormalProcessingMode() (u_sess->misc_cxt.Mode == NormalProcessing)
 #define IsPostUpgradeProcessingMode() (u_sess->misc_cxt.Mode == PostUpgradeProcessing)
 #define IsFencedProcessingMode() (u_sess->misc_cxt.Mode == FencedProcessing)
+#define IsK2Mode() (u_sess->k2_cxt.isK2ModelEnabled)
 
 #define GetProcessingMode() u_sess->misc_cxt.Mode
 

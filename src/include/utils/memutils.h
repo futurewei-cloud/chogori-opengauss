@@ -155,6 +155,8 @@ extern MemoryContext AllocSetContextCreate(MemoryContext parent, const char* nam
 #define ALLOCSET_SMALL_MINSIZE 0
 #define ALLOCSET_SMALL_INITSIZE (1 * 1024)
 #define ALLOCSET_SMALL_MAXSIZE (8 * 1024)
+#define ALLOCSET_SMALL_SIZES \
+	ALLOCSET_SMALL_MINSIZE, ALLOCSET_SMALL_INITSIZE, ALLOCSET_SMALL_MAXSIZE
 
 /* default grow ratio for sort and materialize when it spreads */
 #define DEFAULT_GROW_RATIO 2.0

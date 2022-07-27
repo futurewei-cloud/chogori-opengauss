@@ -176,7 +176,7 @@ extern bool get_restriction_variable(
 extern void get_join_variables(PlannerInfo* root, List* args, SpecialJoinInfo* sjinfo, VariableStatData* vardata1,
     VariableStatData* vardata2, bool* join_is_reversed);
 extern double get_variable_numdistinct(VariableStatData* vardata, bool* isdefault, bool adjust_rows = true,
-    double join_ratio = 1.0, SpecialJoinInfo* sjinfo = NULL, STATS_EST_TYPE eType = STATS_TYPE_GLOBAL, 
+    double join_ratio = 1.0, SpecialJoinInfo* sjinfo = NULL, STATS_EST_TYPE eType = STATS_TYPE_GLOBAL,
     bool isJoinVar = false);
 extern double mcv_selectivity(VariableStatData* vardata, FmgrInfo* opproc, Datum constval, bool varonleft,
     double* sumcommonp, Oid equaloperator, bool* inmcv, double* lastcommonp = NULL);
@@ -271,4 +271,21 @@ extern void set_varratio_after_calc_selectivity(
 extern double get_windowagg_selectivity(PlannerInfo* root, WindowClause* wc, WindowFunc* wfunc, List* partitionExprs,
     int32 constval, double tuples, unsigned int num_datanodes);
 extern bool contain_single_col_stat(List* stat_list);
+
+/*
+ * deconstruct_indexquals is a simple function to examine the indexquals
+ * attached to a proposed IndexPath.  It returns a list of IndexQualInfo
+ * structs, one per qual expression.
+ */
+typedef struct
+{
+	RestrictInfo *rinfo;		/* the indexqual itself */
+	int			indexcol;		/* zero-based index column number */
+	bool		varonleft;		/* true if index column is on left of qual */
+	Oid			clause_op;		/* qual's operator OID, if relevant */
+	Node	   *other_operand;	/* non-index operand of qual's operator */
+} IndexQualInfo;
+
+extern List *deconstruct_indexquals(IndexPath *path);
+
 #endif /* SELFUNCS_H */

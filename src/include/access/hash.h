@@ -326,7 +326,7 @@ extern Datum hashint2vector(PG_FUNCTION_ARGS);
 extern Datum hashname(PG_FUNCTION_ARGS);
 extern Datum hashtext(PG_FUNCTION_ARGS);
 extern Datum hashvarlena(PG_FUNCTION_ARGS);
-extern Datum hash_any(register const unsigned char* k, register int keylen);
+extern Datum hash_any(const unsigned char* k, int keylen);
 extern Datum hash_uint32(uint32 k);
 extern Datum hash_new_uint32(uint32 k);
 
@@ -335,7 +335,7 @@ extern Datum hash_new_uint32(uint32 k);
 /* hashinsert.c */
 extern void _hash_doinsert(Relation rel, IndexTuple itup, Relation heapRel);
 extern OffsetNumber _hash_pgaddtup(Relation rel, Buffer buf, Size itemsize, IndexTuple itup);
-extern void _hash_pgaddmultitup(Relation rel, Buffer buf, IndexTuple *itups, 
+extern void _hash_pgaddmultitup(Relation rel, Buffer buf, IndexTuple *itups,
                                 OffsetNumber *itup_offsets, uint16 nitups);
 
 /* hashovfl.c */
@@ -365,7 +365,7 @@ extern uint32 _hash_init(Relation rel, double num_tuples, ForkNumber forkNum);
 extern void _hash_init_metabuffer(Buffer buf, double num_tuples, RegProcedure procid, uint16 ffactor, bool initpage);
 extern void _hash_pageinit(Page page, Size size);
 extern void _hash_expandtable(Relation rel, Buffer metabuf);
-extern void _hash_finish_split(Relation rel, Buffer metabuf, Buffer obuf, Bucket obucket, 
+extern void _hash_finish_split(Relation rel, Buffer metabuf, Buffer obuf, Bucket obucket,
                                uint32 maxbucket, uint32 highmask, uint32 lowmask);
 
 /* hashsearch.c */

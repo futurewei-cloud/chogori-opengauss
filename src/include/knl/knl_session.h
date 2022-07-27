@@ -14,13 +14,13 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * ---------------------------------------------------------------------------------------
- * 
+ *
  * knl_session.h
  *        Data stucture for session level global variables.
  *
  * several guidelines for put variables in knl_session.h
  *
- * variables which related to session only and can be decoupled with thread status 
+ * variables which related to session only and can be decoupled with thread status
  * should put int knl_session.h
  *
  * pay attention to memory allocation
@@ -32,7 +32,7 @@
  *
  * all context define below should follow naming rules:
  * knl_u_sess->on_xxxx
- * 
+ *
  * IDENTIFICATION
  *        src/include/knl/knl_session.h
  *
@@ -226,7 +226,7 @@ typedef struct knl_u_SPI_context {
     /* Recording the nested exception counts for commit/rollback statement after. */
     int portal_stp_exception_counter;
 
-    /* 
+    /*
      * Recording the current execute procedure or function is with a exception declare
      * or not, if it called by a procedure or function with exception,it's value still
      * be true
@@ -652,19 +652,19 @@ typedef enum AdviseCostMode {
      * filter sqls that cost are too large or too small,
      * use partial sql to recommand distribution key.
      */
-    ACM_MEDCOSTLOW,        
+    ACM_MEDCOSTLOW,
     ACM_NONE
 } AdviseCostMode;
 
 /* Only use it for AM_COST model, different mdoels have different search spaces sizes. */
 typedef enum AdviseCompressLevel {
     /*
-     * Based on the join actual cost, the combination with the highest weight 
+     * Based on the join actual cost, the combination with the highest weight
      * is selected by using greedy algorithm.
      */
     ACL_HIGH,
     /*
-     * Also using greedy algorithm, but save all combinations regardless 
+     * Also using greedy algorithm, but save all combinations regardless
      * of whether they have the highest weight. Then for each combination,
      * recalculate queries cost using the columns under that combination.
      * Finally find lowest cost of all queries.
@@ -784,7 +784,7 @@ typedef struct knl_u_contrib_context {
     int32 slotid;           /* next slot id */
     int max_linesize;
     char* cur_directory;
-	
+
 } knl_u_contrib_context;
 
 #define LC_ENV_BUFSIZE (NAMEDATALEN + 20)
@@ -1069,7 +1069,7 @@ typedef struct knl_u_misc_context {
 
 /*
  *Session-level status of base backups
- * 
+ *
  *This is used in parallel with the shared memory status to control parallel
  *execution of base backup functions for a given session, be it a backend
  *dedicated to replication or a normal backend connected to a database. The
@@ -2200,7 +2200,7 @@ typedef struct knl_u_cache_context {
 
     bool part_cache_need_eoxact_work;
 
-    bool bucket_cache_need_eoxact_work; 
+    bool bucket_cache_need_eoxact_work;
 
 } knl_u_cache_context;
 
@@ -2420,6 +2420,17 @@ typedef struct knl_u_mot_context {
     JitExec::JitContext* jit_context;
     MOT::TxnManager* jit_txn;
 } knl_u_mot_context;
+
+// forward-declaration for k2 types
+namespace k2fdw {
+    class TxnManager;
+}
+
+// the thread-local session context for k2 (i.e. the txn manager)
+typedef struct k2fdw_u_sess_context {
+    k2fdw::TxnManager* txn;
+} k2fdw_u_sess_context;
+
 #endif
 
 typedef struct knl_u_gtt_context {
@@ -2488,6 +2499,10 @@ typedef struct GlobalSessionId {
 typedef struct knl_u_hook_context {
     void *analyzerRoutineHook;
 } knl_u_hook_context;
+
+typedef struct knl_u_k2_context {
+    bool isK2ModelEnabled;
+} knl_u_k2_context;
 
 typedef struct knl_session_context {
     volatile knl_session_status status;
@@ -2576,6 +2591,7 @@ typedef struct knl_session_context {
 
 #ifdef ENABLE_MOT
     knl_u_mot_context mot_cxt;
+    k2fdw_u_sess_context k2fdw_cxt;
 #endif
 
     knl_u_ustore_context ustore_cxt;
@@ -2595,6 +2611,8 @@ typedef struct knl_session_context {
     knl_u_gtt_context gtt_ctx;
     /* extension streaming */
     knl_u_streaming_context streaming_cxt;
+
+    knl_u_k2_context k2_cxt;
 
     /* comm_cn_dn_logic_conn */
     SessionInfo *session_info_ptr;
@@ -2623,21 +2641,21 @@ extern bool stp_set_commit_rollback_err_msg(stp_xact_err_type type);
 
 extern THR_LOCAL knl_session_context* u_sess;
 
-inline bool stp_disable_xact_and_set_err_msg(bool *save_commit_rollback_state, stp_xact_err_type type) 
+inline bool stp_disable_xact_and_set_err_msg(bool *save_commit_rollback_state, stp_xact_err_type type)
 {
     *save_commit_rollback_state = u_sess->SPI_cxt.is_allow_commit_rollback;
     u_sess->SPI_cxt.is_allow_commit_rollback = false;
     return stp_set_commit_rollback_err_msg(type);
 }
 
-inline bool stp_enable_and_get_old_xact_stmt_state() 
+inline bool stp_enable_and_get_old_xact_stmt_state()
 {
     bool save_commit_rollback_state = u_sess->SPI_cxt.is_allow_commit_rollback;
     u_sess->SPI_cxt.is_allow_commit_rollback = true;
     return save_commit_rollback_state;
 }
 
-inline void stp_retore_old_xact_stmt_state(bool OldState) 
+inline void stp_retore_old_xact_stmt_state(bool OldState)
 {
     u_sess->SPI_cxt.is_allow_commit_rollback = OldState;
 }
@@ -2668,4 +2686,3 @@ inline void stp_reset_xact_state_and_err_msg(bool savedisAllowCommitRollback, bo
 
 
 #endif /* SRC_INCLUDE_KNL_KNL_SESSION_H_ */
-

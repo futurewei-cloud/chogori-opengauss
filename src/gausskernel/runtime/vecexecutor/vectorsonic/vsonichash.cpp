@@ -51,7 +51,7 @@ extern bool anls_opt_is_on(AnalysisOpt dfx_opt);
 extern Datum hash_bi_key(Numeric key);
 
 FORCE_INLINE
-uint32 hashquickany(uint32 seed, register const unsigned char* data, register int len)
+uint32 hashquickany(uint32 seed, const unsigned char* data, int len)
 {
     const unsigned char* p = data;
     const unsigned char* pend = p + len;

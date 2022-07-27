@@ -2341,7 +2341,7 @@ static bool _equalColumnParam (const ClientLogicColumnParam* a, const ClientLogi
     COMPARE_SCALAR_FIELD(key);
     COMPARE_STRING_FIELD(value);
     COMPARE_SCALAR_FIELD(len);
-    COMPARE_LOCATION_FIELD(location); 
+    COMPARE_LOCATION_FIELD(location);
     return true;
 }
 static bool _equalGlobalParam (const ClientLogicGlobalParam* a, const ClientLogicGlobalParam* b)
@@ -2349,7 +2349,7 @@ static bool _equalGlobalParam (const ClientLogicGlobalParam* a, const ClientLogi
     COMPARE_SCALAR_FIELD(key);
     COMPARE_STRING_FIELD(value);
     COMPARE_SCALAR_FIELD(len);
-    COMPARE_LOCATION_FIELD(location); 
+    COMPARE_LOCATION_FIELD(location);
     return true;
 }
 static bool _equalGlobalSetting (const CreateClientLogicGlobal* a, const CreateClientLogicGlobal* b)
@@ -2368,9 +2368,9 @@ static bool _equalEncryptedColumn(const ClientLogicColumnRef *a, const ClientLog
 {
     COMPARE_NODE_FIELD(column_key_name);
     COMPARE_SCALAR_FIELD(columnEncryptionAlgorithmType);
-    COMPARE_NODE_FIELD(orig_typname);  
-    COMPARE_NODE_FIELD(dest_typname);  
-    COMPARE_LOCATION_FIELD(location); 
+    COMPARE_NODE_FIELD(orig_typname);
+    COMPARE_NODE_FIELD(dest_typname);
+    COMPARE_LOCATION_FIELD(location);
     return true;
 }
 
@@ -2521,6 +2521,7 @@ static bool _equalConstraint(const Constraint* a, const Constraint* b)
     COMPARE_SCALAR_FIELD(old_pktable_oid);
     COMPARE_SCALAR_FIELD(skip_validation);
     COMPARE_SCALAR_FIELD(initially_valid);
+	COMPARE_NODE_FIELD(k2pg_index_params);
 
     return true;
 }

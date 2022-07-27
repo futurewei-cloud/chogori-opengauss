@@ -153,6 +153,13 @@ enum SysCacheIdentifier {
 
 extern int SysCacheSize;
 
+extern Bitmapset *K2PgSysTablePrimaryKey(Oid relid);
+
+/* Used in IsK2PgEnabled() mode only */
+extern void K2PgSetSysCacheTuple(Relation rel, HeapTuple tup);
+extern void K2PgPreloadCatalogCaches(void);
+extern void K2PgPreloadCatalogCache(int cache_id, int idx_cache_id);
+
 extern void InitCatalogCache(void);
 extern void InitCatalogCachePhase2(void);
 

@@ -179,6 +179,12 @@ EState* CreateExecutorState(void)
 
     estate->pruningResult = NULL;
 
+	/*
+	 * K2PG-specific fields
+	 */
+	estate->es_k2pg_is_single_row_modify_txn = false;
+	estate->k2pg_conflict_slot = NULL;
+
     /*
      * Return the executor state structure
      */
@@ -1510,7 +1516,7 @@ bool ExecCheckIndexConstraints(TupleTableSlot *slot, EState *estate, Relation ta
     indexInfoArray = resultRelInfo->ri_IndexRelationInfo;
     heapRelationDesc = resultRelInfo->ri_RelationDesc;
     actualHeap = targetRel;
-    
+
     rc = memset_s(isnull, sizeof(isnull), 0, sizeof(isnull));
     securec_check(rc, "", "");
 
@@ -2035,7 +2041,7 @@ retry:
         /* If lossy indexscan, must recheck the condition */
         if (is_scan) {
             /* tuple doesn't actually match, so no conflict */
-            continue; 
+            continue;
         }
 
         /*
@@ -2062,8 +2068,8 @@ retry:
             goto retry;
         }
 
-        /* Determine whether the index column of the scanned tuple is the same 
-         * as that of the tuple to be inserted. If not, the tuple pointed to by 
+        /* Determine whether the index column of the scanned tuple is the same
+         * as that of the tuple to be inserted. If not, the tuple pointed to by
          * the item has been modified by other transactions. Check again for any conflicts.
          */
         for (int i=0; i < indnkeyatts; i++) {
@@ -2072,8 +2078,8 @@ retry:
                 scan_handler_idx_endscan(index_scan);
                 goto retry;
             }
-            if (!existing_isnull[i] && 
-                !DatumGetBool(FunctionCall2Coll(&scankeys[i].sk_func, scankeys[i].sk_collation, 
+            if (!existing_isnull[i] &&
+                !DatumGetBool(FunctionCall2Coll(&scankeys[i].sk_func, scankeys[i].sk_collation,
                                 existing_values[i], values[i]))) {
                 conflict = false;
                 scan_handler_idx_endscan(index_scan);
@@ -2103,7 +2109,7 @@ retry:
          */
         error_new = BuildIndexValueDescription(index, values, isnull);
         error_existing = BuildIndexValueDescription(index, existing_values, existing_isnull);
-        newIndex ? 
+        newIndex ?
             ereport(ERROR,
                 (errcode(ERRCODE_EXCLUSION_VIOLATION),
                     errmsg("could not create exclusion constraint \"%s\" when trying to build a new index",

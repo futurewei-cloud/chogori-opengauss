@@ -340,9 +340,9 @@ Datum hashvarlena(PG_FUNCTION_ARGS)
  * by using the final values of both b and c.  b is perhaps a little less
  * well mixed than c, however.
  */
-Datum hash_any(register const unsigned char *k, register int keylen)
+Datum hash_any(const unsigned char *k, int keylen)
 {
-    register uint32 a, b, c, len;
+    uint32 a, b, c, len;
 
     /* Set up the internal state */
     len = (uint32)keylen;
@@ -351,7 +351,7 @@ Datum hash_any(register const unsigned char *k, register int keylen)
     /* If the source pointer is word-aligned, we use word-wide fetches */
     if (((intptr_t)k & UINT32_ALIGN_MASK) == 0) {
         /* Code path for aligned source data */
-        register const uint32 *ka = (const uint32 *)k;
+        const uint32 *ka = (const uint32 *)k;
 
         /* handle most of the key */
         while (len >= 12) {
@@ -564,7 +564,7 @@ Datum hash_any(register const unsigned char *k, register int keylen)
  */
 Datum hash_new_uint32(uint32 k)
 {
-    register uint32 a, b, c;
+    uint32 a, b, c;
 
     a = 0xdeadbeef + k;
     b = 0xdeadbeef;
@@ -584,7 +584,7 @@ Datum hash_new_uint32(uint32 k)
  */
 Datum hash_uint32(uint32 k)
 {
-    register uint32 a, b, c;
+    uint32 a, b, c;
 
     a = b = c = 0x9e3779b9 + (uint32)sizeof(uint32) + 3923095;
     a += k;

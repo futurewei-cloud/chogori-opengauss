@@ -90,6 +90,9 @@
 #include "foreign/fdwapi.h"
 #endif
 
+#include "access/k2/k2cat_cmds.h"
+#include "access/k2/k2pg_aux.h"
+
 
 /* non-export function prototypes */
 static bool relationHasPrimaryKey(Relation rel);
@@ -832,8 +835,16 @@ Oid index_create(Relation heapRelation, const char *indexRelationName, Oid index
             (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
                 errmsg("shared relations must be placed in pg_global tablespace")));
 
-    if (get_relname_relid(indexRelationName, namespaceId))
-        ereport(ERROR, (errcode(ERRCODE_DUPLICATE_TABLE), errmsg("relation \"%s\" already exists", indexRelationName)));
+	/*
+	 * In K2PG mode, during bootstrap, a relation lookup by name will be a full-table scan
+	 * and slow because secondary indexes are not available yet. So we will skip this
+	 * duplicate name check as it will error later anyway when the indexes are created.
+	 */
+	if (!IsK2PgEnabled() || !IsBootstrapProcessingMode())
+	{
+        if (get_relname_relid(indexRelationName, namespaceId))
+            ereport(ERROR, (errcode(ERRCODE_DUPLICATE_TABLE), errmsg("relation \"%s\" already exists", indexRelationName)));
+    }
 
     if (RELATION_IS_GLOBAL_TEMP(heapRelation)) {
         /* No support create index on global temp table use concurrent mode yet */
@@ -897,7 +908,7 @@ Oid index_create(Relation heapRelation, const char *indexRelationName, Oid index
     if (extra->isGlobalPartitionedIndex) {
         relKind = RELKIND_GLOBAL_INDEX;
     }
-    /* 
+    /*
      * for normal relation index and global partition index, isLocalPart should be false.
      * more description refers to defination of IndexCreateExtraArgs;
      */
@@ -918,6 +929,22 @@ Oid index_create(Relation heapRelation, const char *indexRelationName, Oid index
         relindexsplit, storage_type, extra->crossBucket);
 
     Assert(indexRelationId == RelationGetRelid(indexRelation));
+
+	/*
+	 * Create index in K2PG only if it is a secondary index. Primary key is
+	 * an implicit part of the base table in K2PG and doesn't need to be created.
+	 */
+	if (IsK2PgRelation(indexRelation) && !isprimary)
+	{
+		K2PgCreateIndex(indexRelationName,
+					   indexInfo,
+					   indexTupDesc,
+					   coloptions,
+					   reloptions,
+					   indexRelationId,
+					   heapRelation,
+					   true);
+	}
 
     /*
      * Obtain exclusive lock on it.  Although no other backends can see it
@@ -1357,7 +1384,7 @@ void index_constraint_create(Relation heapRelation, Oid indexRelationId, IndexIn
      * index into a UNIQUE or PRIMARY KEY constraint.
      */
     if (remove_old_dependencies) {
-        (void)deleteDependencyRecordsForClass(RelationRelationId, indexRelationId, 
+        (void)deleteDependencyRecordsForClass(RelationRelationId, indexRelationId,
             RelationRelationId, DEPENDENCY_AUTO);
     }
 
@@ -3087,8 +3114,8 @@ double IndexBuildHeapScan(Relation heapRelation, Relation indexRelation, IndexIn
                 } else if (!inRedistribution) {
                 /*
                  * Determine the status of tuples for redistribution.
-                 * In redistribution, data in the temporary table is inserted into by 
-                 * original table, No delete or update operation is performed. 
+                 * In redistribution, data in the temporary table is inserted into by
+                 * original table, No delete or update operation is performed.
                  * All tuples are valid.
                  */
                     ereport(LOG, (errmsg("In redistribution, skip HeapTupleSatisfiesVacuum for table %s",
@@ -5458,7 +5485,7 @@ void ScanHeapInsertCBI(Relation parentRel, Relation heapRel, Relation idxRel, Oi
  * Description	:
  * Notes		:
  */
-void ScanPartitionInsertIndex(Relation partTableRel, Relation partRel, const List* indexRelList, 
+void ScanPartitionInsertIndex(Relation partTableRel, Relation partRel, const List* indexRelList,
     const List* indexInfoList)
 {
     TableScanDesc scan = NULL;
@@ -5529,7 +5556,7 @@ void ScanPartitionInsertIndex(Relation partTableRel, Relation partRel, const Lis
  * Description	:
  * Notes		:
  */
-void AddCBIForPartition(Relation partTableRel, Relation tempTableRel, const List* indexRelList, 
+void AddCBIForPartition(Relation partTableRel, Relation tempTableRel, const List* indexRelList,
     const List* indexDestOidList)
 {
     ListCell* cell1 = NULL;
@@ -5618,7 +5645,7 @@ void AddGPIForPartition(Oid partTableOid, Oid partOid)
  * Description	:
  * Notes		:
  */
-void ScanPartitionDeleteGPITuples(Relation partTableRel, Relation partRel, const List* indexRelList, 
+void ScanPartitionDeleteGPITuples(Relation partTableRel, Relation partRel, const List* indexRelList,
     const List* indexInfoList)
 {
     TableScanDesc scan = NULL;
@@ -5872,11 +5899,11 @@ TupleDesc GetPsortTupleDesc(TupleDesc indexTupDesc)
     return psortTupDesc;
 }
 
-/* 
+/*
  * indexRelOptions is passed in by a third parameter but not fetched from indexRelation,
  * because when called indexRelation may not hold the options at all.
  * tablespaceId: tablespace used for psort index, which may be different from indexRelation
- *               if it's a partition. 
+ *               if it's a partition.
  */
 Oid psort_create(const char* indexRelationName, Relation indexRelation, Oid tablespaceId, Datum indexRelOptions)
 {
@@ -6239,5 +6266,5 @@ void cbi_set_enable_clean(Relation rel)
     heap_freetuple_ext(tuple);
     heap_freetuple_ext(newTuple);
     heap_close(pg_class, RowExclusiveLock);
-    
+
 }

@@ -164,7 +164,7 @@ int pg_regexec(regex_t* re, const chr* string, size_t len, size_t search_start, 
     regmatch_t pmatch[], int flags)
 {
     struct vars var;
-    register struct vars* v = &var;
+    struct vars* v = &var;
     int st;
     size_t n;
     size_t i;

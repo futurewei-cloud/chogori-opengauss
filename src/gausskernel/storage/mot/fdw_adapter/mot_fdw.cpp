@@ -298,8 +298,8 @@ Datum mot_fdw_handler(PG_FUNCTION_ARGS)
     fdwroutine->IterateForeignScan = MOTIterateForeignScan;
     fdwroutine->ReScanForeignScan = MOTReScanForeignScan;
     fdwroutine->EndForeignScan = MOTEndForeignScan;
-    fdwroutine->AnalyzeForeignTable = MOTAnalyzeForeignTable;
-    fdwroutine->AcquireSampleRows = MOTAcquireSampleRowsFunc;
+    fdwroutine->AnalyzeForeignTable = NULL;
+    fdwroutine->AcquireSampleRows = NULL;
     fdwroutine->ValidateTableDef = MOTValidateTableDef;
     fdwroutine->PartitionTblProcess = NULL;
     fdwroutine->BuildRuntimePredicate = NULL;
@@ -323,7 +323,6 @@ Datum mot_fdw_handler(PG_FUNCTION_ARGS)
         RegisterSubXactCallback(MOTSubxactCallback, NULL);
         u_sess->mot_cxt.callbacks_set = true;
     }
-
     PG_TRY();
     {
         MOTAdaptor::InitTxnManager(__FUNCTION__);
@@ -1119,11 +1118,12 @@ static void MOTReScanForeignScan(ForeignScanState* node)
  */
 static void MOTEndForeignScan(ForeignScanState* node)
 {
-    MOTFdwStateSt* festate = (MOTFdwStateSt*)node->fdw_state;
-    if (festate->m_allocInScan) {
-        ReleaseFdwState(festate);
-        node->fdw_state = NULL;
-    }
+    (void) node;
+    //MOTFdwStateSt* festate = (MOTFdwStateSt*)node->fdw_state;
+    //if (festate->m_allocInScan) {
+    //    ReleaseFdwState(festate);
+    //    node->fdw_state = NULL;
+    //}
 }
 
 /*

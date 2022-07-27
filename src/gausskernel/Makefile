@@ -20,7 +20,7 @@ include $(top_builddir)/src/Makefile.global
 override CXXFLAGS += $(PTHREAD_CFLAGS)
 
 # these directories: catalog  lib  libpq nodes  parser  po  port  regex  snowball  tsearch  utils pgxc
-# under ../common 
+# under ../common
 #
 SUBDIRS = ../common/backend bootstrap cbb optimizer process dbmind runtime  security  storage \
 	$(top_builddir)/src/common/timezone $(top_builddir)/src/common/interfaces/libpq \
@@ -85,7 +85,7 @@ endif
 
 ifneq ($(enable_multiple_nodes)_$(enable_privategauss), no_no)
    OBJS += $(top_builddir)/../distribute/lib/hotpatch/hotpatch.o \
-        $(top_builddir)/../distribute/lib/hotpatch/common/libhotpatchcommon.a 
+        $(top_builddir)/../distribute/lib/hotpatch/common/libhotpatchcommon.a
 endif
 
 ifeq ($(enable_multiple_nodes), yes)
@@ -112,7 +112,7 @@ endif
 ##############################################################################
 # libobs component
 ###############################################################################
-LIBS += -L$(LIBCURL_LIB_PATH) -L$(LIBOPENSSL_LIB_PATH) 
+LIBS += -L$(LIBCURL_LIB_PATH) -L$(LIBOPENSSL_LIB_PATH)
 LIBS += -leSDKOBS -leSDKLogAPI -lssl -lcrypto -lpcre -liconv -lnghttp2 -llog4cpp -lsecurec  -lcurl
 
 ##############################################################################
@@ -221,7 +221,7 @@ else
  ifeq ($(enable_ut), yes)
   SNAPPY_LIB_NAME=snappy_pic
  else
-  SNAPPY_LIB_NAME=snappy	
+  SNAPPY_LIB_NAME=snappy
  endif
 endif
 LIBS += -l${SNAPPY_LIB_NAME}
@@ -242,7 +242,7 @@ else
  ifeq ($(enable_ut), yes)
   PROTOBUF_LIB_NAME=protobuf_pic
  else
-  PROTOBUF_LIB_NAME=protobuf	
+  PROTOBUF_LIB_NAME=protobuf
  endif
 endif
 
@@ -252,6 +252,13 @@ LIBS += -l${PROTOBUF_LIB_NAME}
 # kerberos
 ##################################################################################
 LIBS += -lcom_err_gauss -lgssapi_krb5_gauss -lkrb5_gauss -lgssrpc_gauss -lk5crypto_gauss -lkadm5clnt_mit -lkadm5srv_mit -lkdb5 -lkrb5support_gauss
+
+################################################################################
+#Chogori
+###############################################################################
+LDFLAGS += -L/usr/local/lib/skvhttp/
+LIBS += -lclient -lcommon -ldto -lfmt -lmpack -lhttplib
+
 
 ##################################################################################
 # libstd
@@ -312,7 +319,7 @@ LDFLAGS += -L$(LIBLLVM_LIB_PATH) -L$(LIBTINFO_LIB_PATH) \
   LDFLAGS += -L$(CJSON_LIB_PATH)
   CXXFLAGS+= -I$(CJSON_INCLUDE_PATH)
 
-  CXXFLAGS+= -I$(LIBOBS_INCLUDE_PATH) 
+  CXXFLAGS+= -I$(LIBOBS_INCLUDE_PATH)
 
 ifeq ($(enable_multiple_nodes), yes)
   LDFLAGS += -L$(top_builddir)/../distribute/gtm/libpg
@@ -430,7 +437,7 @@ submake-libpljava: | submake-fmgroids
 	$(top_builddir)/third_party/dependency/pljava/build.sh -m only_so
 
 # run this to build carbondata-sdk
-$(top_builddir)/../contrib/carbondata/libcarbondata.a: 
+$(top_builddir)/../contrib/carbondata/libcarbondata.a:
 	$(MAKE) -C $(top_builddir)/../contrib/carbondata all
 
 .PHONY: submake-schemapg submake-errcodes
@@ -609,6 +616,7 @@ endif
 ifeq ($(enable_mot), yes)
 	$(MAKE) -C $(top_builddir)/src/gausskernel/storage/mot/fdw_adapter install
 endif
+	$(MAKE) -C $(top_builddir)/src/gausskernel/storage/k2 install
 	$(MAKE) -C $(top_builddir)/contrib/test_decoding install
 	$(MAKE) -C $(top_builddir)/contrib/mppdb_decoding install
 	$(MAKE) -C $(top_builddir)/contrib/security_plugin install
@@ -720,7 +728,7 @@ endif
 
 install-bin: gaussdb $(POSTGRES_IMP) installdirs libcgroup
 	$(INSTALL_PROGRAM) gaussdb$(X) '$(DESTDIR)$(bindir)/gaussdb$(X)'
-	@if test -d $(KERBEROS_BIN_PATH); then cp -rf $(KERBEROS_BIN_PATH)/klist $(DESTDIR)$(bindir)/; fi  
+	@if test -d $(KERBEROS_BIN_PATH); then cp -rf $(KERBEROS_BIN_PATH)/klist $(DESTDIR)$(bindir)/; fi
 	@if test -d $(KERBEROS_BIN_PATH); then cp -rf $(KERBEROS_BIN_PATH)/kinit $(DESTDIR)$(bindir)/; fi
 	@if test -d $(KERBEROS_BIN_PATH); then cp -rf $(KERBEROS_BIN_PATH)/kdestroy $(DESTDIR)$(bindir)/; fi
 	@if test -d $(KERBEROS_SBIN_PATH); then cp -rf $(KERBEROS_SBIN_PATH)/kdb5_util $(DESTDIR)$(bindir)/; fi
@@ -798,7 +806,7 @@ ifeq ($(enable_multiple_nodes), yes)
 	rm -f '$(DESTDIR)$(bindir)/gaussdb$(X)' '$(DESTDIR)$(bindir)/gaussmaster'
 	rm -f '$(DESTDIR)$(bindir)/gaussdb$(X)' '$(DESTDIR)$(bindir)/gs_encrypt'
 else
-	rm -f '$(DESTDIR)$(bindir)/gaussdb$(X)' 
+	rm -f '$(DESTDIR)$(bindir)/gaussdb$(X)'
 endif
 	rm -f $(DESTDIR)$(libdir)/libcgroup*
 	rm -f $(DESTDIR)$(libdir)/libsimsearch/*
@@ -834,6 +842,7 @@ endif
 ifeq ($(enable_mot), yes)
 	$(MAKE) -C $(top_builddir)/src/gausskernel/storage/mot/fdw_adapter uninstall
 endif
+	$(MAKE) -C $(top_builddir)/src/gausskernel/storage/k2 uninstall
 	$(MAKE) -C $(top_builddir)/contrib/log_fdw uninstall
 	$(MAKE) -C $(top_builddir)/contrib/pg_upgrade_support clean
 	$(MAKE) -C $(top_builddir)/contrib/test_decoding uninstall

@@ -139,7 +139,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register slock_t _res = 1;
+    slock_t _res = 1;
 
     /*
      * Use a non-locking test before asserting the bus lock.  Note that the
@@ -198,7 +198,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register slock_t _res = 1;
+    slock_t _res = 1;
 
     /*
      * On Opteron, using a non-locking test before the locking instruction
@@ -326,8 +326,8 @@ typedef unsigned int slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    volatile register slock_t* ulAddr = lock;
-    register slock_t _res = 1;
+    volatile slock_t* ulAddr = lock;
+    slock_t _res = 1;
     unsigned int tmp = 0;
 
     __asm__ volatile("// __xchg4\n"
@@ -371,7 +371,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register slock_t _res = 1;
+    slock_t _res = 1;
 
     __asm__ __volatile__("	swpb 	%0, %0, [%2]	\n" : "+r"(_res), "+m"(*lock) : "r"(lock) : "memory");
     return (int)_res;
@@ -413,7 +413,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register slock_t _res;
+    slock_t _res;
 
     /*
      *	See comment in /pg/backend/port/tas/solaris_sparc.s for why this
@@ -545,7 +545,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register int rv;
+    int rv;
 
     __asm__ __volatile__("	clrl	%0		\n"
                          "	tas		%1		\n"
@@ -571,7 +571,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register int _res;
+    int _res;
 
     __asm__ __volatile__("	movl 	$1, %0			\n"
                          "	bbssi	$0, (%2), 1f	\n"
@@ -594,7 +594,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register int _res;
+    int _res;
 
     __asm__ __volatile__("	sbitb	0, %1	\n"
                          "	sfsd	%0		\n"
@@ -621,7 +621,7 @@ typedef unsigned long slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register slock_t _res;
+    slock_t _res;
 
     __asm__ __volatile__("	ldq		$0, %1	\n"
                          "	bne		$0, 2f	\n"
@@ -659,9 +659,9 @@ typedef unsigned int slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register volatile slock_t* _l = lock;
-    register int _res;
-    register int _tmp;
+    volatile slock_t* _l = lock;
+    int _res;
+    int _tmp;
 
     __asm__ __volatile__("       .set push           \n"
                          "       .set mips2          \n"
@@ -718,7 +718,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    register int _res;
+    int _res;
 
     /*
      * This asm is coded as if %0 could be any register, but actually SuperH
@@ -837,7 +837,7 @@ typedef struct {
 static __inline__ int tas(volatile slock_t* lock)
 {
     volatile int* lockword = TAS_ACTIVE_WORD(lock);
-    register int lockval;
+    int lockval;
 
     __asm__ __volatile__("	ldcwx	0(0,%2),%0	\n" : "=r"(lockval), "+m"(*lockword) : "r"(lockword) : "memory");
     return (lockval == 0);

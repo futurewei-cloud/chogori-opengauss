@@ -109,6 +109,9 @@
 #include "datasource/datasource.h"
 #include "postmaster/rbcleaner.h"
 
+#include "access/k2/k2cat_cmds.h"
+#include "access/k2/k2pg_aux.h"
+
 /*
  * This constant table maps ObjectClasses to the corresponding catalog OIDs.
  * See also getObjectClass().
@@ -460,7 +463,7 @@ void deleteWhatDependsOn(const ObjectAddress* object, bool showNotices)
     targetObjects = new_object_addresses();
 
     findDependentObjects(object, DEPFLAG_ORIGINAL, NULL, /* empty stack */
-        targetObjects, NULL, /* no pendingObjects */ 
+        targetObjects, NULL, /* no pendingObjects */
         &depRel);
 
     /*
@@ -1169,6 +1172,17 @@ static void doDeletion(const ObjectAddress* object, int flags)
                 bool concurrent = (((uint32)flags & PERFORM_DELETION_CONCURRENTLY) == PERFORM_DELETION_CONCURRENTLY);
 
                 Assert(object->objectSubId == 0);
+
+				if (IsK2PgRelationById(object->objectId))
+				{
+					Relation index = RelationIdGetRelation(object->objectId);
+
+					if (!index->rd_index->indisprimary)
+						K2PgDropIndex(object->objectId);
+
+					RelationClose(index);
+				}
+
                 index_drop(object->objectId, concurrent);
             } else {
                 /*
@@ -1195,8 +1209,11 @@ static void doDeletion(const ObjectAddress* object, int flags)
 
                 if (object->objectSubId != 0)
                     RemoveAttributeById(object->objectId, object->objectSubId);
-                else
+                else {
+                    if (IsK2PgRelationById(object->objectId))
+						K2PgDropTable(object->objectId);
                     heap_drop_with_catalog(object->objectId);
+                }
 
                 /*
                  * IMPORANT: The relation must not be reloaded after heap_drop_with_catalog()
@@ -1390,7 +1407,7 @@ static void doDeletion(const ObjectAddress* object, int flags)
 #ifdef PGXC
         case OCLASS_PGXC_CLASS:
             RemovePgxcClass(object->objectId, IS_PGXC_DATANODE);
-            /* 
+            /*
              * pgxc_slice is the extended information for pgxc_class,
              * so need to delete the related tuples in pgxc_slice.
              */
@@ -2320,7 +2337,7 @@ void free_object_addresses(ObjectAddresses* addrs)
 ObjectClass getObjectClass(const ObjectAddress* object)
 {
     /* only pg_class entries can have nonzero objectSubId */
-    if (object->classId != PackageRelationId && object->classId != RelationRelationId 
+    if (object->classId != PackageRelationId && object->classId != RelationRelationId
                                              && object->objectSubId != 0)
         ereport(ERROR, (errmodule(MOD_OPT), errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                 errmsg("invalid objectSubId 0 for object class %u", object->classId)));
@@ -2335,7 +2352,7 @@ ObjectClass getObjectClass(const ObjectAddress* object)
 
          case PackageRelationId:
             return OCLASS_PACKAGE;
-            
+
         case TypeRelationId:
             return OCLASS_TYPE;
 

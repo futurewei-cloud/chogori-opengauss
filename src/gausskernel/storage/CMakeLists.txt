@@ -5,7 +5,7 @@ set(CMAKE_RULE_MESSAGES OFF)
 set(CMAKE_SKIP_RPATH TRUE)
 
 set(CMAKE_MODULE_PATH
-    ${CMAKE_CURRENT_SOURCE_DIR}/access 
+    ${CMAKE_CURRENT_SOURCE_DIR}/access
     ${CMAKE_CURRENT_SOURCE_DIR}/bulkload
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer
     ${CMAKE_CURRENT_SOURCE_DIR}/cmgr
@@ -16,6 +16,7 @@ set(CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/file
     ${CMAKE_CURRENT_SOURCE_DIR}/freespace
     ${CMAKE_CURRENT_SOURCE_DIR}/ipc
+    ${CMAKE_CURRENT_SOURCE_DIR}/k2
     ${CMAKE_CURRENT_SOURCE_DIR}/large_object
     ${CMAKE_CURRENT_SOURCE_DIR}/lmgr
     ${CMAKE_CURRENT_SOURCE_DIR}/page
@@ -39,6 +40,7 @@ add_subdirectory(dfs)
 add_subdirectory(file)
 add_subdirectory(freespace)
 add_subdirectory(ipc)
+add_subdirectory(k2)
 add_subdirectory(large_object)
 add_subdirectory(lmgr)
 add_subdirectory(page)
@@ -49,4 +51,3 @@ add_subdirectory(tcap)
 if("${ENABLE_MOT}" STREQUAL "ON")
     add_subdirectory(mot)
 endif()
-

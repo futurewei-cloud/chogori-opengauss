@@ -19,6 +19,7 @@
 #include "access/heapam.h"
 #include "access/itup.h"
 #include "access/tupdesc.h"
+#include "access/k2/k2catam.h"
 
 #define PARALLEL_SCAN_GAP 100
 
@@ -53,6 +54,7 @@ typedef struct HeapScanDescData {
     /* scan parameters */
     uint32 rs_flags;
     bool rs_allow_strat;  /* allow or disallow use of access strategy */
+	bool rs_temp_snap;	/* unregister snapshot at scan end? */
 
     /* scan current state */
     TupleDesc rs_tupdesc;  /* heap tuple descriptor for rs_ctup */
@@ -67,6 +69,8 @@ typedef struct HeapScanDescData {
      */
     HeapTupleData rs_ctup; /* current tuple in scan, if any */
     ParallelHeapScanDesc rs_parallel; /* parallel scan information */
+    CamScanDesc	k2scan;			/* only valid in k2-scan case */
+
     HeapTupleHeaderData rs_ctbuf_hdr;
 } HeapScanDescData;
 
@@ -97,7 +101,7 @@ struct IndexFetchTableData;
  * amgettuple-based scans.
  */
 typedef struct IndexScanDescData {
-    /* scan parameters */    
+    /* scan parameters */
     // !! heapRelation MUST BE FIRST MEMBER !!
     Relation heapRelation;  /* heap relation descriptor, or NULL */
 
@@ -127,6 +131,8 @@ typedef struct IndexScanDescData {
     /* in an index-only scan, this is valid after a successful amgettuple */
     IndexTuple xs_itup;    /* index tuple returned by AM */
     TupleDesc xs_itupdesc; /* rowtype descriptor of xs_itup */
+	HeapTuple	xs_hitup;		/* index data returned by AM, as HeapTuple */
+	TupleDesc	xs_hitupdesc;	/* rowtype descriptor of xs_hitup */
 
     /* xs_ctup/xs_cbuf/xs_recheck are valid after a successful index_getnext */
     HeapTupleData xs_ctup; /* current heap tuple, if any */
@@ -140,6 +146,25 @@ typedef struct IndexScanDescData {
     /* state data for traversing HOT chains in index_getnext */
     bool xs_continue_hot; /* T if must keep walking HOT chain */
     IndexFetchTableData *xs_heapfetch;
+
+	/* During execution, Postgres will push down hints to K2PG for performance purpose.
+	 * (currently, only LIMIT values are being pushed down). All these execution information will
+	 * kept in "k2pg_exec_params".
+	 *
+	 * - Generally, "k2pg_exec_params" is kept in execution-state. As Postgres executor traverses and
+	 *   excutes the nodes, it passes along the execution state. Necessary information (such as
+	 *   LIMIT values) will be collected and written to "k2pg_exec_params" in EState.
+	 *
+	 * - However, IndexScan execution doesn't use Postgres's node execution infrastructure. Neither
+	 *   execution plan nor execution state is passed to IndexScan operators. As a result,
+	 *   "k2pg_exec_params" is kept in "IndexScanDescData" to avoid passing EState to a lot of
+	 *   IndexScan functions.
+	 *
+	 * - Postgres IndexScan function will call and pass "k2pg_exec_params" to PgGate to control the
+	 *   index-scan execution in K2PG.
+	 */
+	K2PgExecParameters *k2pg_exec_params;
+
     /* put decompressed heap tuple data into xs_ctbuf_hdr be careful! when malloc memory  should give extra mem for
      *xs_ctbuf_hdr. t_bits which is varlength arr
      */
@@ -185,6 +210,8 @@ typedef struct SysScanDescData {
     Relation irel;       /* NULL if doing heap scan */
     HeapScanDesc scan;   /* only valid in heap-scan case */
     IndexScanDesc iscan; /* only valid in index-scan case */
+	Snapshot	snapshot;		/* snapshot to unregister at end of scan */
+    CamScanDesc	k2scan;			/* only valid in k2-scan case */
 } SysScanDescData;
 
 #endif /* RELSCAN_H */

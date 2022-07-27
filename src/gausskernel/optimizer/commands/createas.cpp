@@ -47,6 +47,9 @@
 #include "utils/rel_gs.h"
 #include "utils/snapmgr.h"
 
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
+
 typedef struct {
     DestReceiver pub; /* publicly-known function pointers */
     IntoClause* into; /* target relation specification */
@@ -513,8 +516,14 @@ static void intorel_receive(TupleTableSlot* slot, DestReceiver* self)
     if (myState->rel->rd_rel->relhasoids)
         HeapTupleSetOid(tuple, InvalidOid);
 
-    (void)tableam_tuple_insert(myState->rel, tuple, 
-        myState->output_cid, myState->hi_options, myState->bistate);
+	if (IsK2PgRelation(myState->rel))
+	{
+		K2PgExecuteInsert(myState->rel, RelationGetDescr(myState->rel), tuple);
+	}
+	else {
+        (void)tableam_tuple_insert(myState->rel, tuple,
+            myState->output_cid, myState->hi_options, myState->bistate);
+    }
     /* We know this is a newly created relation, so there are no indexes */
 }
 

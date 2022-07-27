@@ -488,7 +488,7 @@ typedef struct knl_g_dw_context {
 typedef struct knl_g_bgwriter_context {
     BgWriterProc *bgwriter_procs;
     int bgwriter_num;                   /* bgwriter thread num*/
-    pg_atomic_uint32 curr_bgwriter_num; 
+    pg_atomic_uint32 curr_bgwriter_num;
     Buffer *candidate_buffers;
     bool *candidate_free_map;
     HTAB *unlink_rel_hashtbl;
@@ -875,6 +875,10 @@ typedef struct knl_g_roach_context {
     bool isRoachRestore;
 } knl_g_roach_context;
 
+typedef struct knl_g_k2_context {
+    bool isK2ModelEnabled;
+} knl_g_k2_context;
+
 typedef struct knl_instance_context {
     knl_virtual_role role;
     volatile int status;
@@ -986,6 +990,9 @@ typedef struct knl_instance_context {
     knl_g_spi_plan_context spi_plan_cxt;
     knl_g_roleid_context roleid_cxt;
     knl_g_roach_context roach_cxt;
+
+    knl_g_k2_context k2_cxt;
+
     pg_atomic_uint32 extensionNum;
 #ifndef ENABLE_MULTIPLE_NODES
     void *raw_parser_hook[DB_CMPT_MAX];
@@ -1025,4 +1032,3 @@ extern void add_numa_alloc_info(void* numaAddr, size_t length);
 #define DEFAULT_CREATE_GLOBAL_INDEX (u_sess->attr.attr_storage.default_index_kind == DEFAULT_INDEX_KIND_GLOBAL)
 
 #endif /* SRC_INCLUDE_KNL_KNL_INSTANCE_H_ */
-

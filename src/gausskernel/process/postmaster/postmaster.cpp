@@ -246,6 +246,8 @@
 #include "gs_ledger/blockchain.h"
 #include "communication/commproxy_interface.h"
 
+#include "access/k2/k2pg_aux.h"
+
 #ifdef ENABLE_UT
 #define static
 #endif
@@ -955,7 +957,7 @@ void SetShmemCxt(void)
     }
 
     /* Keep enough slot for thread pool. */
-    g_instance.shmem_cxt.MaxConnections = 
+    g_instance.shmem_cxt.MaxConnections =
                 Max((g_instance.attr.attr_network.MaxConnections + g_instance.attr.attr_network.maxInnerToolConnections), thread_pool_worker_num);
 
     g_instance.shmem_cxt.MaxBackends = g_instance.shmem_cxt.MaxConnections +
@@ -963,7 +965,7 @@ void SetShmemCxt(void)
                                        g_instance.attr.attr_storage.autovacuum_max_workers +
                                        g_instance.attr.attr_storage.max_undo_workers + 1 +
                                        AUXILIARY_BACKENDS +
-                                       AV_LAUNCHER_PROCS + 
+                                       AV_LAUNCHER_PROCS +
                                        g_max_worker_processes;
     g_instance.shmem_cxt.MaxReserveBackendId = g_instance.attr.attr_sql.job_queue_processes +
                                                g_instance.attr.attr_storage.autovacuum_max_workers +
@@ -1029,6 +1031,7 @@ int PostmasterMain(int argc, char* argv[])
     OptParseContext optCtxt;
     errno_t rc = 0;
     Port port;
+    bool k2_mode_enabled = false;
 
     t_thrd.proc_cxt.MyProcPid = PostmasterPid = gs_thread_self();
 
@@ -1106,7 +1109,7 @@ int PostmasterMain(int argc, char* argv[])
      * common help() function in main/main.c.
      */
     initOptParseContext(&optCtxt);
-    while ((opt = getopt_r(argc, argv, "A:B:bc:C:D:d:EeFf:h:ijk:lM:N:nOo:Pp:Rr:S:sTt:u:W:-:", &optCtxt)) != -1) {
+    while ((opt = getopt_r(argc, argv, "A:B:bc:C:D:d:EeFf:h:ijk:lM:N:nOo:Pp:Rr:S:sTt:u:W:K:-:", &optCtxt)) != -1) {
         switch (opt) {
             case 'A':
                 SetConfigOption("debug_assertions", optCtxt.optarg, PGC_POSTMASTER, PGC_S_ARGV);
@@ -1286,6 +1289,9 @@ int PostmasterMain(int argc, char* argv[])
                 SetConfigOption("post_auth_delay", optCtxt.optarg, PGC_POSTMASTER, PGC_S_ARGV);
                 break;
 
+            case 'K':
+                k2_mode_enabled = true;
+                break;
             case 'c':
             case '-': {
                 char* name = NULL;
@@ -1350,6 +1356,16 @@ int PostmasterMain(int argc, char* argv[])
         }
     }
 
+    if (k2_mode_enabled || K2PgIsEnabledInPostgresEnvVar()) {
+        g_instance.k2_cxt.isK2ModelEnabled = true;
+        u_sess->k2_cxt.isK2ModelEnabled = true;
+        ereport(LOG, (errmsg("K2_Mode is ENABLED in PostgreSQL.")));
+    } else {
+        g_instance.k2_cxt.isK2ModelEnabled = false;
+        u_sess->k2_cxt.isK2ModelEnabled = false;
+        ereport(LOG, (errmsg("K2_Mode is NOT ENABLED in PostgreSQL.")));
+    }
+
 #ifndef ENABLE_MULTIPLE_NODES
     /* single_node mode default role is VSINGLENODE and must be it */
     if (g_instance.role == VUNKNOWN) {
@@ -1376,7 +1392,7 @@ int PostmasterMain(int argc, char* argv[])
         write_stderr("Try \"%s --help\" for more information.\n", progname);
         ExitPostmaster(1);
     }
-    
+
     /*
      * Locate the proper configuration files and data directory, and read
      * postgresql.conf for the first time.
@@ -1387,7 +1403,7 @@ int PostmasterMain(int argc, char* argv[])
 
     if (strlen(GetConfigOption(const_cast<char*>("unix_socket_directory"), true, false)) != 0) {
         PythonFencedMasterModel = true;
-        
+
         /* disable bbox for fenced UDF process */
         SetConfigOption("enable_bbox_dump", "false", PGC_POSTMASTER, PGC_S_ARGV);
     }
@@ -2060,7 +2076,7 @@ int PostmasterMain(int argc, char* argv[])
         ALLOCSET_DEFAULT_INITSIZE,
         ALLOCSET_DEFAULT_MAXSIZE,
         SHARED_CONTEXT);
-        
+
     /* create global cache memory context */
     knl_g_cachemem_create();
 
@@ -2214,8 +2230,8 @@ int PostmasterMain(int argc, char* argv[])
 
     load_searchserver_library();
 #endif
-    /* 
-     * Save backend variables for DCF call back thread, 
+    /*
+     * Save backend variables for DCF call back thread,
      * the saved backend variables will be restored in
      * DCF call back thread share memory init function.
      */
@@ -2412,11 +2428,11 @@ static void CheckExtremeRtoGUCConflicts(void)
         g_instance.attr.attr_storage.recovery_parse_workers = 1;
     }
 
-    if ((g_instance.attr.attr_storage.recovery_parse_workers > 1) && 
+    if ((g_instance.attr.attr_storage.recovery_parse_workers > 1) &&
         g_instance.attr.attr_storage.WalReceiverBufSize < minReceiverBufSize) {
         ereport(ERROR,
             (errcode(ERRCODE_SYSTEM_ERROR),
-                errmsg("when starting extreme rto, wal receiver buf should not smaller than %dMB", 
+                errmsg("when starting extreme rto, wal receiver buf should not smaller than %dMB",
                     minReceiverBufSize / 1024),
                 errhint("recommend config \"wal_receiver_buffer_size=64MB\"")));
     }
@@ -2432,7 +2448,7 @@ static void CheckExtremeRtoGUCConflicts(void)
 }
 static void CheckRecoveryParaConflict()
 {
-	if (g_instance.attr.attr_storage.max_recovery_parallelism > RECOVERY_PARALLELISM_DEFAULT 
+	if (g_instance.attr.attr_storage.max_recovery_parallelism > RECOVERY_PARALLELISM_DEFAULT
 	    && IS_DN_DUMMY_STANDYS_MODE()) {
 		ereport(WARNING,
 		    (errmsg("when starting as dummy_standby mode, we couldn't support parallel redo, down it")));
@@ -2527,13 +2543,13 @@ static bool save_backend_variables_for_callback_thread()
     return save_backend_variables(&backend_save_para, &port);
 }
 
-static bool ObsSlotThreadExist(const char* slotName) 
+static bool ObsSlotThreadExist(const char* slotName)
 {
     for (int i = 0; i < g_instance.attr.attr_storage.max_replication_slots; i++) {
         if (g_instance.archive_obs_thread_info.slotName[i] == NULL) {
             continue;
         }
-        if (strcmp(g_instance.archive_obs_thread_info.slotName[i], slotName) == 0 && 
+        if (strcmp(g_instance.archive_obs_thread_info.slotName[i], slotName) == 0 &&
             g_instance.archive_obs_thread_info.obsArchPID[i] != 0) {
             return true;
         }
@@ -2542,7 +2558,7 @@ static bool ObsSlotThreadExist(const char* slotName)
     return false;
 }
 
-static char *GetObsSlotName(const List *archiveSlotNames) 
+static char *GetObsSlotName(const List *archiveSlotNames)
 {
     foreach_cell(cell, archiveSlotNames) {
         char *slotName = (char*)lfirst(cell);
@@ -2569,7 +2585,7 @@ static void ArchObsThreadStart(int threadIndex)
         return;
     }
     ereport(LOG, (errmsg("pgarch thread need start, create slotName: %s, index: %d", slotName, threadIndex)));
-    
+
     errno_t rc = EOK;
     rc = memcpy_s(g_instance.archive_obs_thread_info.slotName[threadIndex], NAMEDATALEN, slotName, strlen(slotName));
     securec_check(rc, "\0", "\0");
@@ -2579,13 +2595,13 @@ static void ArchObsThreadStart(int threadIndex)
         if (g_instance.archive_obs_thread_info.obsBarrierArchPID[threadIndex] != 0) {
             signal_child(g_instance.archive_obs_thread_info.obsBarrierArchPID[threadIndex], SIGUSR2);
         }
-        g_instance.archive_obs_thread_info.obsBarrierArchPID[threadIndex] = 
+        g_instance.archive_obs_thread_info.obsBarrierArchPID[threadIndex] =
             initialize_util_thread(BARRIER_ARCH, g_instance.archive_obs_thread_info.slotName[threadIndex]);
     }
     list_free_deep(archiveSlotNames);
 }
 
-static void ArchObsThreadShutdown(int threadIndex) 
+static void ArchObsThreadShutdown(int threadIndex)
 {
     char *slotName = g_instance.archive_obs_thread_info.slotName[threadIndex];
     if (slotName == NULL || strlen(slotName) == 0 || getObsReplicationSlotWithName(slotName) != NULL) {
@@ -2602,7 +2618,7 @@ static void ArchObsThreadShutdown(int threadIndex)
     g_instance.archive_obs_thread_info.obsArchPID[threadIndex] = 0;
     g_instance.archive_obs_thread_info.obsBarrierArchPID[threadIndex] = 0;
     errno_t rc = EOK;
-    rc = memset_s(g_instance.archive_obs_thread_info.slotName[threadIndex], NAMEDATALEN, 0, 
+    rc = memset_s(g_instance.archive_obs_thread_info.slotName[threadIndex], NAMEDATALEN, 0,
         strlen(g_instance.archive_obs_thread_info.slotName[threadIndex]));
     securec_check(rc, "\0", "\0");
 }
@@ -2613,9 +2629,9 @@ void ArchObsThreadManage()
     volatile int *l_tline = &t_thrd.arch.slot_tline;
     if (likely(*g_tline == *l_tline)) {
         for (int i = 0; i < g_instance.attr.attr_storage.max_replication_slots; i++) {
-            if (START_BARRIER_CREATOR && pmState == PM_RUN && g_instance.archive_obs_thread_info.obsArchPID[i] != 0 && 
+            if (START_BARRIER_CREATOR && pmState == PM_RUN && g_instance.archive_obs_thread_info.obsArchPID[i] != 0 &&
                 g_instance.archive_obs_thread_info.obsBarrierArchPID[i] == 0) {
-                g_instance.archive_obs_thread_info.obsBarrierArchPID[i] = 
+                g_instance.archive_obs_thread_info.obsBarrierArchPID[i] =
                     initialize_util_thread(BARRIER_ARCH, g_instance.archive_obs_thread_info.slotName[i]);
             }
         }
@@ -2890,7 +2906,7 @@ static int ServerLoop(void)
             g_instance.pid_cxt.PgAuditPID = pgaudit_start();
             ereport(LOG, (errmsg("auditor process started, pid=%lu", g_instance.pid_cxt.PgAuditPID)));
         }
-#endif 
+#endif
         /* If u_sess->attr.attr_security.Audit_enabled is set to false, terminate auditor process. */
         if (g_instance.pid_cxt.PgAuditPID != 0 && !u_sess->attr.attr_security.Audit_enabled) {
             signal_child(g_instance.pid_cxt.PgAuditPID, SIGQUIT);
@@ -2910,7 +2926,7 @@ static int ServerLoop(void)
          * fails, we'll just try again later.  Likewise for the checkpointer.
          */
         if (pmState == PM_RUN || pmState == PM_RECOVERY || pmState == PM_HOT_STANDBY) {
-            if (g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
+            if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
                 g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
 
             if (g_instance.pid_cxt.BgWriterPID == 0 && !dummyStandbyMode && !ENABLE_INCRE_CKPT) {
@@ -2976,7 +2992,7 @@ static int ServerLoop(void)
          * autovacuum might update relfrozenxid64 for empty tables before the
          * physical files are put in place.
          */
-        if (!u_sess->proc_cxt.IsBinaryUpgrade && g_instance.pid_cxt.AutoVacPID == 0 &&
+        if (!g_instance.k2_cxt.isK2ModelEnabled && !u_sess->proc_cxt.IsBinaryUpgrade && g_instance.pid_cxt.AutoVacPID == 0 &&
             (AutoVacuumingActive() || t_thrd.postmaster_cxt.start_autovac_launcher) && pmState == PM_RUN &&
             !dummyStandbyMode && u_sess->attr.attr_common.upgrade_mode != 1) {
             g_instance.pid_cxt.AutoVacPID = initialize_util_thread(AUTOVACUUM_LAUNCHER);
@@ -3031,10 +3047,10 @@ static int ServerLoop(void)
 
         /* If we have lost the archiver, try to start a new one */
         if (!dummyStandbyMode) {
-            if (g_instance.pid_cxt.PgArchPID == 0 && pmState == PM_RUN && XLogArchivingActive() && 
+            if (g_instance.pid_cxt.PgArchPID == 0 && pmState == PM_RUN && XLogArchivingActive() &&
                 (XLogArchiveCommandSet() || XLogArchiveDestSet())) {
                 g_instance.pid_cxt.PgArchPID = pgarch_start();
-            } else if (g_instance.archive_obs_thread_info.obsArchPID != NULL && 
+            } else if (g_instance.archive_obs_thread_info.obsArchPID != NULL &&
                 (pmState == PM_RUN || pmState == PM_HOT_STANDBY)) {
                 ArchObsThreadManage();
             }
@@ -3290,7 +3306,7 @@ int ProcessStartupPacket(Port* port, bool SSLdone)
             ereport(LOG, (errmsg("getsockopt(SO_RCVTIMEO) failed: %m")));
             return STATUS_ERROR;
         }
-        
+
         if (comm_setsockopt(port->sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval)) < 0) {
             ereport(LOG, (errmsg("setsockopt(SO_RCVTIMEO) failed: %m")));
             return STATUS_ERROR;
@@ -3897,7 +3913,7 @@ int ProcessStartupPacket(Port* port, bool SSLdone)
         ereport(LOG, (errmsg("setsockopt(SO_RCVTIMEO) failed: %m")));
         return STATUS_ERROR;
     }
-    
+
     return STATUS_OK;
 }
 
@@ -4327,7 +4343,7 @@ static void ObsArchSighupHandler()
                 }
             }
         }
-    
+
     if (START_BARRIER_CREATOR && g_instance.archive_obs_thread_info.obsBarrierArchPID != NULL) {
         for (int i = 0; i < g_instance.attr.attr_storage.max_replication_slots; i++) {
             if (g_instance.archive_obs_thread_info.obsBarrierArchPID[i] != 0) {
@@ -4817,7 +4833,7 @@ static void pmdie(SIGNAL_ARGS)
             if (g_instance.pid_cxt.UndoRecyclerPID != 0) {
                 signal_child(g_instance.pid_cxt.UndoRecyclerPID, SIGTERM);
             }
-			
+
             if (g_instance.pid_cxt.WalWriterAuxiliaryPID != 0) {
                 signal_child(g_instance.pid_cxt.WalWriterAuxiliaryPID, SIGTERM);
             }
@@ -5395,7 +5411,7 @@ static void reaper(SIGNAL_ARGS)
              * when we entered consistent recovery state.  It doesn't matter
              * if this fails, we'll just try again later.
              */
-            if (g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
+            if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
                 g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
 
             if (g_instance.pid_cxt.BgWriterPID == 0 && !dummyStandbyMode && !ENABLE_INCRE_CKPT) {
@@ -5434,7 +5450,7 @@ static void reaper(SIGNAL_ARGS)
              * Likewise, start other special children as needed.  In a restart
              * situation, some of them may be alive already.
              */
-            if (!u_sess->proc_cxt.IsBinaryUpgrade && AutoVacuumingActive() && g_instance.pid_cxt.AutoVacPID == 0 &&
+            if (!g_instance.k2_cxt.isK2ModelEnabled && !u_sess->proc_cxt.IsBinaryUpgrade && AutoVacuumingActive() && g_instance.pid_cxt.AutoVacPID == 0 &&
                 !dummyStandbyMode && u_sess->attr.attr_common.upgrade_mode != 1)
                 g_instance.pid_cxt.AutoVacPID = initialize_util_thread(AUTOVACUUM_LAUNCHER);
 
@@ -5454,11 +5470,11 @@ static void reaper(SIGNAL_ARGS)
             if (g_instance.pid_cxt.GlobalStatsPID == 0 && !dummyStandbyMode)
                 g_instance.pid_cxt.GlobalStatsPID = initialize_util_thread(GLOBALSTATS_THREAD);
 
-            if (XLogArchivingActive() && g_instance.pid_cxt.PgArchPID == 0 && !dummyStandbyMode && 
+            if (XLogArchivingActive() && g_instance.pid_cxt.PgArchPID == 0 && !dummyStandbyMode &&
                     XLogArchiveCommandSet())
                 g_instance.pid_cxt.PgArchPID = pgarch_start();
-            
-            if (!dummyStandbyMode && g_instance.archive_obs_cxt.obs_slot_num != 0 && 
+
+            if (!dummyStandbyMode && g_instance.archive_obs_cxt.obs_slot_num != 0 &&
                     g_instance.archive_obs_thread_info.obsArchPID != NULL) {
                 ArchObsThreadManage();
             }
@@ -5656,7 +5672,7 @@ static void reaper(SIGNAL_ARGS)
                         }
                     }
                 }
-                
+
                 if (g_instance.archive_obs_thread_info.obsBarrierArchPID != NULL) {
                     for (int i = 0; i < g_instance.attr.attr_storage.max_replication_slots; i++) {
                         if (g_instance.archive_obs_thread_info.obsBarrierArchPID[i] != 0) {
@@ -5857,17 +5873,17 @@ static void reaper(SIGNAL_ARGS)
             }
             continue;
         }
-        
+
         if (g_instance.archive_obs_thread_info.obsArchPID != NULL) {
             for (int i = 0; i < g_instance.attr.attr_storage.max_replication_slots; i++) {
                 if (pid == g_instance.archive_obs_thread_info.obsArchPID[i]) {
                     g_instance.archive_obs_thread_info.obsArchPID[i] = 0;
-                    
+
                     if (!EXIT_STATUS_0(exitstatus))
                         LogChildExit(LOG, _("archiver process"), pid, exitstatus);
-                    if (getObsReplicationSlotWithName(g_instance.archive_obs_thread_info.slotName[i]) != NULL && 
+                    if (getObsReplicationSlotWithName(g_instance.archive_obs_thread_info.slotName[i]) != NULL &&
                         (pmState == PM_RUN || pmState == PM_HOT_STANDBY)) {
-                        g_instance.archive_obs_thread_info.obsArchPID[i] = 
+                        g_instance.archive_obs_thread_info.obsArchPID[i] =
                             initialize_util_thread(ARCH, g_instance.archive_obs_thread_info.slotName[i]);
                     }
                     continue;
@@ -5882,9 +5898,9 @@ static void reaper(SIGNAL_ARGS)
 
                     if (!EXIT_STATUS_0(exitstatus))
                         LogChildExit(LOG, _("barrier archiver process"), pid, exitstatus);
-                    
+
                     if (getObsReplicationSlotWithName(g_instance.archive_obs_thread_info.slotName[i]) != NULL) {
-                        g_instance.archive_obs_thread_info.obsBarrierArchPID[i] = 
+                        g_instance.archive_obs_thread_info.obsBarrierArchPID[i] =
 						    initialize_util_thread(BARRIER_ARCH, g_instance.archive_obs_thread_info.slotName[i]);
                     }
                     continue;
@@ -6607,8 +6623,8 @@ static void PostmasterStateMachine(void)
             g_instance.pid_cxt.WLMCollectPID == 0 && g_instance.pid_cxt.WLMMonitorPID == 0 &&
             g_instance.pid_cxt.WLMArbiterPID == 0 && g_instance.pid_cxt.CPMonitorPID == 0 &&
             g_instance.pid_cxt.PgJobSchdPID == 0 && g_instance.pid_cxt.CBMWriterPID == 0 &&
-            g_instance.pid_cxt.TxnSnapCapturerPID == 0 && 
-            g_instance.pid_cxt.RbCleanrPID == 0 && 
+            g_instance.pid_cxt.TxnSnapCapturerPID == 0 &&
+            g_instance.pid_cxt.RbCleanrPID == 0 &&
             g_instance.pid_cxt.SnapshotPID == 0 && g_instance.pid_cxt.PercentilePID == 0 &&
             g_instance.pid_cxt.AshPID == 0 && g_instance.pid_cxt.CsnminSyncPID == 0 &&
             g_instance.pid_cxt.BarrierCreatorPID == 0 &&
@@ -6619,7 +6635,7 @@ static void PostmasterStateMachine(void)
 #endif   /* ENABLE_MULTIPLE_NODES */
 
             g_instance.pid_cxt.UndoLauncherPID == 0 && g_instance.pid_cxt.UndoRecyclerPID == 0 &&
-            g_instance.pid_cxt.GlobalStatsPID == 0 && 
+            g_instance.pid_cxt.GlobalStatsPID == 0 &&
             IsAllPageWorkerExit() && IsAllBuildSenderExit()) {
             if (g_instance.fatal_error) {
                 /*
@@ -6641,7 +6657,7 @@ static void PostmasterStateMachine(void)
                 Assert(g_instance.status > NoShutdown || g_instance.demotion > NoDemote);
 
                 /* Start the checkpointer if not running */
-                if (g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
+                if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.CheckpointerPID == 0 && !dummyStandbyMode)
                     g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
 
                 if (g_instance.pid_cxt.PageWriterPID != NULL) {
@@ -6683,7 +6699,7 @@ static void PostmasterStateMachine(void)
 
                     if (g_instance.pid_cxt.PgArchPID != 0)
                         signal_child(g_instance.pid_cxt.PgArchPID, SIGQUIT);
-                    
+
                     if (g_instance.archive_obs_thread_info.obsArchPID != NULL) {
                         for (int i = 0; i < g_instance.attr.attr_storage.max_replication_slots; i++) {
                             if (g_instance.archive_obs_thread_info.obsArchPID[i] != 0) {
@@ -6725,7 +6741,7 @@ static void PostmasterStateMachine(void)
          */
         if (g_instance.pid_cxt.PgArchPID == 0 && CountChildren(BACKEND_TYPE_ALL) == 0 &&
             g_instance.pid_cxt.WalReceiverPID == 0 && g_instance.pid_cxt.WalRcvWriterPID == 0 &&
-            g_instance.pid_cxt.DataReceiverPID == 0 && g_instance.pid_cxt.DataRcvWriterPID == 0 && 
+            g_instance.pid_cxt.DataReceiverPID == 0 && g_instance.pid_cxt.DataRcvWriterPID == 0 &&
             ObsArchAllShutDown() && g_instance.pid_cxt.HeartbeatPID == 0) {
             pmState = PM_WAIT_DEAD_END;
         }
@@ -6840,7 +6856,7 @@ static void PostmasterStateMachine(void)
         ereport(LOG, (errmsg("all server processes terminated; reinitializing")));
         hashmdata = t_thrd.postmaster_cxt.HaShmData;
         cur_mode = hashmdata->current_mode;
-        /* cause gpc scheduler use lwlock, so before reset shared memory(still has lwlock), 
+        /* cause gpc scheduler use lwlock, so before reset shared memory(still has lwlock),
           get gpc_reset_lock and reset gpc */
         if (ENABLE_GPC) {
             GPCResetAll();
@@ -6870,7 +6886,7 @@ static void PostmasterStateMachine(void)
      */
     if (g_instance.demotion > NoDemote && pmState == PM_NO_CHILDREN) {
         ereport(LOG, (errmsg("all server processes terminated; reinitializing")));
-        /* cause gpc scheduler use lwlock, so before reset shared memory(still has lwlock), 
+        /* cause gpc scheduler use lwlock, so before reset shared memory(still has lwlock),
           get gpc_reset_lock and reset gpc */
         if (ENABLE_GPC) {
             GPCResetAll();
@@ -7617,7 +7633,9 @@ static void handle_recovery_started()
          * we'll just try again later.
          */
         Assert(g_instance.pid_cxt.CheckpointerPID == 0);
-        g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
+        if (!g_instance.k2_cxt.isK2ModelEnabled) {
+            g_instance.pid_cxt.CheckpointerPID = initialize_util_thread(CHECKPOINT_THREAD);
+        }
         Assert(g_instance.pid_cxt.BgWriterPID == 0);
         if (!ENABLE_INCRE_CKPT) {
             g_instance.pid_cxt.BgWriterPID = initialize_util_thread(BGWRITER);
@@ -7977,7 +7995,7 @@ static void PaxosPromoteLeader(void)
 {
 #ifndef ENABLE_MULTIPLE_NODES
     Assert(t_thrd.dcf_cxt.dcfCtxInfo->isDcfStarted);
-    ereport(LOG, (errmsg("The node with nodeID %d begin to promote leader in DCF mode.", 
+    ereport(LOG, (errmsg("The node with nodeID %d begin to promote leader in DCF mode.",
                     g_instance.attr.attr_storage.dcf_attr.dcf_node_id)));
     int timeout = 60; /* seconds */
     /* Read timeout from TimeoutFile */
@@ -8051,7 +8069,7 @@ static void sigusr1_handler(SIGNAL_ARGS)
         ereport(LOG, (errmsg("set lsn after recovery done in gaussdb state file")));
     }
 
-    if (g_instance.pid_cxt.WalWriterAuxiliaryPID == 0 && 
+    if (g_instance.pid_cxt.WalWriterAuxiliaryPID == 0 &&
         t_thrd.postmaster_cxt.HaShmData->current_mode == STANDBY_MODE &&
         (pmState == PM_RECOVERY || pmState == PM_HOT_STANDBY)) {
         g_instance.pid_cxt.WalWriterAuxiliaryPID = initialize_util_thread(WALWRITERAUXILIARY);
@@ -8060,7 +8078,7 @@ static void sigusr1_handler(SIGNAL_ARGS)
                 pmState:%u, ServerMode:%u",
                 g_instance.pid_cxt.WalWriterAuxiliaryPID, pmState, t_thrd.postmaster_cxt.HaShmData->current_mode)));
     }
-        
+
     if (CheckPostmasterSignal(PMSIGNAL_UPDATE_WAITING)) {
         PMUpdateDBState(WAITING_STATE, get_cur_mode(), get_cur_repl_num());
         ereport(LOG,
@@ -8110,7 +8128,7 @@ static void sigusr1_handler(SIGNAL_ARGS)
         signal_child(g_instance.pid_cxt.SysLoggerPID, SIGUSR1);
     }
 
-    if (CheckPostmasterSignal(PMSIGNAL_START_AUTOVAC_LAUNCHER) && g_instance.status == NoShutdown) {
+    if (!g_instance.k2_cxt.isK2ModelEnabled && CheckPostmasterSignal(PMSIGNAL_START_AUTOVAC_LAUNCHER) && g_instance.status == NoShutdown) {
         /*
          * Start one iteration of the autovacuum daemon, even if autovacuuming
          * is nominally not enabled.  This is so we can have an active defense
@@ -8128,7 +8146,7 @@ static void sigusr1_handler(SIGNAL_ARGS)
         /* The autovacuum launcher wants us to start a worker process. */
         StartAutovacuumWorker();
     }
-    
+
     /* should not start a worker in shutdown or demotion procedure */
     if (CheckPostmasterSignal(PMSIGNAL_START_RB_WORKER) && g_instance.status == NoShutdown &&
         g_instance.demotion == NoDemote) {
@@ -8267,7 +8285,7 @@ static void sigusr1_handler(SIGNAL_ARGS)
         Assert(t_thrd.dcf_cxt.dcfCtxInfo->isDcfStarted);
         handle_remove_member_signal(nodeID);
     }
-    
+
     if (g_instance.attr.attr_storage.dcf_attr.enable_dcf &&
         checkSignalFileExist(ChangeRoleFile) && t_thrd.dcf_cxt.dcfCtxInfo->isDcfStarted) {
         handle_change_role_signal();
@@ -10206,7 +10224,7 @@ DbState get_local_dbstate_sub(WalRcvData* walrcv, ServerMode mode)
 {
     bool has_build_reason = true;
     if ((t_thrd.postmaster_cxt.HaShmData->repl_reason[t_thrd.postmaster_cxt.HaShmData->current_repl] ==
-        NONE_REBUILD && walrcv != NULL && walrcv->isRuning && 
+        NONE_REBUILD && walrcv != NULL && walrcv->isRuning &&
         (walrcv->conn_target == REPCONNTARGET_PRIMARY || IsCascadeStandby())) ||
         dummyStandbyMode || (IS_DISASTER_RECOVER_MODE &&
         t_thrd.postmaster_cxt.HaShmData->repl_reason[t_thrd.postmaster_cxt.HaShmData->current_repl] == NONE_REBUILD)) {
@@ -11120,7 +11138,7 @@ static void is_memory_backend_reserved(const knl_thread_arg* arg)
         }
         return;
     }
-    
+
     switch (arg->role) {
         case WALWRITER:
         case WALRECEIVER:
@@ -12280,4 +12298,3 @@ void InitShmemForDcfCallBack()
     InitProcessAndShareMemory();
 }
 #endif
-

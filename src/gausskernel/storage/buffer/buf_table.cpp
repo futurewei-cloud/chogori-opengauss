@@ -29,7 +29,7 @@
 #include "gstrace/gstrace_infra.h"
 #include "gstrace/storage_gstrace.h"
 
-extern uint32 hashquickany(uint32 seed, register const unsigned char *data, register int len);
+extern uint32 hashquickany(uint32 seed, const unsigned char *data, int len);
 /* entry for buffer lookup hashtable */
 typedef struct {
     BufferTag key; /* Tag of a disk page */

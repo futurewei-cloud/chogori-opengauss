@@ -12,11 +12,11 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * ---------------------------------------------------------------------------------------
- * 
+ *
  * be_module.h
- * 
- * 
- * 
+ *
+ *
+ *
  * IDENTIFICATION
  *        src/include/utils/be_module.h
  *
@@ -73,6 +73,7 @@ enum ModuleId {
     MOD_WLM_CP,       /* wlm for the comupte pool */
     MOD_ACCELERATE,   /* accelerate with comptue pool */
     MOD_MOT,          /* MOT */
+    MOD_K2,           /* K2 */
     MOD_PLANHINT,     /* plan hint */
     MOD_PARQUET,      /* Parquet storage format */
     MOD_PGSTAT,       /* pgstat */
@@ -104,7 +105,7 @@ enum ModuleId {
     MOD_COMM_PARAM, /* comm session params */
     MOD_TIMESERIES, /* timeseries feature */
     MOD_SCHEMA,     /* schema search */
-    
+
     MOD_SEGMENT_PAGE,  /* segment page storage */
     MOD_LIGHTPROXY, /* lightProxy */
     MOD_HOTKEY,     /* hotkey */
