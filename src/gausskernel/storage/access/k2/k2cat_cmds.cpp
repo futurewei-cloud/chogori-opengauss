@@ -96,26 +96,19 @@ K2FinishInitDB()
 void
 K2PgCreateDatabase(Oid dboid, const char *dbname, Oid src_dboid, Oid next_oid, bool colocated)
 {
-	K2PgStatement handle;
+    (void) colocated;
 
-	HandleK2PgStatus(PgGate_NewCreateDatabase(dbname,
+	HandleK2PgStatus(PgGate_ExecCreateDatabase(dbname,
 										  dboid,
 										  src_dboid,
-										  next_oid,
-										  colocated,
-										  &handle));
-	HandleK2PgStatus(PgGate_ExecCreateDatabase(handle));
+                                          next_oid));
 }
 
 void
 K2PgDropDatabase(Oid dboid, const char *dbname)
 {
-	K2PgStatement handle;
-
-	HandleK2PgStatus(PgGate_NewDropDatabase(dbname,
-										dboid,
-										&handle));
-	HandleK2PgStatus(PgGate_ExecDropDatabase(handle));
+	HandleK2PgStatus(PgGate_ExecDropDatabase(dbname,
+                                             dboid));
 }
 
 void
@@ -131,34 +124,33 @@ K2PgReservePgOids(Oid dboid, Oid next_oid, uint32 count, Oid *begin_oid, Oid *en
 /* ------------------------------------------------------------------------- */
 /*  Table Functions. */
 
-static void CreateTableAddColumn(K2PgStatement handle,
-								 Form_pg_attribute att,
-								 bool is_hash,
+static void CreateTableAddColumn(Form_pg_attribute att,
 								 bool is_primary,
 								 bool is_desc,
-								 bool is_nulls_first)
+								 bool is_nulls_first,
+                                 std::vector<K2PGColumnDef>& columns)
 {
-	const AttrNumber attnum = att->attnum;
-	const K2PgTypeEntity *col_type = K2PgDataTypeFromOidMod(attnum,
+	const K2PgTypeEntity *col_type = K2PgDataTypeFromOidMod(att->attnum,
 															att->atttypid);
-	HandleK2PgStatus(PgGate_CreateTableAddColumn(handle,
-																					 NameStr(att->attname),
-																					 attnum,
-																					 col_type,
-																					 is_hash,
-																					 is_primary,
-																					 is_desc,
-																					 is_nulls_first));
+    K2PGColumnDef column {
+        .attr_name = NameStr(att->attname),
+        .attr_num = att->attnum,
+        .attr_type = col_type,
+        .is_key = is_primary,
+        .is_desc = is_desc,
+        .is_nulls_first = is_nulls_first
+    };
+
+    columns.push_back(std::move(column));
 }
 
 /* Utility function to add columns to the K2PG create statement
  * Columns need to be sent in order first hash columns, then rest of primary
  * key columns, then regular columns.
  */
-static void CreateTableAddColumns(K2PgStatement handle,
-								  TupleDesc desc,
+static void CreateTableAddColumns(TupleDesc desc,
 								  Constraint *primary_key,
-								  const bool colocated)
+                                  std::vector<K2PGColumnDef>& columns)
 {
 	/* Add all key columns first with respect to compound key order */
 	ListCell *cell;
@@ -181,25 +173,17 @@ static void CreateTableAddColumns(K2PgStatement handle,
 										" '%s' not yet supported",
 										K2PgTypeOidToStr(att->atttypid))));
 					SortByDir order = index_elem->ordering;
-					/* In K2PG mode, the first column defaults to HASH if it is
-					 * not set and its table is not colocated */
-					const bool is_first_key =
-						cell == list_head(primary_key->k2pg_index_params);
-					bool is_hash = (is_first_key &&
-									 order == SORTBY_DEFAULT &&
-									 !colocated);
 					bool is_desc = false;
 					bool is_nulls_first = false;
 					ColumnSortingOptions(order,
 										 index_elem->nulls_ordering,
 										 &is_desc,
 										 &is_nulls_first);
-					CreateTableAddColumn(handle,
-										 att,
-										 is_hash,
+					CreateTableAddColumn(att,
 										 true /* is_primary */,
 										 is_desc,
-										 is_nulls_first);
+										 is_nulls_first,
+                                         columns);
 					column_found = true;
 					break;
 				}
@@ -228,12 +212,11 @@ static void CreateTableAddColumns(K2PgStatement handle,
 				}
 			}
 		if (!is_key)
-			CreateTableAddColumn(handle,
-								 att,
-								 false /* is_hash */,
+			CreateTableAddColumn(att,
 								 false /* is_primary */,
 								 false /* is_desc */,
-								 false /* is_nulls_first */);
+								 false /* is_nulls_first */,
+                                 columns);
 	}
 }
 
@@ -250,7 +233,6 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 		return; /* Nothing to do. */
 	}
 
-	K2PgStatement handle = NULL;
 	ListCell       *listptr;
 
 	char *db_name = get_database_name(MyDatabaseId);
@@ -303,21 +285,16 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 		}
 	}
 
-	HandleK2PgStatus(PgGate_NewCreateTable(db_name,
+    std::vector<K2PGColumnDef> columns;
+	CreateTableAddColumns(desc, primary_key, columns);
+	HandleK2PgStatus(PgGate_ExecCreateTable(db_name,
 									   schema_name,
 									   stmt->relation->relname,
 									   MyDatabaseId,
 									   relationId,
-									   false, /* is_shared_table */
 									   false, /* if_not_exists */
 									   primary_key == NULL /* add_primary_key */,
-									   colocated,
-									   &handle));
-
-	CreateTableAddColumns(handle, desc, primary_key, colocated);
-
-	/* Create the table. */
-	HandleK2PgStatus(PgGate_ExecCreateTable(handle));
+									   columns));
 }
 
 void
@@ -483,20 +460,8 @@ K2PgCreateIndex(const char *indexName,
 		}
 	}
 
-	K2PgStatement handle = NULL;
-
-	HandleK2PgStatus(PgGate_NewCreateIndex(db_name,
-									   schema_name,
-									   indexName,
-									   MyDatabaseId,
-									   indexId,
-									   RelationGetRelid(rel),
-									   rel->rd_rel->relisshared,
-									   indexInfo->ii_Unique,
-									   skip_index_backfill,
-									   false, /* if_not_exists */
-									   &handle));
-
+    std::vector<K2PGColumnDef> columns;
+    
 	for (int i = 0; i < indexTupleDesc->natts; i++)
 	{
 		Form_pg_attribute     att         = TupleDescAttr(indexTupleDesc, i);
@@ -515,22 +480,31 @@ K2PgCreateIndex(const char *indexName,
 		}
 
 		const int16 options        = coloptions[i];
-		const bool  is_hash        = options & INDOPTION_HASH;
 		const bool  is_desc        = options & INDOPTION_DESC;
 		const bool  is_nulls_first = options & INDOPTION_NULLS_FIRST;
+        
+        K2PGColumnDef column {
+            .attr_name = attname,
+            .attr_num = attnum,
+            .attr_type = col_type,
+            .is_key = is_key,
+            .is_desc = is_desc,
+            .is_nulls_first = is_nulls_first
+        };
 
-		HandleK2PgStatus(PgGate_CreateIndexAddColumn(handle,
-																						 attname,
-																						 attnum,
-																						 col_type,
-																						 is_hash,
-																						 is_key,
-																						 is_desc,
-																						 is_nulls_first));
+        columns.push_back(std::move(column));
 	}
-
-	/* Create the index. */
-	HandleK2PgStatus(PgGate_ExecCreateIndex(handle));
+    
+	HandleK2PgStatus(PgGate_ExecCreateIndex(db_name,
+									   schema_name,
+									   indexName,
+									   MyDatabaseId,
+									   indexId,
+									   RelationGetRelid(rel),
+									   indexInfo->ii_Unique,
+									   skip_index_backfill,
+									   false, /* if_not_exists */
+									   columns));
 }
 
 K2PgStatement

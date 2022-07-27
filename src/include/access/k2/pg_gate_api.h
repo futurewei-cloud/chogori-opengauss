@@ -23,7 +23,8 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+#include <vector>
 
 #include "access/k2/k2pg_util.h"
 #include "access/k2/pg_gate_typedefs.h"
@@ -58,9 +59,6 @@ K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx);
 // Invalidate the sessions table cache.
 K2PgStatus PgGate_InvalidateCache();
 
-// Clear all values and expressions that were bound to the given statement.
-K2PgStatus PgGate_ClearBinds(K2PgStatement handle);
-
 // Check if initdb has been already run.
 K2PgStatus PgGate_IsInitDbDone(bool* initdb_done);
 
@@ -75,9 +73,6 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version);
 // DATABASE ----------------------------------------------------------------------------------------
 // Connect database. Switch the connected database to the given "database_name".
 K2PgStatus PgGate_ConnectDatabase(const char *database_name);
-
-// Get whether the given database is colocated.
-K2PgStatus PgGate_IsDatabaseColocated(const K2PgOid database_oid, bool *colocated);
 
 K2PgStatus PgGate_InsertSequenceTuple(int64_t db_oid,
                                  int64_t seq_oid,
@@ -115,19 +110,14 @@ K2PgStatus PgGate_InitPrimaryCluster();
 K2PgStatus PgGate_FinishInitDB();
 
 // Create database.
-K2PgStatus PgGate_NewCreateDatabase(const char *database_name,
+K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
                                  K2PgOid database_oid,
                                  K2PgOid source_database_oid,
-                                 K2PgOid next_oid,
-                                 const bool colocated,
-                                 K2PgStatement *handle);
-K2PgStatus PgGate_ExecCreateDatabase(K2PgStatement handle);
+                                 K2PgOid next_oid);
 
 // Drop database.
-K2PgStatus PgGate_NewDropDatabase(const char *database_name,
-                               K2PgOid database_oid,
-                               K2PgStatement *handle);
-K2PgStatus PgGate_ExecDropDatabase(K2PgStatement handle);
+K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
+                                   K2PgOid database_oid);
 
 // Alter database.
 K2PgStatus PgGate_NewAlterDatabase(const char *database_name,
@@ -152,25 +142,26 @@ void PgGate_InvalidateTableCache(
 K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid);
 
 // TABLE -------------------------------------------------------------------------------------------
+struct K2PGColumnDef {
+    const char* attr_name;
+    int attr_num;
+    const K2PgTypeEntity *attr_type;
+    bool is_key;
+    bool is_desc;
+    bool is_nulls_first;
+};
+   
 // Create and drop table "database_name.schema_name.table_name()".
 // - When "schema_name" is NULL, the table "database_name.table_name" is created.
 // - When "database_name" is NULL, the table "connected_database_name.table_name" is created.
-K2PgStatus PgGate_NewCreateTable(const char *database_name,
+K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               const char *schema_name,
                               const char *table_name,
                               K2PgOid database_oid,
                               K2PgOid table_oid,
-                              bool is_shared_table,
                               bool if_not_exist,
                               bool add_primary_key,
-                              const bool colocated,
-                              K2PgStatement *handle);
-
-K2PgStatus PgGate_CreateTableAddColumn(K2PgStatement handle, const char *attr_name, int attr_num,
-                                    const K2PgTypeEntity *attr_type, bool is_hash, bool is_range,
-                                    bool is_desc, bool is_nulls_first);
-
-K2PgStatus PgGate_ExecCreateTable(K2PgStatement handle);
+                              const std::vector<K2PGColumnDef>& columns);
 
 K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
                              K2PgOid table_oid,
@@ -228,23 +219,16 @@ K2PgStatus PgGate_IsTableColocated(const K2PgOid database_oid,
 // Create and drop index "database_name.schema_name.index_name()".
 // - When "schema_name" is NULL, the index "database_name.index_name" is created.
 // - When "database_name" is NULL, the index "connected_database_name.index_name" is created.
-K2PgStatus PgGate_NewCreateIndex(const char *database_name,
+K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               const char *schema_name,
                               const char *index_name,
                               K2PgOid database_oid,
                               K2PgOid index_oid,
                               K2PgOid table_oid,
-                              bool is_shared_index,
                               bool is_unique_index,
                               const bool skip_index_backfill,
                               bool if_not_exist,
-                              K2PgStatement *handle);
-
-K2PgStatus PgGate_CreateIndexAddColumn(K2PgStatement handle, const char *attr_name, int attr_num,
-                                    const K2PgTypeEntity *attr_type, bool is_hash, bool is_range,
-                                    bool is_desc, bool is_nulls_first);
-
-K2PgStatus PgGate_ExecCreateIndex(K2PgStatement handle);
+                              const std::vector<K2PGColumnDef>& columns);
 
 K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
                             K2PgOid index_oid,

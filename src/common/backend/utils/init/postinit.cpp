@@ -2422,15 +2422,6 @@ void PostgresInitializer::LoadSysCache()
      */
     RelationCacheInitializePhase3();
 
-	/*
-	 * Also cache whather the database is colocated for optimization purposes.
-	 */
-	if (IsK2PgEnabled() && !IsBootstrapProcessingMode())
-	{
-		HandleK2PgStatus(PgGate_IsDatabaseColocated(MyDatabaseId,
-												&MyDatabaseColocated));
-	}
-
     /* set up ACL framework (so CheckMyDatabase can check permissions) */
     initialize_acl();
 }
