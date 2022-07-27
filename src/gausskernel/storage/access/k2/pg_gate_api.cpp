@@ -112,12 +112,6 @@ K2PgStatus PgGate_InvalidateCache() {
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
-// Clear all values and expressions that were bound to the given statement.
-K2PgStatus PgGate_ClearBinds(K2PgStatement handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ClearBinds");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
 // Check if initdb has been already run.
 K2PgStatus PgGate_IsInitDbDone(bool* initdb_done) {
   elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbDone");
@@ -155,40 +149,20 @@ K2PgStatus PgGate_ConnectDatabase(const char *database_name) {
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
-// Get whether the given database is colocated.
-K2PgStatus PgGate_IsDatabaseColocated(const K2PgOid database_oid, bool *colocated) {
-  elog(DEBUG5, "PgGateAPI: PgGate_IsDatabaseColocated");
-  *colocated = false;
-  return K2PgStatusOK();
-}
-
 // Create database.
-K2PgStatus PgGate_NewCreateDatabase(const char *database_name,
+K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
                                  K2PgOid database_oid,
                                  K2PgOid source_database_oid,
-                                 K2PgOid next_oid,
-                                 const bool colocated,
-                                 K2PgStatement *handle) {
-  elog(LOG, "PgGateAPI: PgGate_NewCreateDatabase %s, %d, %d, %d",
+                                 K2PgOid next_oid) {
+  elog(LOG, "PgGateAPI: PgGate_ExecCreateDatabase %s, %d, %d, %d",
          database_name, database_oid, source_database_oid, next_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
-K2PgStatus PgGate_ExecCreateDatabase(K2PgStatement handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecCreateDatabase");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
 // Drop database.
-K2PgStatus PgGate_NewDropDatabase(const char *database_name,
-                               K2PgOid database_oid,
-                               K2PgStatement *handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_NewDropDatabase %s, %d", database_name, database_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_ExecDropDatabase(K2PgStatement handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase");
+K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
+                                   K2PgOid database_oid) {
+  elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
@@ -291,34 +265,15 @@ K2PgStatus PgGate_DeleteSequenceTuple(int64_t db_oid, int64_t seq_oid) {
 // Create and drop table "database_name.schema_name.table_name()".
 // - When "schema_name" is NULL, the table "database_name.table_name" is created.
 // - When "database_name" is NULL, the table "connected_database_name.table_name" is created.
-K2PgStatus PgGate_NewCreateTable(const char *database_name,
+K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               const char *schema_name,
                               const char *table_name,
                               K2PgOid database_oid,
                               K2PgOid table_oid,
-                              bool is_shared_table,
                               bool if_not_exist,
                               bool add_primary_key,
-                              const bool colocated,
-                              K2PgStatement *handle) {
-  if (is_shared_table) {
-    elog(LOG, "PgGateAPI: PgGate_NewCreateTable (shared) %s, %s, %s", database_name, schema_name, table_name);
-  } else {
-    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
-  }
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_CreateTableAddColumn(K2PgStatement handle, const char *attr_name, int attr_num,
-                                    const K2PgTypeEntity *attr_type, bool is_hash, bool is_range,
-                                    bool is_desc, bool is_nulls_first) {
-  elog(DEBUG5, "PgGateAPI: PgGate_CreateTableAddColumn (name: %s, order: %d, is_hash %d, is_range %d)",
-    attr_name, attr_num, is_hash, is_range);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_ExecCreateTable(K2PgStatement handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecCreateTable");
+                              const std::vector<K2PGColumnDef>& columns) {
+  elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
@@ -431,34 +386,17 @@ K2PgStatus PgGate_IsTableColocated(const K2PgOid database_oid,
 // Create and drop index "database_name.schema_name.index_name()".
 // - When "schema_name" is NULL, the index "database_name.index_name" is created.
 // - When "database_name" is NULL, the index "connected_database_name.index_name" is created.
-K2PgStatus PgGate_NewCreateIndex(const char *database_name,
+K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               const char *schema_name,
                               const char *index_name,
                               K2PgOid database_oid,
                               K2PgOid index_oid,
                               K2PgOid table_oid,
-                              bool is_shared_index,
                               bool is_unique_index,
                               const bool skip_index_backfill,
                               bool if_not_exist,
-                              K2PgStatement *handle){
-  if (is_shared_index) {
-    elog(LOG, "PgGateAPI: PgGate_NewCreateIndex (shared) %s, %s, %s", database_name, schema_name, index_name);
-  } else {
-    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
-  }
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_CreateIndexAddColumn(K2PgStatement handle, const char *attr_name, int attr_num,
-                                    const K2PgTypeEntity *attr_type, bool is_hash, bool is_range,
-                                    bool is_desc, bool is_nulls_first){
-  elog(DEBUG5, "PgGateAPI: PgGate_CreateIndexAddColumn (name: %s, order: %d, is_hash: %d, is_range: %d)", attr_name, attr_num, is_hash, is_range);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_ExecCreateIndex(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecCreateIndex");
+                              const std::vector<K2PGColumnDef>& columns){
+  elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 

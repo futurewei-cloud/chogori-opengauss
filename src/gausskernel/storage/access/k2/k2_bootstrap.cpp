@@ -45,13 +45,13 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "parser/parser.h"
 
-static void K2PgAddSysCatalogColumn(K2PgStatement k2pg_stmt,
-								   IndexStmt *pkey_idx,
+static void K2PgAddSysCatalogColumn(IndexStmt *pkey_idx,
 								   const char *attname,
 								   int attnum,
 								   Oid type_id,
 								   int32 typmod,
-								   bool key)
+                                   bool key,
+                                   std::vector<K2PGColumnDef>& columns)
 {
 
 	ListCell      *lc;
@@ -76,45 +76,47 @@ static void K2PgAddSysCatalogColumn(K2PgStatement k2pg_stmt,
 	 */
 	if (key == is_key)
 	{
-		HandleK2PgStatus(PgGate_CreateTableAddColumn(k2pg_stmt,
-																						 attname,
-																						 attnum,
-																						 col_type,
-																						 false /* is_hash */,
-																						 is_key,
-																						 false /* is_desc */,
-																						 false /* is_nulls_first */));
+        K2PGColumnDef column {
+            .attr_name = attname,
+            .attr_num = attnum,
+            .attr_type = col_type,
+            .is_key = is_key,
+            .is_desc = false,
+            .is_nulls_first = false
+        };
+
+        columns.push_back(std::move(column));
 	}
 }
 
-static void K2PgAddSysCatalogColumns(K2PgStatement k2pg_stmt,
-									TupleDesc tupdesc,
+static void K2PgAddSysCatalogColumns(TupleDesc tupdesc,
 									IndexStmt *pkey_idx,
-									const bool key)
+                                    const bool key,
+                                    std::vector<K2PGColumnDef>& columns)
 {
 	if (tupdesc->tdhasoid)
 	{
 		/* Add the OID column if the table was declared with OIDs. */
-		K2PgAddSysCatalogColumn(k2pg_stmt,
-							   pkey_idx,
+		K2PgAddSysCatalogColumn(pkey_idx,
 							   "oid",
 							   ObjectIdAttributeNumber,
 							   OIDOID,
 							   0,
-							   key);
+                               key,
+                               columns);
 	}
 
 	/* Add the rest of the columns. */
 	for (int attno = 0; attno < tupdesc->natts; attno++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupdesc, attno);
-		K2PgAddSysCatalogColumn(k2pg_stmt,
-							   pkey_idx,
+		K2PgAddSysCatalogColumn(pkey_idx,
 							   attr->attname.data,
 							   attr->attnum,
 							   attr->atttypid,
 							   attr->atttypmod,
-							   key);
+							   key,
+                               columns);
 	}
 }
 
@@ -128,25 +130,21 @@ void K2PgCreateSysCatalogTable(const char *table_name,
 	Assert(IsBootstrapProcessingMode());
 	char           *db_name     = "template1";
 	char           *schema_name = "pg_catalog";
-	K2PgStatement k2pg_stmt      = NULL;
 
-	HandleK2PgStatus(PgGate_NewCreateTable(db_name,
+    std::vector<K2PGColumnDef> columns;
+	/* Add all key columns first, then the regular columns */
+	if (pkey_idx != NULL)
+	{
+		K2PgAddSysCatalogColumns(tupdesc, pkey_idx, /* key */ true, columns);
+	}
+	K2PgAddSysCatalogColumns(tupdesc, pkey_idx, /* key */ false, columns);
+
+	HandleK2PgStatus(PgGate_ExecCreateTable(db_name,
 	                                   schema_name,
 	                                   table_name,
 	                                   TemplateDbOid,
 	                                   table_oid,
-	                                   is_shared_relation,
 	                                   false, /* if_not_exists */
 									   pkey_idx == NULL, /* add_primary_key */
-									   true, /* colocated */
-	                                   &k2pg_stmt));
-
-	/* Add all key columns first, then the regular columns */
-	if (pkey_idx != NULL)
-	{
-		K2PgAddSysCatalogColumns(k2pg_stmt, tupdesc, pkey_idx, /* key */ true);
-	}
-	K2PgAddSysCatalogColumns(k2pg_stmt, tupdesc, pkey_idx, /* key */ false);
-
-	HandleK2PgStatus(PgGate_ExecCreateTable(k2pg_stmt));
+	                                   columns));
 }
