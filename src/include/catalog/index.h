@@ -72,7 +72,7 @@ typedef struct {
 } v_i_state;
 
 
-typedef enum CheckWaitMode 
+typedef enum CheckWaitMode
 {
     CHECK_WAIT,
     CHECK_NOWAIT,
@@ -169,7 +169,7 @@ extern double IndexBuildHeapScanCrossBucket(Relation heapRelation, Relation inde
                                             IndexBuildCallback callback, void *callbackState);
 extern double IndexBuildVectorBatchScan(Relation heapRelation, Relation indexRelation, IndexInfo *indexInfo,
                                         VectorBatch *vecScanBatch, Snapshot snapshot,
-                                        IndexBuildVecBatchScanCallback callback, void *callback_state, 
+                                        IndexBuildVecBatchScanCallback callback, void *callback_state,
                                         void *transferFuncs);
 
 
@@ -178,9 +178,9 @@ extern void validate_index_heapscan(
     Relation heapRelation, Relation indexRelation, IndexInfo* indexInfo, Snapshot snapshot, v_i_state* state);
 
 extern void index_set_state_flags(Oid indexId, IndexStateFlagsAction action);
-extern void reindex_indexpart_internal(Relation heapRelation, 
-                                       Relation iRel, 
-                                       IndexInfo* indexInfo, 
+extern void reindex_indexpart_internal(Relation heapRelation,
+                                       Relation iRel,
+                                       IndexInfo* indexInfo,
                                        Oid indexPartId);
 extern void reindex_index(Oid indexId, Oid indexPartId,
                           bool skip_constraint_checks, AdaptMem *memInfo,
@@ -223,17 +223,17 @@ extern void addIndexForPartition(Relation partitionedRelation, Oid partOid);
 extern void dropIndexForPartition(Oid partOid);
 extern void index_update_stats(Relation rel, bool hasindex, bool isprimary,
                                Oid reltoastidxid, Oid relcudescidx, double reltuples);
-extern void PartitionNameCallbackForIndexPartition(Oid partitionedRelationOid, 
-                                                   const char *partitionName, 
-                                                   Oid partId, 
-                                                   Oid oldPartId, 
-                                                   char partition_type, 
+extern void PartitionNameCallbackForIndexPartition(Oid partitionedRelationOid,
+                                                   const char *partitionName,
+                                                   Oid partId,
+                                                   Oid oldPartId,
+                                                   char partition_type,
                                                    void *arg,
                                                    LOCKMODE callbackobj_lockMode);
 extern void reindex_partIndex(Relation heapRel,  Partition heapPart, Relation indexRel , Partition indexPart);
 extern bool reindexPartition(Oid relid, Oid partOid, int flags, int reindexType);
 extern void AddGPIForPartition(Oid partTableOid, Oid partOid);
-void AddCBIForPartition(Relation partTableRel, Relation tempTableRel, const List* indexRelList, 
+void AddCBIForPartition(Relation partTableRel, Relation tempTableRel, const List* indexRelList,
     const List* indexDestOidList);
 extern void DeleteGPITuplesForPartition(Oid partTableOid, Oid partOid);
 extern void mergeBTreeIndexes(List* mergingBtreeIndexes, List* srcPartMergeOffset, int2 bktId);

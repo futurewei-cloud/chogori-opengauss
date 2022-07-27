@@ -69,6 +69,9 @@
 
 #include "securec.h"
 
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/pg_gate_api.h"
+
 /* non-export function prototypes */
 void CheckPredicate(Expr* predicate);
 Oid GetIndexOpClass(List* opclass, Oid attrType, const char* accessMethodName, Oid accessMethodId);
@@ -369,6 +372,25 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
     } else {
         concurrent = false;
     }
+
+	/* Use fast path create index when in nested DDL.  This is desired
+	 * when there would be no concurrency issues (e.g. `CREATE TABLE
+	 * ... (... UNIQUE (...))`).  However, there may be cases where it
+	 * is unsafe to use the fast path.  For now, just use the fast path
+	 * in all cases.
+	 */
+	if (stmt->concurrent && K2PgGetDdlNestingLevel() != 1)
+		stmt->concurrent = false;
+
+	/*
+	 * Backfilling unique indexes is currently not supported.  This is desired
+	 * when there would be no concurrency issues (e.g. `CREATE TABLE ... (...
+	 * UNIQUE (...))`).  However, it is not desired in cases where there could
+	 * be concurrency issues (e.g. `CREATE UNIQUE INDEX ...`, `ALTER TABLE ...
+	 * ADD UNIQUE (...)`).  For now, just use the fast path in all cases.
+	 */
+	if (stmt->concurrent && stmt->unique)
+		stmt->concurrent = false;
 
     /*
      * Open heap relation, acquire a suitable lock on it, remember its OID
@@ -747,6 +769,29 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
      * look up the access method, verify it can handle the requested features
      */
     accessMethodName = stmt->accessMethod;
+
+	/*
+	 * In K2PG mode, switch index method from "btree" or "hash" to "lsm" depending on whether
+	 * the table is stored in K2PG storage or not (such as temporary tables).
+	 */
+	if (IsK2PgEnabled())
+	{
+		if (accessMethodName == NULL)
+		{
+			accessMethodName = const_cast<char*>(IsK2PgRelation(rel) ? DEFAULT_K2PG_INDEX_TYPE : DEFAULT_INDEX_TYPE);
+		}
+		else if (IsK2PgRelation(rel))
+		{
+			if (strcmp(accessMethodName, "btree") == 0 || strcmp(accessMethodName, "hash") == 0)
+			{
+				ereport(NOTICE,
+						(errmsg("index method \"%s\" was replaced with \"%s\" in K2PG",
+								accessMethodName, DEFAULT_K2PG_INDEX_TYPE)));
+				accessMethodName = DEFAULT_K2PG_INDEX_TYPE;
+			}
+		}
+	}
+
     if (RelationIsUstoreFormat(rel) &&
         (strcmp(accessMethodName, "gist") == 0 || strcmp(accessMethodName, "gin") == 0)) {
         ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -771,6 +816,13 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
             (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("access method \"%s\" does not exist", accessMethodName)));
     }
     accessMethodId = HeapTupleGetOid(tuple);
+
+ 	if (IsK2PgRelation(rel) && accessMethodId != K2INDEX_AM_OID)
+		ereport(ERROR,
+				(errmsg("index method \"%s\" not supported yet",
+						accessMethodName),
+				 errhint(" ")));
+
     accessMethodForm = (Form_pg_am)GETSTRUCT(tuple);
     if (stmt->unique &&
 #ifndef ENABLE_MULTIPLE_NODES
@@ -1110,7 +1162,7 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
     if (stmt->isPartitioned && !stmt->isGlobal) {
         Relation partitionedIndex = index_open(indexRelationId, AccessExclusiveLock);
 
-        if (rel->partMap->type == PART_TYPE_RANGE || 
+        if (rel->partMap->type == PART_TYPE_RANGE ||
             rel->partMap->type == PART_TYPE_INTERVAL ||
             rel->partMap->type == PART_TYPE_HASH ||
             rel->partMap->type == PART_TYPE_LIST) {
@@ -1281,7 +1333,11 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
 
     PopActiveSnapshot();
     CommitTransactionCommand();
+    K2PgDecrementDdlNestingLevel(true /* success */);
+	K2PgIncrementDdlNestingLevel();
+
     StartTransactionCommand();
+    // TODO: need to add index permission API calls once we support that ?
 
     /*
      * Phase 2 of concurrent index build (see comments for validate_index()
@@ -1366,7 +1422,11 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
      * Commit this transaction to make the indisready update visible.
      */
     CommitTransactionCommand();
+ 	K2PgDecrementDdlNestingLevel(true /* success */);
+	K2PgIncrementDdlNestingLevel();
+
     StartTransactionCommand();
+    // TODO: need to add index permission API calls once we support that ?
 
     /*
      * Phase 3 of concurrent index build
@@ -1426,6 +1486,7 @@ Oid DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, bool is_al
      */
     CommitTransactionCommand();
     StartTransactionCommand();
+    // TODO: need to add index permission API calls once we support that ?
 
     /*
      * The index is now valid in the sense that it contains all currently
@@ -3441,7 +3502,7 @@ static void CheckIndexParamsNumber(IndexStmt* stmt) {
     if (stmt->isGlobal && stmt->crossbucket && (list_length(stmt->indexParams) > GLOBAL_CROSSBUCKET_INDEX_MAX_KEYS)) {
         ereport(ERROR,
             (errcode(ERRCODE_TOO_MANY_COLUMNS),
-                errmsg("cannot use more than %d columns in a global cross-bucket index", 
+                errmsg("cannot use more than %d columns in a global cross-bucket index",
                     GLOBAL_CROSSBUCKET_INDEX_MAX_KEYS)));
     } else if (stmt->isGlobal && (list_length(stmt->indexParams) > INDEX_MAX_KEYS - 1)) {
         ereport(ERROR,

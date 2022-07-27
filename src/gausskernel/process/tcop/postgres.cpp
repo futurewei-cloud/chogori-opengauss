@@ -5602,6 +5602,10 @@ void quickdie(SIGNAL_ARGS)
      */
     on_exit_reset();
 
+	if (IsK2PgEnabled()) {
+		K2PgOnPostgresBackendShutdown();
+	}
+
     /*
      * Note we do exit(2) not exit(0).	This is to force the postmaster into a
      * system reset cycle if some idiot DBA sends a manual SIGQUIT to a random
@@ -7315,6 +7319,9 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
         t_thrd.proc_cxt.PostInit->InitWAL();
     else
         t_thrd.proc_cxt.PostInit->InitBackendWorker();
+
+    /* Connect to K2PG cluster. */
+	K2PgInitPostgresBackend("postgres", dbname, username);
 
     /*
      * If the t_thrd.mem_cxt.postmaster_mem_cxt is still around, recycle the space; we don't
