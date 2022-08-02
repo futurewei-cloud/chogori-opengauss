@@ -55,8 +55,7 @@ k2inbuildCallback(Relation index, HeapTuple heapTuple, Datum *values, const bool
 		K2PgExecuteInsertIndex(index,
 							  values,
 							  (bool *)isnull,
-							  heapTuple->t_k2pgctid,
-							  buildstate->is_backfill);
+							  heapTuple->t_k2pgctid);
 
 	buildstate->index_tuples += 1;
 }
@@ -97,8 +96,7 @@ k2ininsert(Relation index, Datum *values, bool *isnull, Datum k2pgctid, Relation
 		K2PgExecuteInsertIndex(index,
 							  values,
 							  isnull,
-							  k2pgctid,
-							  false /* is_backfill */);
+							  k2pgctid);
 
 	return index->rd_index->indisunique ? true : false;
 }
