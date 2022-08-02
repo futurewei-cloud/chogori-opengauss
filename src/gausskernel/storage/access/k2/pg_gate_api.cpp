@@ -527,7 +527,7 @@ K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_co
 }
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
-K2PgStatus PgGate_DmlBuildPgTupleId(K2PgStatement handle, const K2PgAttrValueDescriptor *attrs,
+K2PgStatus PgGate_DmlBuildPgTupleId(const K2PgAttrValueDescriptor *attrs,
                                  int32_t nattrs, uint64_t *k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %d", nattrs);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
@@ -538,54 +538,32 @@ K2PgStatus PgGate_DmlBuildPgTupleId(K2PgStatement handle, const K2PgAttrValueDes
 
 // INSERT ------------------------------------------------------------------------------------------
 
-K2PgStatus PgGate_NewInsert(K2PgOid database_oid,
-                         K2PgOid table_oid,
-                         bool is_single_row_txn,
-                         K2PgStatement *handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewInsert %d, %d, %d", database_oid, table_oid, is_single_row_txn);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_ExecInsert(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_InsertStmtSetUpsertMode(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_InsertStmtSetUpsertMode");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_InsertStmtSetWriteTime(K2PgStatement handle, const uint64_t write_time){
-  elog(DEBUG5, "PgGateAPI: PgGate_InsertStmtSetWriteTime %lu", write_time);
+K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
+                             K2PgOid table_oid,
+                             bool upsert,
+                             bool increment_catalog,
+                             const std::vector<K2PgWriteColumnDef>& columns) {
+  elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
 // UPDATE ------------------------------------------------------------------------------------------
-K2PgStatus PgGate_NewUpdate(K2PgOid database_oid,
-                         K2PgOid table_oid,
-                         bool is_single_row_txn,
-                         K2PgStatement *handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewUpdate %u, %u, %d", database_oid, table_oid, is_single_row_txn);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_ExecUpdate(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecUpdate");
+K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
+                             K2PgOid table_oid,
+                             bool increment_catalog,
+                             int* rows_affected,
+                             const std::vector<K2PgWriteColumnDef>& columns) {
+  elog(DEBUG5, "PgGateAPI: PgGate_ExecUpdate %u, %u", database_oid, table_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
 // DELETE ------------------------------------------------------------------------------------------
-K2PgStatus PgGate_NewDelete(K2PgOid database_oid,
-                         K2PgOid table_oid,
-                         bool is_single_row_txn,
-                         K2PgStatement *handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewDelete %d, %d, %d", database_oid, table_oid, is_single_row_txn);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_ExecDelete(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecDelete");
+K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
+                             K2PgOid table_oid,
+                             bool increment_catalog,
+                             int* rows_affected,
+                             const std::vector<K2PgWriteColumnDef>& columns) {
+  elog(DEBUG5, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
