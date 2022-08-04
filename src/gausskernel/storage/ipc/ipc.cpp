@@ -56,6 +56,8 @@
 #include "storage/mot/mot_fdw.h"
 #endif
 
+#include "access/k2/k2pg_aux.h"
+
 #ifdef ENABLE_MEMORY_CHECK
 extern "C" {
     extern void __lsan_do_leak_check();
@@ -318,8 +320,8 @@ void proc_exit(int code)
             file_scanner = file_list;
             file_list = file_list->next;
 #ifndef ENABLE_MEMORY_CHECK
-            /* 
-             * in the senario of ImmediateShutdown, it is not safe to close plugin 
+            /*
+             * in the senario of ImmediateShutdown, it is not safe to close plugin
              * as PM thread will not wait for all children threads exist(will send SIGQUIT signal) referring to pmdie
              */
             if (g_instance.status != ImmediateShutdown) {
@@ -372,6 +374,9 @@ void proc_exit(int code)
     }
 
     GlobalStatsCleanupFiles();
+    
+	if (IsK2PgEnabled())
+		K2PgOnPostgresBackendShutdown();
 
     gs_thread_exit(code);
 }
@@ -489,15 +494,15 @@ void sess_exit_prepare(int code)
             (u_sess->ext_fdw_ctx[i].fdwExitFunc)(code, UInt32GetDatum(NULL));
         }
     }
-	
+
     if (u_sess->gtt_ctx.gtt_cleaner_exit_registered) {
         pg_on_exit_callback func = u_sess->gtt_ctx.gtt_sess_exit;
         (*func)(code, UInt32GetDatum(NULL));
     }
-	
+
     for (; u_sess->on_sess_exit_index < on_sess_exit_size; u_sess->on_sess_exit_index++)
         (*on_sess_exit_list[u_sess->on_sess_exit_index])(code, UInt32GetDatum(NULL));
-    
+
     t_thrd.storage_cxt.on_proc_exit_index = 0;
     RESUME_INTERRUPTS();
     gs_signal_recover_mask(old_sigset);
@@ -695,4 +700,3 @@ bool IsCalledInSessExit(pg_on_exit_callback func)
     }
     return false;
 }
-

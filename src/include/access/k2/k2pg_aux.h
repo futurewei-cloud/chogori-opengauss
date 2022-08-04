@@ -32,6 +32,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2pg_util.h"
 #include "access/k2/pg_gate_api.h"
 
+#define DEFAULT_K2PG_INDEX_TYPE	"k2index"
+
 /*
  * Version of the catalog entries in the relcache and catcache.
  * We (only) rely on a following invariant: If the catalog cache version here is
