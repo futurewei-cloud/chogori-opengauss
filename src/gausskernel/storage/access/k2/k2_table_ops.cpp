@@ -317,6 +317,7 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 		CacheInvalidateHeapTuple(rel, tuple, NULL);
 	}
 
+    // TODO: && RelationHasCachedLists(rel)
 	bool is_syscatalog_change = IsSystemCatalogChange(rel);
 	/* Execute the insert */
 	HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, false /* upsert */, is_syscatalog_change, columns));
@@ -625,6 +626,17 @@ bool K2PgExecuteUpdate(Relation rel,
 	tupleDesc = RelationGetDescr(rel);
 	bool whole_row = bms_is_member(InvalidAttrNumber, updatedCols);
 
+    /* TODO in chogori-sql, pushdown ops were retrieved from the list like below.
+     * We don't support these pushdowns in k2 and we should make sure opengauss does not try
+     * to pass them to us.
+     *
+     * ModifyTable *mt_plan = (ModifyTable *) mtstate->ps.plan;
+     * ListCell* pushdown_lc = list_head(mt_plan->k2PushdownTlist);
+     *
+     * Also we should eventually support SQL such as "SET balance = balance + 1" even if it is not
+     * pushed down to the storage. We should automatically convert it to a read-modify-write for k2
+     */
+    
 	for (int idx = 0; idx < tupleDesc->natts; idx++)
 	{
 		FormData_pg_attribute *att_desc = TupleDescAttr(tupleDesc, idx);
