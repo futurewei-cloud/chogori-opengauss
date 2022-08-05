@@ -65,6 +65,8 @@
 #include "utils/relcache.h"
 #include "commands/copy.h"
 
+#include "access/k2/pg_gate_api.h"
+
 #define MAX_SLOW_QUERY_RETENSION_DAYS 604800
 #define MAX_FULL_SQL_RETENSION_SEC 86400
 #define IS_NULL_STR(str) ((str) == NULL || (str)[0] == '\0')
@@ -1418,6 +1420,10 @@ void instr_stmt_report_basic_info()
         ResourceOwner tmpOwner = t_thrd.utils_cxt.CurrentResourceOwner;
         t_thrd.utils_cxt.CurrentResourceOwner = old_cur_owner;
         ResourceOwnerDelete(tmpOwner);
+        if (to_update_db_name || to_update_user_name || to_update_client_addr) {
+            // start a new PG Gate session if any changes in db, user name, or client address
+            PgGate_InitSession(NULL, u_sess->statement_cxt.db_name);
+        }
     }
 }
 
