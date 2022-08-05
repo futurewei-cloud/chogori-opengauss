@@ -23,6 +23,8 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
+#include "postgres.h"
+
 #include <cstdint>
 #include <vector>
 
@@ -311,39 +313,39 @@ K2PgStatus PgGate_DmlFetch(K2PgStatement handle, int32_t natts, uint64_t *values
 K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count);
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
-K2PgStatus PgGate_DmlBuildPgTupleId(K2PgStatement handle, const K2PgAttrValueDescriptor *attrs,
+K2PgStatus PgGate_DmlBuildPgTupleId(const K2PgAttrValueDescriptor *attrs,
                                  int32_t nattrs, uint64_t *k2pgctid);
 
 // DB Operations: WHERE(partially supported by K2-SKV)
 // TODO: ORDER_BY, GROUP_BY, etc.
 
 // INSERT ------------------------------------------------------------------------------------------
-K2PgStatus PgGate_NewInsert(K2PgOid database_oid,
-                         K2PgOid table_oid,
-                         bool is_single_row_txn,
-                         K2PgStatement *handle);
-
-K2PgStatus PgGate_ExecInsert(K2PgStatement handle);
-
-K2PgStatus PgGate_InsertStmtSetUpsertMode(K2PgStatement handle);
-
-K2PgStatus PgGate_InsertStmtSetWriteTime(K2PgStatement handle, const uint64_t write_time);
+struct K2PgWriteColumnDef {
+    int attr_num;
+    Oid type_id;
+    Datum datum;
+    bool is_null;
+};
+    
+K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
+                             K2PgOid table_oid,
+                             bool upsert,
+                             bool increment_catalog,
+                             const std::vector<K2PgWriteColumnDef>& columns);
 
 // UPDATE ------------------------------------------------------------------------------------------
-K2PgStatus PgGate_NewUpdate(K2PgOid database_oid,
-                         K2PgOid table_oid,
-                         bool is_single_row_txn,
-                         K2PgStatement *handle);
-
-K2PgStatus PgGate_ExecUpdate(K2PgStatement handle);
+K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
+                             K2PgOid table_oid,
+                             bool increment_catalog,
+                             int* rows_affected,
+                             const std::vector<K2PgWriteColumnDef>& columns);
 
 // DELETE ------------------------------------------------------------------------------------------
-K2PgStatus PgGate_NewDelete(K2PgOid database_oid,
-                         K2PgOid table_oid,
-                         bool is_single_row_txn,
-                         K2PgStatement *handle);
-
-K2PgStatus PgGate_ExecDelete(K2PgStatement handle);
+K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
+                             K2PgOid table_oid,
+                             bool increment_catalog,
+                             int* rows_affected,
+                             const std::vector<K2PgWriteColumnDef>& columns);
 
 // Colocated TRUNCATE ------------------------------------------------------------------------------
 K2PgStatus PgGate_NewTruncateColocated(K2PgOid database_oid,

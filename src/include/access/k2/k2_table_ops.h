@@ -62,8 +62,7 @@ extern Oid K2PgExecuteInsert(Relation rel,
 extern void K2PgExecuteInsertIndex(Relation rel,
 								  Datum *values,
 								  bool *isnull,
-								  Datum k2pgctid,
-								  bool is_backfill);
+								  Datum k2pgctid);
 
 /*
  * Delete a tuple (identified by k2pgctid) from a K2PG table.

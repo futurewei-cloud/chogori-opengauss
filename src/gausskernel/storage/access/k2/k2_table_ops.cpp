@@ -210,8 +210,7 @@ Datum K2PgGetPgTupleIdFromSlot(TupleTableSlot *slot)
  * meaning the k2pgctid will be unique. Therefore you should only use this if the relation has
  * a primary key or you're doing an insert.
  */
-Datum K2PgGetPgTupleIdFromTuple(K2PgStatement pg_stmt,
-							   Relation rel,
+Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 							   HeapTuple tuple,
 							   TupleDesc tupleDesc) {
 	Bitmapset *pkey = GetFullK2PgTablePrimaryKey(rel);
@@ -242,18 +241,9 @@ Datum K2PgGetPgTupleIdFromTuple(K2PgStatement pg_stmt,
 		}
 		++next_attr;
 	}
-	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(pg_stmt, attrs, nattrs, &tuple_id));
+	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(attrs, nattrs, &tuple_id));
 	pfree(attrs);
 	return (Datum)tuple_id;
-}
-
-/*
- * Bind k2pgctid to the statement.
- */
-static void K2PgBindTupleId(K2PgStatement pg_stmt, Datum tuple_id) {
-	K2PgExpr k2pg_expr = K2PgNewConstant(pg_stmt, BYTEAOID, tuple_id,
-										false /* is_null */);
-	HandleK2PgStatus(PgGate_DmlBindColumn(pg_stmt, K2PgTupleIdAttributeNumber, k2pg_expr));
 }
 
 /*
@@ -266,69 +256,19 @@ static bool IsSystemCatalogChange(Relation rel)
 }
 
 /*
- * Utility method to execute a prepared write statement.
- * Will handle the case if the write changes the system catalogs meaning
- * we need to increment the catalog versions accordingly.
- */
-static void K2PgExecWriteStmt(K2PgStatement k2pg_stmt, Relation rel, int *rows_affected_count)
-{
-	bool is_syscatalog_change = IsSystemCatalogChange(rel);
-	bool modifies_row = false;
-	HandleK2PgStatus(PgGate_DmlModifiesRow(k2pg_stmt, &modifies_row));
-
-	/*
-	 * If this write may invalidate catalog cache tuples (i.e. UPDATE or DELETE),
-	 * or this write may insert into a cached list, we must increment the
-	 * cache version so other sessions can invalidate their caches.
-	 * NOTE: If this relation caches lists, an INSERT could effectively be
-	 * UPDATINGing the list object.
-	 */
-	bool is_syscatalog_version_change = is_syscatalog_change && modifies_row;
-	//		&& (modifies_row || RelationHasCachedLists(rel));
-
-	/* Let the master know if this should increment the catalog version. */
-	if (is_syscatalog_version_change)
-	{
-		HandleK2PgStatus(PgGate_SetIsSysCatalogVersionChange(k2pg_stmt));
-	}
-
-	HandleK2PgStatus(PgGate_SetCatalogCacheVersion(k2pg_stmt, k2pg_catalog_cache_version));
-
-	/* Execute the insert. */
-	HandleK2PgStatus(PgGate_DmlExecWriteOp(k2pg_stmt, rows_affected_count));
-
-	/*
-	 * Optimization to increment the catalog version for the local cache as
-	 * this backend is already aware of this change and should update its
-	 * catalog caches accordingly (without needing to ask the master).
-	 * Note that, since the master catalog version should have been identically
-	 * incremented, it will continue to match with the local cache version if
-	 * and only if no other master changes occurred in the meantime (i.e. from
-	 * other backends).
-	 * If changes occurred, then a cache refresh will be needed as usual.
-	 */
-	if (is_syscatalog_version_change)
-	{
-		// TODO(shane) also update the shared memory catalog version here.
-		k2pg_catalog_cache_version += 1;
-	}
-}
-
-/*
  * Utility method to insert a tuple into the relation's backing K2PG table.
  */
 static Oid K2PgExecuteInsertInternal(Relation rel,
                                     TupleDesc tupleDesc,
-                                    HeapTuple tuple,
-                                    bool is_single_row_txn)
+                                     HeapTuple tuple)
 {
 	Oid            dboid    = K2PgGetDatabaseOid(rel);
 	Oid            relid    = RelationGetRelid(rel);
 	AttrNumber     minattr  = FirstLowInvalidHeapAttributeNumber + 1;
 	int            natts    = RelationGetNumberOfAttributes(rel);
 	Bitmapset      *pkey    = GetK2PgTablePrimaryKey(rel);
-	K2PgStatement insert_stmt = NULL;
 	bool           is_null  = false;
+    std::vector<K2PgWriteColumnDef> columns;
 
 	/* Generate a new oid for this row if needed */
 	if (rel->rd_rel->relhasoids)
@@ -336,16 +276,6 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 		if (!OidIsValid(HeapTupleGetOid(tuple)))
 			HeapTupleSetOid(tuple, GetNewOid(rel));
 	}
-
-	/* Create the INSERT request and add the values from the tuple. */
-	HandleK2PgStatus(PgGate_NewInsert(dboid,
-	                              relid,
-	                              is_single_row_txn,
-	                              &insert_stmt));
-
-	/* Get the k2pgctid for the tuple and bind to statement */
-	tuple->t_k2pgctid = K2PgGetPgTupleIdFromTuple(insert_stmt, rel, tuple, tupleDesc);
-	K2PgBindTupleId(insert_stmt, tuple->t_k2pgctid);
 
 	for (AttrNumber attnum = minattr; attnum <= natts; attnum++)
 	{
@@ -367,8 +297,13 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 		}
 
 		/* Add the column value to the insert request */
-		K2PgExpr k2pg_expr = K2PgNewConstant(insert_stmt, type_id, datum, is_null);
-		HandleK2PgStatus(PgGate_DmlBindColumn(insert_stmt, attnum, k2pg_expr));
+        K2PgWriteColumnDef column {
+            .attr_num = attnum,
+            .type_id = type_id,
+            .datum = datum,
+            .is_null = is_null
+        };
+        columns.push_back(std::move(column));
 	}
 
 	/*
@@ -382,34 +317,40 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 		CacheInvalidateHeapTuple(rel, tuple, NULL);
 	}
 
+    // TODO: && RelationHasCachedLists(rel)
+	bool is_syscatalog_change = IsSystemCatalogChange(rel);
 	/* Execute the insert */
-	K2PgExecWriteStmt(insert_stmt, rel, NULL /* rows_affected_count */);
+	HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, false /* upsert */, is_syscatalog_change, columns));
 
-	/* Clean up */
-	insert_stmt = NULL;
+	/*
+	 * Optimization to increment the catalog version for the local cache as
+	 * this backend is already aware of this change and should update its
+	 * catalog caches accordingly (without needing to ask the master).
+	 * Note that, since the master catalog version should have been identically
+	 * incremented, it will continue to match with the local cache version if
+	 * and only if no other master changes occurred in the meantime (i.e. from
+	 * other backends).
+	 * If changes occurred, then a cache refresh will be needed as usual.
+	 */
+	if (is_syscatalog_change)
+	{
+		// TODO(shane) also update the shared memory catalog version here.
+		k2pg_catalog_cache_version += 1;
+	}
 
 	return HeapTupleGetOid(tuple);
 }
 
 /*
- * Utility method to bind const to column
- */
-static void BindColumn(K2PgStatement stmt, int attr_num, Oid type_id, Datum datum, bool is_null)
-{
-  K2PgExpr expr = K2PgNewConstant(stmt, type_id, datum, is_null);
-  HandleK2PgStatus(PgGate_DmlBindColumn(stmt, attr_num, expr));
-}
-
-/*
  * Utility method to set keys and value to index write statement
  */
-static void PrepareIndexWriteStmt(K2PgStatement stmt,
-                                  Relation index,
+static void PrepareIndexWriteStmt(Relation index,
                                   Datum *values,
                                   bool *isnull,
                                   int natts,
                                   Datum k2pgbasectid,
-                                  bool k2pgctid_as_value)
+                                  bool k2pgctid_as_value,
+                                  std::vector<K2PgWriteColumnDef>& columns)
 {
 	TupleDesc tupdesc = RelationGetDescr(index);
 
@@ -427,7 +368,13 @@ static void PrepareIndexWriteStmt(K2PgStatement stmt,
 		Datum value   = values[attnum - 1];
 		bool  is_null = isnull[attnum - 1];
 		has_null_attr = has_null_attr || is_null;
-		BindColumn(stmt, attnum, type_id, value, is_null);
+        K2PgWriteColumnDef column {
+            .attr_num = attnum,
+            .type_id = type_id,
+            .datum = value,
+            .is_null = is_null
+        };
+        columns.push_back(std::move(column));
 	}
 
 	const bool unique_index = index->rd_index->indisunique;
@@ -437,24 +384,30 @@ static void PrepareIndexWriteStmt(K2PgStatement stmt,
 	 * - to k2pgbasectid if at least one index key column is null.
 	 * - to NULL otherwise (setting is_null to true is enough).
 	 */
-	if (unique_index)
-		BindColumn(stmt,
-		           K2PgUniqueIdxKeySuffixAttributeNumber,
-		           BYTEAOID,
-		           k2pgbasectid,
-		           !has_null_attr /* is_null */);
+	if (unique_index) {
+         K2PgWriteColumnDef column {
+            .attr_num = K2PgUniqueIdxKeySuffixAttributeNumber,
+            .type_id = BYTEAOID,
+            .datum = k2pgbasectid,
+            .is_null = !has_null_attr
+        };
+        columns.push_back(std::move(column));
+   }
 
 	/*
 	 * We may need to set the base ctid column:
 	 * - for unique indexes only if we need it as a value (i.e. for inserts)
 	 * - for non-unique indexes always (it is a key column).
 	 */
-	if (k2pgctid_as_value || !unique_index)
-		BindColumn(stmt,
-		           K2PgIdxBaseTupleIdAttributeNumber,
-		           BYTEAOID,
-		           k2pgbasectid,
-		           false /* is_null */);
+	if (k2pgctid_as_value || !unique_index) {
+          K2PgWriteColumnDef column {
+            .attr_num =	K2PgIdxBaseTupleIdAttributeNumber,
+            .type_id = BYTEAOID,
+            .datum = k2pgbasectid,
+            .is_null = false
+        };
+        columns.push_back(std::move(column));
+    }
 }
 
 Oid K2PgExecuteInsert(Relation rel,
@@ -463,8 +416,7 @@ Oid K2PgExecuteInsert(Relation rel,
 {
 	return K2PgExecuteInsertInternal(rel,
 	                                tupleDesc,
-	                                tuple,
-	                                false /* is_single_row_txn */);
+                                     tuple);
 }
 
 Oid K2PgExecuteNonTxnInsert(Relation rel,
@@ -473,8 +425,7 @@ Oid K2PgExecuteNonTxnInsert(Relation rel,
 {
 	return K2PgExecuteInsertInternal(rel,
 	                                tupleDesc,
-	                                tuple,
-	                                true /* is_single_row_txn */);
+                                     tuple);
 }
 
 Oid K2PgHeapInsert(TupleTableSlot *slot,
@@ -507,64 +458,41 @@ Oid K2PgHeapInsert(TupleTableSlot *slot,
 void K2PgExecuteInsertIndex(Relation index,
 						   Datum *values,
 						   bool *isnull,
-						   Datum k2pgctid,
-						   bool is_backfill)
+                            Datum k2pgctid)
 {
 	Assert(index->rd_rel->relkind == RELKIND_INDEX);
 	Assert(k2pgctid != 0);
 
 	Oid            dboid    = K2PgGetDatabaseOid(index);
 	Oid            relid    = RelationGetRelid(index);
-	K2PgStatement insert_stmt = NULL;
+    std::vector<K2PgWriteColumnDef> columns;
+    bool upsert = false;
 
-	/* Create the INSERT request and add the values from the tuple. */
-	/*
-	 * TODO(jason): rename `is_single_row_txn` to something like
-	 * `non_distributed_txn` when closing issue #4906.
-	 */
-	HandleK2PgStatus(PgGate_NewInsert(dboid,
-								  relid,
-								  is_backfill /* is_single_row_txn */,
-								  &insert_stmt));
-
-	PrepareIndexWriteStmt(insert_stmt, index, values, isnull,
+	PrepareIndexWriteStmt(index, values, isnull,
 						  RelationGetNumberOfAttributes(index),
-						  k2pgctid, true /* k2pgctid_as_value */);
+						  k2pgctid, true /* k2pgctid_as_value */, columns);
 
 	/*
 	 * For non-unique indexes the primary-key component (base tuple id) already
 	 * guarantees uniqueness, so no need to read and check it in K2 PG.
 	 */
 	if (!index->rd_index->indisunique) {
-		HandleK2PgStatus(PgGate_InsertStmtSetUpsertMode(insert_stmt));
+        upsert = true;
 	}
 
-	/* For index backfill, set write hybrid time to a time in the past.  This
-	 * is to guarantee that backfilled writes are temporally before any online
-	 * writes. */
-	/* TODO(jason): don't hard-code 50. */
-	if (is_backfill)
-		HandleK2PgStatus(PgGate_InsertStmtSetWriteTime(insert_stmt, 50));
-
 	/* Execute the insert and clean up. */
-	K2PgExecWriteStmt(insert_stmt, index, NULL /* rows_affected_count */);
+	HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, upsert, false, columns));
 }
 
 bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, ModifyTableState *mtstate)
 {
 	Oid            dboid          = K2PgGetDatabaseOid(rel);
 	Oid            relid          = RelationGetRelid(rel);
-	K2PgStatement delete_stmt    = NULL;
 
 	// TODO: consider removing this logic if not needed
 	bool           isSingleRow    = mtstate->k2pg_mt_is_single_row_update_or_delete;
 	Datum          k2pgctid         = 0;
-
-	/* Create DELETE request. */
-	HandleK2PgStatus(PgGate_NewDelete(dboid,
-								  relid,
-								  estate->es_k2pg_is_single_row_modify_txn,
-								  &delete_stmt));
+    std::vector<K2PgWriteColumnDef> columns;
 
 	/*
 	 * Look for k2pgctid. Raise error if k2pgctid is not found.
@@ -575,8 +503,7 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	if (isSingleRow)
 	{
 		HeapTuple tuple = ExecMaterializeSlot(slot);
-		k2pgctid = K2PgGetPgTupleIdFromTuple(delete_stmt,
-										  rel,
+		k2pgctid = K2PgGetPgTupleIdFromTuple(rel,
 										  tuple,
 										  slot->tts_tupleDescriptor);
 	}
@@ -593,19 +520,39 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	}
 
 	/* Bind k2pgctid to identify the current row. */
-	K2PgExpr k2pgctid_expr = K2PgNewConstant(delete_stmt, BYTEAOID, k2pgctid,
-										   false /* is_null */);
-	HandleK2PgStatus(PgGate_DmlBindColumn(delete_stmt, K2PgTupleIdAttributeNumber, k2pgctid_expr));
+    K2PgWriteColumnDef k2id {
+        .attr_num = K2PgTupleIdAttributeNumber,
+        .type_id = BYTEAOID,
+        .datum = k2pgctid,
+        .is_null = false
+    };
+    columns.push_back(std::move(k2id));
+
 
 	/* Delete row from foreign key cache */
 	HandleK2PgStatus(PgGate_DeleteFromForeignKeyReferenceCache(relid, k2pgctid));
 
+    bool increment_catalog = IsSystemCatalogChange(rel);
+
 	/* Execute the statement. */
 	int rows_affected_count = 0;
-	K2PgExecWriteStmt(delete_stmt, rel, isSingleRow ? &rows_affected_count : NULL);
+    HandleK2PgStatus(PgGate_ExecDelete(dboid, relid, increment_catalog, &rows_affected_count, columns));
 
-	/* Cleanup. */
-	delete_stmt = NULL;
+	/*
+	 * Optimization to increment the catalog version for the local cache as
+	 * this backend is already aware of this change and should update its
+	 * catalog caches accordingly (without needing to ask the master).
+	 * Note that, since the master catalog version should have been identically
+	 * incremented, it will continue to match with the local cache version if
+	 * and only if no other master changes occurred in the meantime (i.e. from
+	 * other backends).
+	 * If changes occurred, then a cache refresh will be needed as usual.
+	 */
+	if (increment_catalog)
+	{
+		// TODO(shane) also update the shared memory catalog version here.
+		k2pg_catalog_cache_version += 1;
+	}
 
 	return !isSingleRow || rows_affected_count > 0;
 }
@@ -616,22 +563,16 @@ void K2PgExecuteDeleteIndex(Relation index, Datum *values, bool *isnull, Datum k
 
 	Oid            dboid    = K2PgGetDatabaseOid(index);
 	Oid            relid    = RelationGetRelid(index);
-	K2PgStatement delete_stmt = NULL;
+    std::vector<K2PgWriteColumnDef> columns;
 
-	/* Create the DELETE request and add the values from the tuple. */
-	HandleK2PgStatus(PgGate_NewDelete(dboid,
-								  relid,
-								  false /* is_single_row_txn */,
-								  &delete_stmt));
-
-	PrepareIndexWriteStmt(delete_stmt, index, values, isnull,
+	PrepareIndexWriteStmt(index, values, isnull,
 	                      IndexRelationGetNumberOfKeyAttributes(index),
-	                      k2pgctid, false /* k2pgctid_as_value */);
+	                      k2pgctid, false /* k2pgctid_as_value */, columns);
 
 	/* Delete row from foreign key cache */
 	HandleK2PgStatus(PgGate_DeleteFromForeignKeyReferenceCache(relid, k2pgctid));
 
-	K2PgExecWriteStmt(delete_stmt, index, NULL /* rows_affected_count */);
+    HandleK2PgStatus(PgGate_ExecDelete(dboid, relid, false, NULL, columns));
 }
 
 bool K2PgExecuteUpdate(Relation rel,
@@ -644,15 +585,9 @@ bool K2PgExecuteUpdate(Relation rel,
 	TupleDesc      tupleDesc      = slot->tts_tupleDescriptor;
 	Oid            dboid          = K2PgGetDatabaseOid(rel);
 	Oid            relid          = RelationGetRelid(rel);
-	K2PgStatement update_stmt    = NULL;
 	bool           isSingleRow    = mtstate->k2pg_mt_is_single_row_update_or_delete;
 	Datum          k2pgctid         = 0;
-
-	/* Create update statement. */
-	HandleK2PgStatus(PgGate_NewUpdate(dboid,
-								  relid,
-								  estate->es_k2pg_is_single_row_modify_txn,
-								  &update_stmt));
+    std::vector<K2PgWriteColumnDef> columns;
 
 	/*
 	 * Look for k2pgctid. Raise error if k2pgctid is not found.
@@ -662,8 +597,7 @@ bool K2PgExecuteUpdate(Relation rel,
 	 */
 	if (isSingleRow)
 	{
-		k2pgctid = K2PgGetPgTupleIdFromTuple(update_stmt,
-										  rel,
+		k2pgctid = K2PgGetPgTupleIdFromTuple(rel,
 										  tuple,
 										  slot->tts_tupleDescriptor);
 	}
@@ -680,24 +614,35 @@ bool K2PgExecuteUpdate(Relation rel,
 	}
 
 	/* Bind k2pgctid to identify the current row. */
-	K2PgExpr k2pgctid_expr = K2PgNewConstant(update_stmt, BYTEAOID, k2pgctid,
-										   false /* is_null */);
-	HandleK2PgStatus(PgGate_DmlBindColumn(update_stmt, K2PgTupleIdAttributeNumber, k2pgctid_expr));
+    K2PgWriteColumnDef k2id {
+        .attr_num = K2PgTupleIdAttributeNumber,
+        .type_id = BYTEAOID,
+        .datum = k2pgctid,
+        .is_null = false
+    };
+    columns.push_back(std::move(k2id));
 
 	/* Assign new values to the updated columns for the current row. */
 	tupleDesc = RelationGetDescr(rel);
 	bool whole_row = bms_is_member(InvalidAttrNumber, updatedCols);
 
-	ModifyTable *mt_plan = (ModifyTable *) mtstate->ps.plan;
-	ListCell* pushdown_lc = list_head(mt_plan->k2PushdownTlist);
-
+    /* TODO in chogori-sql, pushdown ops were retrieved from the list like below.
+     * We don't support these pushdowns in k2 and we should make sure opengauss does not try
+     * to pass them to us.
+     *
+     * ModifyTable *mt_plan = (ModifyTable *) mtstate->ps.plan;
+     * ListCell* pushdown_lc = list_head(mt_plan->k2PushdownTlist);
+     *
+     * Also we should eventually support SQL such as "SET balance = balance + 1" even if it is not
+     * pushed down to the storage. We should automatically convert it to a read-modify-write for k2
+     */
+    
 	for (int idx = 0; idx < tupleDesc->natts; idx++)
 	{
 		FormData_pg_attribute *att_desc = TupleDescAttr(tupleDesc, idx);
 
 		AttrNumber attnum = att_desc->attnum;
-		int32_t type_id = att_desc->atttypid;
-		int32_t type_mod = att_desc->atttypmod;
+		Oid type_id = att_desc->atttypid;
 
 		/* Skip virtual (system) and dropped columns */
 		if (!IsRealK2PgColumn(rel, attnum))
@@ -713,37 +658,38 @@ bool K2PgExecuteUpdate(Relation rel,
 		if (isSingleRow && !whole_row && !bms_is_member(bms_idx, updatedCols))
 			continue;
 
-		/* Assign this attr's value, handle expression pushdown if needed. */
-		if (pushdown_lc != NULL &&
-		    ((TargetEntry *) lfirst(pushdown_lc))->resno == attnum)
-		{
-			TargetEntry *tle = (TargetEntry *) lfirst(pushdown_lc);
-			Expr *expr = (Expr *)copyObject(tle->expr);
-			K2PgExprInstantiateParams(expr, estate->es_param_list_info);
-
-			K2PgExpr k2pg_expr = K2PgNewEvalExprCall(update_stmt, expr, attnum, type_id, type_mod);
-
-			HandleK2PgStatus(PgGate_DmlAssignColumn(update_stmt, attnum, k2pg_expr));
-
-			pushdown_lc = lnext(pushdown_lc);
-		}
-		else
-		{
-			bool is_null = false;
-			Datum d = heap_getattr(tuple, attnum, tupleDesc, &is_null);
-			K2PgExpr k2pg_expr = K2PgNewConstant(update_stmt, type_id,
-												d, is_null);
-
-			HandleK2PgStatus(PgGate_DmlAssignColumn(update_stmt, attnum, k2pg_expr));
-		}
+        bool is_null = false;
+        Datum d = heap_getattr(tuple, attnum, tupleDesc, &is_null);
+        K2PgWriteColumnDef column {
+            .attr_num = attnum,
+            .type_id = type_id,
+            .datum = d,
+            .is_null = is_null
+        };
+        columns.push_back(std::move(column));
 	}
 
+    bool increment_catalog = IsSystemCatalogChange(rel);
+    
 	/* Execute the statement. */
 	int rows_affected_count = 0;
-	K2PgExecWriteStmt(update_stmt, rel, isSingleRow ? &rows_affected_count : NULL);
+    HandleK2PgStatus(PgGate_ExecUpdate(dboid, relid, increment_catalog, &rows_affected_count, columns));
 
-	/* Cleanup. */
-	update_stmt = NULL;
+	/*
+	 * Optimization to increment the catalog version for the local cache as
+	 * this backend is already aware of this change and should update its
+	 * catalog caches accordingly (without needing to ask the master).
+	 * Note that, since the master catalog version should have been identically
+	 * incremented, it will continue to match with the local cache version if
+	 * and only if no other master changes occurred in the meantime (i.e. from
+	 * other backends).
+	 * If changes occurred, then a cache refresh will be needed as usual.
+	 */
+	if (increment_catalog)
+	{
+		// TODO(shane) also update the shared memory catalog version here.
+		k2pg_catalog_cache_version += 1;
+	}
 
 	/*
 	 * If the relation has indexes, save the k2pgctid to insert the updated row into the indexes.
@@ -760,27 +706,25 @@ void K2PgDeleteSysCatalogTuple(Relation rel, HeapTuple tuple)
 {
 	Oid            dboid       = K2PgGetDatabaseOid(rel);
 	Oid            relid       = RelationGetRelid(rel);
-	K2PgStatement delete_stmt = NULL;
+    std::vector<K2PgWriteColumnDef> columns;
 
 	if (tuple->t_k2pgctid == 0)
 		ereport(ERROR,
 		        (errcode(ERRCODE_UNDEFINED_COLUMN), errmsg(
 				        "Missing column k2pgctid in DELETE request to K2PG database")));
 
-	/* Prepare DELETE statement. */
-	HandleK2PgStatus(PgGate_NewDelete(dboid,
-								  relid,
-								  false /* is_single_row_txn */,
-								  &delete_stmt));
-
 	/* Bind k2pgctid to identify the current row. */
-	K2PgExpr k2pgctid_expr = K2PgNewConstant(delete_stmt, BYTEAOID, tuple->t_k2pgctid,
-										   false /* is_null */);
+    K2PgWriteColumnDef k2id {
+        .attr_num = K2PgTupleIdAttributeNumber,
+        .type_id = BYTEAOID,
+        .datum = tuple->t_k2pgctid,
+        .is_null = false
+    };
+    columns.push_back(std::move(k2id));
+
 
 	/* Delete row from foreign key cache */
 	HandleK2PgStatus(PgGate_DeleteFromForeignKeyReferenceCache(relid, tuple->t_k2pgctid));
-
-	HandleK2PgStatus(PgGate_DmlBindColumn(delete_stmt, K2PgTupleIdAttributeNumber, k2pgctid_expr));
 
 	/*
 	 * Mark tuple for invalidation from system caches at next command
@@ -790,10 +734,7 @@ void K2PgDeleteSysCatalogTuple(Relation rel, HeapTuple tuple)
 	MarkCurrentCommandUsed();
 	CacheInvalidateHeapTuple(rel, tuple, NULL);
 
-	K2PgExecWriteStmt(delete_stmt, rel, NULL /* rows_affected_count */);
-
-	/* Complete execution */
-	delete_stmt = NULL;
+    HandleK2PgStatus(PgGate_ExecDelete(dboid, relid, true /* increment_catalog */, NULL /* rows_affected */, columns));
 }
 
 void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple)
@@ -802,19 +743,19 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
 	Oid            relid       = RelationGetRelid(rel);
 	TupleDesc      tupleDesc   = RelationGetDescr(rel);
 	int            natts       = RelationGetNumberOfAttributes(rel);
-	K2PgStatement update_stmt = NULL;
-
-	/* Create update statement. */
-	HandleK2PgStatus(PgGate_NewUpdate(dboid,
-								  relid,
-								  false /* is_single_row_txn */,
-								  &update_stmt));
+    std::vector<K2PgWriteColumnDef> columns;
 
 	AttrNumber minattr = FirstLowInvalidHeapAttributeNumber + 1;
 	Bitmapset  *pkey   = GetK2PgTablePrimaryKey(rel);
 
 	/* Bind the k2pgctid to the statement. */
-	K2PgBindTupleId(update_stmt, tuple->t_k2pgctid);
+    K2PgWriteColumnDef tidColumn {
+        .attr_num = K2PgTupleIdAttributeNumber,
+        .type_id = BYTEAOID,
+        .datum = tuple->t_k2pgctid,
+        .is_null = false
+    };
+    columns.push_back(std::move(tidColumn));
 
 	/* Assign values to the non-primary-key columns to update the current row. */
 	for (int idx = 0; idx < natts; idx++)
@@ -829,9 +770,13 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
 
 		bool is_null = false;
 		Datum d = heap_getattr(tuple, attnum, tupleDesc, &is_null);
-		K2PgExpr k2pg_expr = K2PgNewConstant(update_stmt, TupleDescAttr(tupleDesc, idx)->atttypid,
-											d, is_null);
-		HandleK2PgStatus(PgGate_DmlAssignColumn(update_stmt, attnum, k2pg_expr));
+        K2PgWriteColumnDef column {
+            .attr_num = attnum,
+            .type_id = TupleDescAttr(tupleDesc, idx)->atttypid,
+            .datum = d,
+            .is_null = is_null
+        };
+        columns.push_back(std::move(column));
 	}
 
 	/*
@@ -849,8 +794,7 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
 		CacheInvalidateHeapTuple(rel, tuple, NULL);
 
 	/* Execute the statement and clean up */
-	K2PgExecWriteStmt(update_stmt, rel, NULL /* rows_affected_count */);
-	update_stmt = NULL;
+    HandleK2PgStatus(PgGate_ExecUpdate(dboid, relid, true /* increment catalog */, NULL /* rows affected */, columns)); 
 }
 
 bool
