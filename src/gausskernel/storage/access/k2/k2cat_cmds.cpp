@@ -235,7 +235,7 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 
 	ListCell       *listptr;
 
-	char *db_name = get_database_name(MyDatabaseId);
+	char *db_name = get_database_name(u_sess->proc_cxt.MyDatabaseId);
 	char *schema_name = stmt->relation->schemaname;
 	if (schema_name == NULL)
 	{
@@ -290,7 +290,7 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 	HandleK2PgStatus(PgGate_ExecCreateTable(db_name,
 									   schema_name,
 									   stmt->relation->relname,
-									   MyDatabaseId,
+									   u_sess->proc_cxt.MyDatabaseId,
 									   relationId,
 									   false, /* if_not_exists */
 									   primary_key == NULL /* add_primary_key */,
@@ -307,7 +307,7 @@ K2PgDropTable(Oid relationId)
 	if (MyDatabaseColocated)
 	{
 		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_IsTableColocated(MyDatabaseId,
+		HandleK2PgStatusIgnoreNotFound(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
 																											 relationId,
 																											 &colocated),
 																 &not_found);
@@ -317,7 +317,7 @@ K2PgDropTable(Oid relationId)
 	if (colocated)
 	{
 		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_NewTruncateColocated(MyDatabaseId,
+		HandleK2PgStatusIgnoreNotFound(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
 																													 relationId,
 																													 false,
 																													 &handle),
@@ -337,7 +337,7 @@ K2PgDropTable(Oid relationId)
 	/* Drop the table */
 	{
 		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_NewDropTable(MyDatabaseId,
+		HandleK2PgStatusIgnoreNotFound(PgGate_NewDropTable(u_sess->proc_cxt.MyDatabaseId,
 																									 relationId,
 																									 false, /* if_exists */
 																									 &handle),
@@ -358,14 +358,14 @@ K2PgTruncateTable(Relation rel) {
 
 	/* Determine if table is colocated */
 	if (MyDatabaseColocated)
-		HandleK2PgStatus(PgGate_IsTableColocated(MyDatabaseId,
+		HandleK2PgStatus(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
 											 relationId,
 											 &colocated));
 
 	if (colocated)
 	{
 		/* Create table-level tombstone for colocated tables */
-		HandleK2PgStatus(PgGate_NewTruncateColocated(MyDatabaseId,
+		HandleK2PgStatus(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
 												 relationId,
 												 false,
 												 &handle));
@@ -376,7 +376,7 @@ K2PgTruncateTable(Relation rel) {
 	else
 	{
 		/* Send truncate table RPC to master for non-colocated tables */
-		HandleK2PgStatus(PgGate_NewTruncateTable(MyDatabaseId,
+		HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
 											 relationId,
 											 &handle));
 		HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
@@ -398,13 +398,13 @@ K2PgTruncateTable(Relation rel) {
 
 		/* Determine if table is colocated */
 		if (MyDatabaseColocated)
-			HandleK2PgStatus(PgGate_IsTableColocated(MyDatabaseId,
+			HandleK2PgStatus(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
 												 relationId,
 												 &colocated));
 		if (colocated)
 		{
 			/* Create table-level tombstone for colocated tables */
-			HandleK2PgStatus(PgGate_NewTruncateColocated(MyDatabaseId,
+			HandleK2PgStatus(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
 													 relationId,
 													 false,
 													 &handle));
@@ -415,7 +415,7 @@ K2PgTruncateTable(Relation rel) {
 		else
 		{
 			/* Send truncate table RPC to master for non-colocated tables */
-			HandleK2PgStatus(PgGate_NewTruncateTable(MyDatabaseId,
+			HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
 												 indexId,
 												 &handle));
 			HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
@@ -436,7 +436,7 @@ K2PgCreateIndex(const char *indexName,
 //			   OptSplit *split_options,
 			   const bool skip_index_backfill)
 {
-	char *db_name	  = get_database_name(MyDatabaseId);
+	char *db_name	  = get_database_name(u_sess->proc_cxt.MyDatabaseId);
 	char *schema_name = get_namespace_name(RelationGetNamespace(rel));
 
 	if (!IsBootstrapProcessingMode())
@@ -461,7 +461,7 @@ K2PgCreateIndex(const char *indexName,
 	}
 
     std::vector<K2PGColumnDef> columns;
-    
+
 	for (int i = 0; i < indexTupleDesc->natts; i++)
 	{
 		Form_pg_attribute     att         = TupleDescAttr(indexTupleDesc, i);
@@ -482,7 +482,7 @@ K2PgCreateIndex(const char *indexName,
 		const int16 options        = coloptions[i];
 		const bool  is_desc        = options & INDOPTION_DESC;
 		const bool  is_nulls_first = options & INDOPTION_NULLS_FIRST;
-        
+
         K2PGColumnDef column {
             .attr_name = attname,
             .attr_num = attnum,
@@ -494,7 +494,7 @@ K2PgCreateIndex(const char *indexName,
 
         columns.push_back(std::move(column));
 	}
-    
+
 	HandleK2PgStatus(PgGate_ExecCreateIndex(db_name,
 									   schema_name,
 									   indexName,
@@ -511,7 +511,7 @@ K2PgStatement
 K2PgPrepareAlterTable(AlterTableStmt *stmt, Relation rel, Oid relationId)
 {
 	K2PgStatement handle = NULL;
-	HandleK2PgStatus(PgGate_NewAlterTable(MyDatabaseId,
+	HandleK2PgStatus(PgGate_NewAlterTable(u_sess->proc_cxt.MyDatabaseId,
 									  relationId,
 									  &handle));
 
@@ -635,12 +635,12 @@ void
 K2PgRename(RenameStmt *stmt, Oid relationId)
 {
 	K2PgStatement handle = NULL;
-	char *db_name	  = get_database_name(MyDatabaseId);
+	char *db_name	  = get_database_name(u_sess->proc_cxt.MyDatabaseId);
 
 	switch (stmt->renameType)
 	{
 		case OBJECT_TABLE:
-			HandleK2PgStatus(PgGate_NewAlterTable(MyDatabaseId,
+			HandleK2PgStatus(PgGate_NewAlterTable(u_sess->proc_cxt.MyDatabaseId,
 											  relationId,
 											  &handle));
 			HandleK2PgStatus(PgGate_AlterTableRenameTable(handle, db_name, stmt->newname));
@@ -649,7 +649,7 @@ K2PgRename(RenameStmt *stmt, Oid relationId)
 		case OBJECT_COLUMN:
 		case OBJECT_ATTRIBUTE:
 
-			HandleK2PgStatus(PgGate_NewAlterTable(MyDatabaseId,
+			HandleK2PgStatus(PgGate_NewAlterTable(u_sess->proc_cxt.MyDatabaseId,
 											  relationId,
 											  &handle));
 
@@ -675,7 +675,7 @@ K2PgDropIndex(Oid relationId)
 	if (MyDatabaseColocated)
 	{
 		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_IsTableColocated(MyDatabaseId,
+		HandleK2PgStatusIgnoreNotFound(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
 																											 relationId,
 																											 &colocated),
 																 &not_found);
@@ -685,7 +685,7 @@ K2PgDropIndex(Oid relationId)
 	if (colocated)
 	{
 		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_NewTruncateColocated(MyDatabaseId,
+		HandleK2PgStatusIgnoreNotFound(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
 																													 relationId,
 																													 false,
 																													 &handle),
@@ -701,7 +701,7 @@ K2PgDropIndex(Oid relationId)
 	/* Drop the index table */
 	{
 		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_NewDropIndex(MyDatabaseId,
+		HandleK2PgStatusIgnoreNotFound(PgGate_NewDropIndex(u_sess->proc_cxt.MyDatabaseId,
 																									 relationId,
 																									 false, /* if_exists */
 																									 &handle),

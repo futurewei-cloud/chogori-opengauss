@@ -2305,10 +2305,6 @@ void PostgresInitializer::SetDatabaseByOid()
     u_sess->proc_cxt.MyDatabaseTableSpace = dbform->dattablespace;
     Assert(u_sess->proc_cxt.MyDatabaseId == m_dboid);
     strlcpy(m_dbname, NameStr(dbform->datname), sizeof(m_dbname));
-
-    // TODO: rollback the global variable MyDatabaseId to use the one in the u_sess instead
-    // otherwise, it might cause race condition in multi-thread environment
-    MyDatabaseId = u_sess->proc_cxt.MyDatabaseId;
 }
 
 void PostgresInitializer::LockDatabase()
