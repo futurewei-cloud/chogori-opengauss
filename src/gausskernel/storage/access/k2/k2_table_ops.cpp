@@ -241,7 +241,8 @@ Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 		}
 		++next_attr;
 	}
-	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(attrs, nattrs, &tuple_id));
+    // TODO see if statement parameter is necessary
+	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(NULL, attrs, nattrs, &tuple_id));
 	pfree(attrs);
 	return (Datum)tuple_id;
 }

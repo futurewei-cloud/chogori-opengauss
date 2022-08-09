@@ -253,67 +253,51 @@ K2PgStatus PgGate_AsyncUpdateIndexPermissions(
 //--------------------------------------------------------------------------------------------------
 // DML statements (select, insert, update, delete, truncate)
 //--------------------------------------------------------------------------------------------------
+struct K2PgConstant {
+    Oid type_id;
+    Datum datum;
+    bool is_null;
+};
 
-// This function is for specifying the selected or returned expressions.
-// - SELECT target_expr1, target_expr2, ...
-// - INSERT / UPDATE / DELETE ... RETURNING target_expr1, target_expr2, ...
-K2PgStatus PgGate_DmlAppendTarget(K2PgStatement handle, K2PgExpr target);
+enum K2PgConstraintType {
+    K2PG_CONSTRAINT_UNKNOWN,
+    K2PG_CONSTRAINT_EQ,
+    K2PG_CONSTRAINT_BETWEEN,
+    K2PG_CONSTRAINT_IN
+    // TODO Add constraints needed by user scan
+};
+    
+struct K2PgConstraintDef {
+    int attr_num;
+    K2PgConstraintType constraint;
+    std::vector<K2PgConstant> constants; // Only 1 element for EQ etc, 2 for BETWEEN, many for IN
+};
 
-// Binding Columns: Bind column with a value (expression) in a statement.
-// + This API is used to identify the rows you want to operate on. If binding columns are not
-//   there, that means you want to operate on all rows (full scan). You can view this as a
-//   a definitions of an initial rowset or an optimization over full-scan.
-//
-// + There are some restrictions on when BindColumn() can be used.
-//   Case 1: INSERT INTO tab(x) VALUES(x_expr)
-//   - BindColumn() can be used for BOTH primary-key and regular columns.
-//   - This bind-column function is used to bind "x" with "x_expr", and "x_expr" that can contain
-//     bind-variables (placeholders) and constants whose values can be updated for each execution
-//     of the same allocated statement.
-//
-//   Case 2: SELECT / UPDATE / DELETE <WHERE key = "key_expr">
-//   - BindColumn() can only be used for primary-key columns.
-//   - This bind-column function is used to bind the primary column "key" with "key_expr" that can
-//     contain bind-variables (placeholders) and constants whose values can be updated for each
-//     execution of the same allocated statement.
-//
-// NOTE ON KEY BINDING
-// - For Sequential Scan, the target columns of the bind are those in the main table.
-// - For Primary Scan, the target columns of the bind are those in the main table.
-// - For Index Scan, the target columns of the bind are those in the index table.
-//   The index-scan will use the bind to find base-k2pgctid which is then use to read data from
-//   the main-table, and therefore the bind-arguments are not associated with columns in main table.
-K2PgStatus PgGate_DmlBindColumn(K2PgStatement handle, int attr_num, K2PgExpr attr_value);
-K2PgStatus PgGate_DmlBindColumnCondEq(K2PgStatement handle, int attr_num, K2PgExpr attr_value);
-K2PgStatus PgGate_DmlBindColumnCondBetween(K2PgStatement handle, int attr_num, K2PgExpr attr_value,
-    K2PgExpr attr_value_end);
-K2PgStatus PgGate_DmlBindColumnCondIn(K2PgStatement handle, int attr_num, int n_attr_values,
-    K2PgExpr *attr_values);
-
+class K2PgScanHandle;
+    
 // bind range condition so as to derive key prefix
+// TODO maybe remove if not needed after user table scan is hooked in
 K2PgStatus PgGate_DmlBindRangeConds(K2PgStatement handle, K2PgExpr where_conds);
 
 // bind where clause for a DML operation
+// TODO maybe remove if not needed after user table scan is hooked in
 K2PgStatus PgGate_DmlBindWhereConds(K2PgStatement handle, K2PgExpr where_conds);
 
 // Binding Tables: Bind the whole table in a statement.  Do not use with BindColumn.
 K2PgStatus PgGate_DmlBindTable(K2PgStatement handle);
 
-// API for SET clause.
-K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
-                               int attr_num,
-                               K2PgExpr attr_value);
-
-// This function is to fetch the targets in PgGate_DmlAppendTarget() from the rows that were defined
-// by PgGate_DmlBindColumn().
-K2PgStatus PgGate_DmlFetch(K2PgStatement handle, int32_t natts, uint64_t *values, bool *isnulls,
+// This function is to fetch the targets in the vector from the Exec call, from the rows that were defined
+// by the constraints vector in the Exec call
+K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data);
 
 // Utility method that checks stmt type and calls either exec insert, update, or delete internally.
+// TODO now only used by DDL commands that we do not support right now (e.g. Drop table). It will need
+// to be updated when we add this support.
 K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count);
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
-K2PgStatus PgGate_DmlBuildPgTupleId(const K2PgAttrValueDescriptor *attrs,
+    K2PgStatus PgGate_DmlBuildPgTupleId(K2PgStatement handle, const K2PgAttrValueDescriptor *attrs,
                                  int32_t nattrs, uint64_t *k2pgctid);
 
 // DB Operations: WHERE(partially supported by K2-SKV)
@@ -359,12 +343,17 @@ K2PgStatus PgGate_ExecTruncateColocated(K2PgStatement handle);
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
                          const K2PgPrepareParameters *prepare_params,
-                         K2PgStatement *handle);
-
-// Set forward/backward scan direction.
-K2PgStatus PgGate_SetForwardScan(K2PgStatement handle, bool is_forward_scan);
-
-K2PgStatus PgGate_ExecSelect(K2PgStatement handle, const K2PgExecParameters *exec_params);
+                         K2PgScanHandle **handle);
+    
+// NOTE ON KEY CONSTRAINTS
+// Scan type is speficied as part of prepare_params in NewSelect
+// - For Sequential Scan, the target columns of the bind are those in the main table.
+// - For Primary Scan, the target columns of the bind are those in the main table.
+// - For Index Scan, the target columns of the bind are those in the index table.
+//   The index-scan will use the bind to find base-k2pgctid which is then use to read data from
+//   the main-table, and therefore the bind-arguments are not associated with columns in main table.
+K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, std::vector<K2PgConstraintDef> constraints, std::vector<int> targets_attrnum,
+                             bool whole_table_scan, bool forward_scan, const K2PgExecParameters *exec_params);
 
 // Transaction control -----------------------------------------------------------------------------
 K2PgStatus PgGate_BeginTransaction();

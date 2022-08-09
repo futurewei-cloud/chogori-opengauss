@@ -136,7 +136,7 @@ extern void HandleK2PgStatusIgnoreNotFound(K2PgStatus status, bool *not_found);
  * the given K2PG statement.
  */
 extern void HandleK2PgStatusWithOwner(K2PgStatus status,
-																		K2PgStatement k2pg_stmt,
+																		K2PgScanHandle* k2pg_stmt,
 																		ResourceOwner owner);
 
 /*
