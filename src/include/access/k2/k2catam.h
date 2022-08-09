@@ -44,7 +44,12 @@ typedef struct CamScanDescData
 #define K2PG_MAX_SCAN_KEYS (INDEX_MAX_KEYS * 2) /* A pair of lower/upper bounds per column max */
 
 	/* The handle for the internal K2PG Select statement. */
-	K2PgStatement handle;
+	K2PgScanHandle* handle;
+    // Data needed by PgGate for Exec call
+    std::vector<K2PgConstraintDef> constraints;
+    std::vector<int> targets_attrnum;
+    bool whole_table_scan = false;
+    
 	ResourceOwner stmt_owner;
 	bool is_exec_done;
 

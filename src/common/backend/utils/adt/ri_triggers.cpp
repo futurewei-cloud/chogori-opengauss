@@ -2876,7 +2876,7 @@ BuildPgTupleId(Relation pk_rel, Relation fk_rel, Relation idx_rel,
 				const RI_ConstraintInfo *riinfo, HeapTuple tup,
 				void **value, int64_t *bytes)
 {
-	K2PgStatement k2pg_stmt;
+	K2PgScanHandle* k2pg_stmt;
 	K2PgPrepareParameters prepare_params;
 
 	prepare_params.index_oid = RelationGetRelid(idx_rel);
@@ -2917,7 +2917,8 @@ BuildPgTupleId(Relation pk_rel, Relation fk_rel, Relation idx_rel,
 	 	elog(DEBUG1, "K2PgUniqueIdxKey: attr_num = %d, type_id = %d, is_null = %d", next_attr->attr_num, BYTEAOID, next_attr->is_null);
 	}
 
-	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(k2pg_stmt, attrs, nattrs, &tuple_id));
+    // TODO see if we can remove the statement from here
+	HandleK2PgStatus(PgGate_DmlBuildPgTupleId((K2PgStatement)k2pg_stmt, attrs, nattrs, &tuple_id));
 
 	const K2PgTypeEntity *type_entity = K2PgDataTypeFromOidMod(K2PgTupleIdAttributeNumber, BYTEAOID);
 	type_entity->datum_to_k2pg(tuple_id, value, bytes);

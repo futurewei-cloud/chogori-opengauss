@@ -158,73 +158,81 @@ static Oid cam_get_atttypid(TupleDesc bind_desc, AttrNumber attnum)
 }
 
 /*
- * Bind a scan key.
- */
+* Bind a scan key.
+*/
 static void camBindColumn(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum, Datum value, bool is_null)
 {
-	Oid	atttypid = cam_get_atttypid(bind_desc, attnum);
+    Oid     atttypid = cam_get_atttypid(bind_desc, attnum);
+    K2PgConstant constant {
+        .type_id = atttypid,
+        .datum = value,
+        .is_null = is_null
+    };
 
-	K2PgExpr k2pg_expr = K2PgNewConstant(camScan->handle, atttypid, value, is_null);
+    K2PgConstraintDef constraint {
+        .attr_num = attnum,
+        .constraint = K2PG_CONSTRAINT_EQ,
+        .constants = {constant}
+    };
 
-	HandleK2PgStatusWithOwner(PgGate_DmlBindColumn(camScan->handle, attnum, k2pg_expr),
-													camScan->handle,
-													camScan->stmt_owner);
-}
-
-void camBindColumnCondEq(CamScanDesc camScan, bool is_hash_key, TupleDesc bind_desc,
-						 AttrNumber attnum, Datum value, bool is_null)
-{
-	Oid	atttypid = cam_get_atttypid(bind_desc, attnum);
-
-	K2PgExpr k2pg_expr = K2PgNewConstant(camScan->handle, atttypid, value, is_null);
-
-	if (is_hash_key)
-		HandleK2PgStatusWithOwner(PgGate_DmlBindColumn(camScan->handle, attnum, k2pg_expr),
-														camScan->handle,
-														camScan->stmt_owner);
-	else
-		HandleK2PgStatusWithOwner(PgGate_DmlBindColumnCondEq(camScan->handle, attnum, k2pg_expr),
-														camScan->handle,
-														camScan->stmt_owner);
+    camScan->constraints.push_back(std::move(constraint));
 }
 
 static void camBindColumnCondBetween(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum,
                                      bool start_valid, Datum value, bool end_valid, Datum value_end)
 {
-	Oid	atttypid = cam_get_atttypid(bind_desc, attnum);
+    Oid     atttypid = cam_get_atttypid(bind_desc, attnum);
 
-	K2PgExpr k2pg_expr = start_valid ? K2PgNewConstant(camScan->handle, atttypid, value,
-      false /* isnull */) : NULL;
-	K2PgExpr k2pg_expr_end = end_valid ? K2PgNewConstant(camScan->handle, atttypid, value_end,
-      false /* isnull */) : NULL;
+    K2PgConstant start {
+        .type_id = atttypid,
+        .datum = value,
+        .is_null = !start_valid
+    };
+    K2PgConstant end {
+        .type_id = atttypid,
+        .datum = value_end,
+        .is_null = !end_valid
+    };
 
-  HandleK2PgStatusWithOwner(PgGate_DmlBindColumnCondBetween(camScan->handle, attnum, k2pg_expr,
-																												k2pg_expr_end),
-													camScan->handle,
-													camScan->stmt_owner);
+    K2PgConstraintDef constraint {
+        .attr_num = attnum,
+        .constraint = K2PG_CONSTRAINT_BETWEEN,
+        .constants = {start, end}
+    };
+
+    camScan->constraints.push_back(std::move(constraint));
 }
-
 /*
  * Bind an array of scan keys for a column.
  */
 static void camBindColumnCondIn(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum,
                                 int nvalues, Datum *values)
 {
+    std::vector<K2PgConstant> constants;
+    
 	Oid	atttypid = cam_get_atttypid(bind_desc, attnum);
 
-	K2PgExpr k2pg_exprs[nvalues]; /* VLA - scratch space */
 	for (int i = 0; i < nvalues; i++) {
 		/*
 		 * For IN we are removing all null values in camBindScanKeys before
 		 * getting here (relying on btree/lsm operators being strict).
 		 * So we can safely set is_null to false for all options left here.
 		 */
-		k2pg_exprs[i] = K2PgNewConstant(camScan->handle, atttypid, values[i], false /* is_null */);
+        K2PgConstant constant {
+            .type_id = atttypid,
+            .datum = values[i],
+            .is_null = false
+        };
+        constants.push_back(constant);
 	}
 
-	HandleK2PgStatusWithOwner(PgGate_DmlBindColumnCondIn(camScan->handle, attnum, nvalues, k2pg_exprs),
-	                                                 camScan->handle,
-	                                                 camScan->stmt_owner);
+    K2PgConstraintDef constraint {
+        .attr_num = attnum,
+        .constraint = K2PG_CONSTRAINT_IN,
+        .constants = std::move(constants)
+    };
+    
+    camScan->constraints.push_back(std::move(constraint));
 }
 
 /*
@@ -233,23 +241,15 @@ static void camBindColumnCondIn(CamScanDesc camScan, TupleDesc bind_desc, AttrNu
 static void camAddTargetColumn(CamScanDesc camScan, AttrNumber attnum)
 {
 	/* Regular (non-system) attribute. */
-	Oid atttypid = InvalidOid;
-	int32 atttypmod = 0;
 	if (attnum > 0)
 	{
 		Form_pg_attribute attr = TupleDescAttr(camScan->target_desc, attnum - 1);
 		/* Ignore dropped attributes */
 		if (attr->attisdropped)
 			return;
-		atttypid = attr->atttypid;
-		atttypmod = attr->atttypmod;
 	}
 
-	K2PgTypeAttrs type_attrs = { atttypmod };
-	K2PgExpr expr = K2PgNewColumnRef(camScan->handle, attnum, atttypid, &type_attrs);
-	HandleK2PgStatusWithOwner(PgGate_DmlAppendTarget(camScan->handle, expr),
-													camScan->handle,
-													camScan->stmt_owner);
+    camScan->targets_attrnum.push_back(attnum);
 }
 
 static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan)
@@ -265,10 +265,7 @@ static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
 	{
-		HandleK2PgStatusWithOwner(PgGate_SetForwardScan(camScan->handle, is_forward_scan),
-														camScan->handle,
-														camScan->stmt_owner);
-		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->exec_params),
+		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, camScan->whole_table_scan, is_forward_scan, camScan->exec_params),
 														camScan->handle,
 														camScan->stmt_owner);
 		camScan->is_exec_done = true;
@@ -320,12 +317,9 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
 	{
-		HandleK2PgStatusWithOwner(PgGate_SetForwardScan(camScan->handle, is_forward_scan),
-									camScan->handle,
-									camScan->stmt_owner);
-		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->exec_params),
-									camScan->handle,
-									camScan->stmt_owner);
+		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, camScan->whole_table_scan, is_forward_scan, camScan->exec_params),
+														camScan->handle,
+														camScan->stmt_owner);
 		camScan->is_exec_done = true;
 	}
 
@@ -418,28 +412,12 @@ camSetupScanPlan(Relation relation, Relation index, bool xs_want_itup,
 	/*
 	 * Setup control-parameters for K2PG preparing statements for different
 	 * types of scan.
-	 * - "querying_colocated_table": Support optimizations for (system and
-	 *   user) colocated tables
 	 * - "index_oid, index_only_scan, use_secondary_index": Different index
 	 *   scans.
 	 * NOTE: Primary index is a special case as there isn't a primary index
 	 * table in K2PG.
 	 */
 	camScan->index = index;
-
-	camScan->prepare_params.querying_colocated_table =
-		IsSystemRelation(relation);
-	if (!camScan->prepare_params.querying_colocated_table &&
-		MyDatabaseColocated)
-	{
-		bool colocated = false;
-		bool notfound;
-		HandleK2PgStatusIgnoreNotFound(PgGate_IsTableColocated(MyDatabaseId,
-																											 RelationGetRelid(relation),
-																											 &colocated),
-																 &notfound);
-		camScan->prepare_params.querying_colocated_table |= colocated;
-	}
 
 	if (index)
 	{
@@ -684,6 +662,7 @@ static void	camSetupScanKeys(Relation relation,
 	}
 
 	/*
+     * TODO: figure out how much of the following is still relevant
 	 * All or some of the keys should not be pushed down if any of the following is true.
 	 * - If hash key is not fully set, we must do a full-table scan so we will clear all the scan
 	 * keys.
@@ -871,9 +850,9 @@ static void camBindScanKeys(Relation relation,
 					{
 						/* Either c = NULL or c IS NULL. */
 						bool is_null = (camScan->key[i].sk_flags & SK_ISNULL) == SK_ISNULL;
-						camBindColumnCondEq(camScan, is_hash_key, scan_plan->bind_desc,
-											scan_plan->bind_key_attnums[i],
-											camScan->key[i].sk_argument, is_null);
+						camBindColumn(camScan, scan_plan->bind_desc,
+									  scan_plan->bind_key_attnums[i],
+									  camScan->key[i].sk_argument, is_null);
 						is_column_bound[idx] = true;
 					}
 					else if (IsSearchArray(camScan->key[i].sk_flags) && is_primary_key)
@@ -1115,7 +1094,8 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	 */
 	if (!IsSystemRelation(relation))
 	{
-		HandleK2PgStatusWithOwner(PgGate_SetCatalogCacheVersion(camScan->handle,
+        // TODO see if we can remove K2PgStatement from this call
+		HandleK2PgStatusWithOwner(PgGate_SetCatalogCacheVersion((K2PgStatement)camScan->handle,
 		                                                        k2pg_catalog_cache_version),
 		                            camScan->handle,
 		                            camScan->stmt_owner);
@@ -1608,7 +1588,7 @@ void camIndexCostEstimate(IndexPath *path, Selectivity *selectivity,
 
 HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
 {
-	K2PgStatement k2pg_stmt;
+	K2PgScanHandle* k2pg_stmt;
 	TupleDesc      tupdesc = RelationGetDescr(relation);
 
 	HandleK2PgStatus(PgGate_NewSelect(K2PgGetDatabaseOid(relation),
@@ -1616,40 +1596,40 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
 																NULL /* prepare_params */,
 																&k2pg_stmt));
 
+    std::vector<K2PgConstraintDef> constraints;
+    std::vector<int> targets;
+    
 	/* Bind k2pgctid to identify the current row. */
-	K2PgExpr k2pgctid_expr = K2PgNewConstant(k2pg_stmt,
-										   BYTEAOID,
-										   k2pgctid,
-										   false);
-	HandleK2PgStatus(PgGate_DmlBindColumn(k2pg_stmt, K2PgTupleIdAttributeNumber, k2pgctid_expr));
+    K2PgConstant ctid_const = {
+        .type_id = BYTEAOID,
+        .datum = k2pgctid,
+        .is_null = false
+    };
+    K2PgConstraintDef ctid_constraint = {
+        .attr_num = K2PgTupleIdAttributeNumber,
+        .constraint = K2PG_CONSTRAINT_EQ,
+        .constants = {ctid_const}
+    };
+    constraints.push_back(std::move(ctid_constraint));
 
 	/*
 	 * Set up the scan targets. For index-based scan we need to return all "real" columns.
 	 */
 	if (RelationGetForm(relation)->relhasoids)
 	{
-		K2PgTypeAttrs type_attrs = { 0 };
-		K2PgExpr   expr = K2PgNewColumnRef(k2pg_stmt, ObjectIdAttributeNumber, InvalidOid,
-										   &type_attrs);
-		HandleK2PgStatus(PgGate_DmlAppendTarget(k2pg_stmt, expr));
+        targets.push_back(ObjectIdAttributeNumber);
 	}
 	for (AttrNumber attnum = 1; attnum <= tupdesc->natts; attnum++)
 	{
-		Form_pg_attribute att = TupleDescAttr(tupdesc, attnum - 1);
-		K2PgTypeAttrs type_attrs = { att->atttypmod };
-		K2PgExpr   expr = K2PgNewColumnRef(k2pg_stmt, attnum, att->atttypid, &type_attrs);
-		HandleK2PgStatus(PgGate_DmlAppendTarget(k2pg_stmt, expr));
+        targets.push_back(attnum);
 	}
-	K2PgTypeAttrs type_attrs = { 0 };
-	K2PgExpr   expr = K2PgNewColumnRef(k2pg_stmt, K2PgTupleIdAttributeNumber, InvalidOid,
-									   &type_attrs);
-	HandleK2PgStatus(PgGate_DmlAppendTarget(k2pg_stmt, expr));
+    targets.push_back(K2PgTupleIdAttributeNumber);
 
 	/*
 	 * Execute the select statement.
 	 * This select statement fetch the row for a specific K2PGTID, LIMIT setting is not needed.
 	 */
-	HandleK2PgStatus(PgGate_ExecSelect(k2pg_stmt, NULL /* exec_params */));
+	HandleK2PgStatus(PgGate_ExecSelect(k2pg_stmt, std::move(constraints), std::move(targets), false /* whole_table */, true /* forward */, NULL /* exec_params */));
 
 	HeapTuple tuple    = NULL;
 	bool      has_data = false;

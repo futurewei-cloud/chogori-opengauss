@@ -206,7 +206,7 @@ extern void PrintMetaCacheBlockLeakWarning(CacheSlotId_t slot);
 /**
  * K2PG-specific
  */
-static void PrintK2PgStmtLeakWarning(K2PgStatement k2pg_stmt);
+static void PrintK2PgStmtLeakWarning(K2PgScanHandle* k2pg_stmt);
 
 extern void ReleaseMetaBlock(CacheSlotId_t slot);
 
@@ -700,8 +700,8 @@ static void ResourceOwnerReleaseInternal(
 	        Datum		foundres;
 			while (ResourceArrayGetAny(&(owner->k2stmtarr), &foundres))
 			{
-				K2PgStatement	res =
-					(K2PgStatement) DatumGetPointer(foundres);
+				K2PgScanHandle*	res =
+					(K2PgScanHandle*) DatumGetPointer(foundres);
 
 				if (isCommit)
 					PrintK2PgStmtLeakWarning(res);
@@ -2041,7 +2041,7 @@ ResourceOwnerEnlargeK2PgStmts(ResourceOwner owner)
  * Caller must have previously done ResourceOwnerEnlargeK2PgStmts()
  */
 void
-ResourceOwnerRememberK2PgStmt(ResourceOwner owner, K2PgStatement k2pg_stmt)
+ResourceOwnerRememberK2PgStmt(ResourceOwner owner, K2PgScanHandle* k2pg_stmt)
 {
 	ResourceArrayAdd(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt));
 }
@@ -2050,7 +2050,7 @@ ResourceOwnerRememberK2PgStmt(ResourceOwner owner, K2PgStatement k2pg_stmt)
  * Forget that a K2PG statement is owned by a ResourceOwner
  */
 void
-ResourceOwnerForgetK2PgStmt(ResourceOwner owner, K2PgStatement k2pg_stmt)
+ResourceOwnerForgetK2PgStmt(ResourceOwner owner, K2PgScanHandle* k2pg_stmt)
 {
 	if (!ResourceArrayRemove(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt)))
 		elog(ERROR, "K2PG statement %p is not owned by resource owner %s",
@@ -2061,7 +2061,7 @@ ResourceOwnerForgetK2PgStmt(ResourceOwner owner, K2PgStatement k2pg_stmt)
  * Debugging subroutine
  */
 static void
-PrintK2PgStmtLeakWarning(K2PgStatement k2pg_stmt)
+PrintK2PgStmtLeakWarning(K2PgScanHandle* k2pg_stmt)
 {
 	elog(WARNING, "K2PG statement leak: statement %p still referenced",
 		 k2pg_stmt);
