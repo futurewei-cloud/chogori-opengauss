@@ -358,11 +358,6 @@ K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
-K2PgStatus PgGate_DmlModifiesRow(K2PgStatement handle, bool *modifies_row){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlModifiesRow");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));

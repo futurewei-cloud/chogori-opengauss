@@ -152,7 +152,7 @@ struct K2PGColumnDef {
     bool is_desc;
     bool is_nulls_first;
 };
-   
+
 // Create and drop table "database_name.schema_name.table_name()".
 // - When "schema_name" is NULL, the table "database_name.table_name" is created.
 // - When "database_name" is NULL, the table "connected_database_name.table_name" is created.
@@ -206,8 +206,6 @@ K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
 
 K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
                                   K2PgTableProperties *properties);
-
-K2PgStatus PgGate_DmlModifiesRow(K2PgStatement handle, bool *modifies_row);
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle);
 
@@ -266,7 +264,7 @@ enum K2PgConstraintType {
     K2PG_CONSTRAINT_IN
     // TODO Add constraints needed by user scan
 };
-    
+
 struct K2PgConstraintDef {
     int attr_num;
     K2PgConstraintType constraint;
@@ -274,7 +272,7 @@ struct K2PgConstraintDef {
 };
 
 class K2PgScanHandle;
-    
+
 // bind range condition so as to derive key prefix
 // TODO maybe remove if not needed after user table scan is hooked in
 K2PgStatus PgGate_DmlBindRangeConds(K2PgStatement handle, K2PgExpr where_conds);
@@ -310,7 +308,7 @@ struct K2PgWriteColumnDef {
     Datum datum;
     bool is_null;
 };
-    
+
 K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
@@ -344,7 +342,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
                          const K2PgPrepareParameters *prepare_params,
                          K2PgScanHandle **handle);
-    
+
 // NOTE ON KEY CONSTRAINTS
 // Scan type is speficied as part of prepare_params in NewSelect
 // - For Sequential Scan, the target columns of the bind are those in the main table.

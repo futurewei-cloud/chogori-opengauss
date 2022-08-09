@@ -205,4 +205,6 @@ extern void PrepareToInvalidateCacheTuple(
 extern void PrintCatCacheLeakWarning(HeapTuple tuple);
 extern void PrintCatCacheListLeakWarning(CatCList* list);
 extern void InsertBuiltinFuncInBootstrap();
+
+extern bool RelationHasCachedLists(Relation relation);
 #endif /* CATCACHE_H */

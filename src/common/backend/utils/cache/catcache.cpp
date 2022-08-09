@@ -3296,3 +3296,29 @@ SetCatCacheList(CatCache *cache,
 
     DLAddHead(&cache->cc_lists, &cl->cache_elem);
 }
+
+/*
+ *	RelationHasCachedLists
+ *
+ *	Returns true if there is a catalog cache associated with this
+ * 	relation which is currently caching at least one list.
+ */
+bool RelationHasCachedLists(Relation relation)
+{
+    CatCache* ccp = NULL;
+	Oid reloid;
+
+	/* sanity checks */
+	Assert(RelationIsValid(relation));
+    Assert(u_sess->cache_cxt.cache_header != NULL);
+
+	reloid = RelationGetRelid(relation);
+
+    for (ccp = u_sess->cache_cxt.cache_header->ch_caches; ccp; ccp = ccp->cc_next)
+	{
+		if (ccp->cc_reloid == reloid && !DLIsNIL(&ccp->cc_lists) && DLListLength(&ccp->cc_lists) > 0)
+			return true;
+	}
+
+	return false;
+}
