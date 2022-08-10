@@ -318,8 +318,8 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 		CacheInvalidateHeapTuple(rel, tuple, NULL);
 	}
 
-    // TODO: && RelationHasCachedLists(rel)
-	bool is_syscatalog_change = IsSystemCatalogChange(rel);
+	bool is_syscatalog_change = IsSystemCatalogChange(rel) && RelationHasCachedLists(rel);
+
 	/* Execute the insert */
 	HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, false /* upsert */, is_syscatalog_change, columns));
 
@@ -637,7 +637,7 @@ bool K2PgExecuteUpdate(Relation rel,
      * Also we should eventually support SQL such as "SET balance = balance + 1" even if it is not
      * pushed down to the storage. We should automatically convert it to a read-modify-write for k2
      */
-    
+
 	for (int idx = 0; idx < tupleDesc->natts; idx++)
 	{
 		FormData_pg_attribute *att_desc = TupleDescAttr(tupleDesc, idx);
@@ -671,7 +671,7 @@ bool K2PgExecuteUpdate(Relation rel,
 	}
 
     bool increment_catalog = IsSystemCatalogChange(rel);
-    
+
 	/* Execute the statement. */
 	int rows_affected_count = 0;
     HandleK2PgStatus(PgGate_ExecUpdate(dboid, relid, increment_catalog, &rows_affected_count, columns));
@@ -795,7 +795,7 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
 		CacheInvalidateHeapTuple(rel, tuple, NULL);
 
 	/* Execute the statement and clean up */
-    HandleK2PgStatus(PgGate_ExecUpdate(dboid, relid, true /* increment catalog */, NULL /* rows affected */, columns)); 
+    HandleK2PgStatus(PgGate_ExecUpdate(dboid, relid, true /* increment catalog */, NULL /* rows affected */, columns));
 }
 
 bool
