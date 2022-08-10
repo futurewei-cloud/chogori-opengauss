@@ -30,14 +30,20 @@ namespace sh=skv::http;
 class TxnManager {
 public:
     // this method returns the current active transaction in this manager, creating a new one if needed
-    sh::Response<std::shared_ptr<sh::TxnHandle>> BeginTxn(sh::dto::TxnOptions opts);
+    sh::Response<std::shared_ptr<sh::TxnHandle>> BeginTxn(const sh::dto::TxnOptions& opts);
 
     // this method returns the current active transaction in this manager, or null ptr if one doesn't exist
     std::shared_ptr<sh::TxnHandle> GetTxn();
 
+    bool HasTxn() { return _txn !=  nullptr; }
+
     // transactions should be ended via this call to ensure the thread-local state is maintained
     sh::Response<> EndTxn(sh::dto::EndAction endAction);
 
+    sh::Response<> CreateSchema(const sh::String& collectionName, const sh::dto::Schema& schema);
+    sh::Response<std::shared_ptr<sh::dto::Schema>> GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion=sh::dto::ANY_SCHEMA_VERSION);
+    sh::Response<> CreateCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds);
+    
 private:
     // Helper used to initialize the manager.
     void _Init();
