@@ -3303,13 +3303,13 @@ SetCatCacheList(CatCache *cache,
  *	Returns true if there is a catalog cache associated with this
  * 	relation which is currently caching at least one list.
  */
-bool RelationHasCachedLists(Relation relation)
+bool RelationHasCachedLists(const Relation& relation)
 {
     CatCache* ccp = NULL;
 	Oid reloid;
 
-	/* sanity checks */
-	Assert(RelationIsValid(relation));
+    /* sanity checks */
+    Assert(RelationIsValid(relation));
     Assert(u_sess->cache_cxt.cache_header != NULL);
 
 	reloid = RelationGetRelid(relation);

@@ -206,5 +206,5 @@ extern void PrintCatCacheLeakWarning(HeapTuple tuple);
 extern void PrintCatCacheListLeakWarning(CatCList* list);
 extern void InsertBuiltinFuncInBootstrap();
 
-extern bool RelationHasCachedLists(Relation relation);
+extern bool RelationHasCachedLists(const Relation& relation);
 #endif /* CATCACHE_H */
