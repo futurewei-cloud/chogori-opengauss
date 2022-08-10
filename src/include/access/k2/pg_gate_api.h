@@ -211,10 +211,6 @@ K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle);
 
 K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_cache_version);
 
-K2PgStatus PgGate_IsTableColocated(const K2PgOid database_oid,
-                                const K2PgOid table_oid,
-                                bool *colocated);
-
 // INDEX -------------------------------------------------------------------------------------------
 // Create and drop index "database_name.schema_name.index_name()".
 // - When "schema_name" is NULL, the index "database_name.index_name" is created.
@@ -328,14 +324,6 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              bool increment_catalog,
                              int* rows_affected,
                              const std::vector<K2PgWriteColumnDef>& columns);
-
-// Colocated TRUNCATE ------------------------------------------------------------------------------
-K2PgStatus PgGate_NewTruncateColocated(K2PgOid database_oid,
-                                    K2PgOid table_oid,
-                                    bool is_single_row_txn,
-                                    K2PgStatement *handle);
-
-K2PgStatus PgGate_ExecTruncateColocated(K2PgStatement handle);
 
 // SELECT ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,

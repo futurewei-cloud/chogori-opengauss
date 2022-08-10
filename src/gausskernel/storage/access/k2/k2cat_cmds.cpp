@@ -94,10 +94,8 @@ K2FinishInitDB()
 /*  Database Functions. */
 
 void
-K2PgCreateDatabase(Oid dboid, const char *dbname, Oid src_dboid, Oid next_oid, bool colocated)
+K2PgCreateDatabase(Oid dboid, const char *dbname, Oid src_dboid, Oid next_oid)
 {
-    (void) colocated;
-
 	HandleK2PgStatus(PgGate_ExecCreateDatabase(dbname,
 										  dboid,
 										  src_dboid,
@@ -173,6 +171,7 @@ static void CreateTableAddColumns(TupleDesc desc,
 										" '%s' not yet supported",
 										K2PgTypeOidToStr(att->atttypid))));
 					SortByDir order = index_elem->ordering;
+
 					bool is_desc = false;
 					bool is_nulls_first = false;
 					ColumnSortingOptions(order,
@@ -259,32 +258,6 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 		}
 	}
 
-	/* By default, inherit the colocated option from the database */
-	bool colocated = MyDatabaseColocated;
-
-	/* Handle user-supplied colocated reloption */
-	ListCell *opt_cell;
-	foreach(opt_cell, stmt->options)
-	{
-		DefElem *def = (DefElem *) lfirst(opt_cell);
-
-		if (strcmp(def->defname, "colocated") == 0)
-		{
-			bool colocated_relopt = defGetBoolean(def);
-			if (MyDatabaseColocated)
-				colocated = colocated_relopt;
-			else if (colocated_relopt)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot set colocated true on a non-colocated"
-								" database")));
-			/* The following break is fine because there should only be one
-			 * colocated reloption at this point due to checks in
-			 * parseRelOptions */
-			break;
-		}
-	}
-
     std::vector<K2PGColumnDef> columns;
 	CreateTableAddColumns(desc, primary_key, columns);
 	HandleK2PgStatus(PgGate_ExecCreateTable(db_name,
@@ -301,38 +274,6 @@ void
 K2PgDropTable(Oid relationId)
 {
 	K2PgStatement	handle = NULL;
-	bool			colocated = false;
-
-	/* Determine if table is colocated */
-	if (MyDatabaseColocated)
-	{
-		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
-																											 relationId,
-																											 &colocated),
-																 &not_found);
-	}
-
-	/* Create table-level tombstone for colocated tables */
-	if (colocated)
-	{
-		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
-																													 relationId,
-																													 false,
-																													 &handle),
-																 &not_found);
-		/* Since the creation of the handle could return a 'NotFound' error,
-		 * execute the statement only if the handle is valid.
-		 */
-		const bool valid_handle = !not_found;
-		if (valid_handle)
-		{
-			HandleK2PgStatusIgnoreNotFound(PgGate_DmlBindTable(handle), &not_found);
-			int rows_affected_count = 0;
-			HandleK2PgStatusIgnoreNotFound(PgGate_DmlExecWriteOp(handle, &rows_affected_count), &not_found);
-		}
-	}
 
 	/* Drop the table */
 	{
@@ -354,33 +295,11 @@ void
 K2PgTruncateTable(Relation rel) {
 	K2PgStatement	handle;
 	Oid				relationId = RelationGetRelid(rel);
-	bool			colocated = false;
 
-	/* Determine if table is colocated */
-	if (MyDatabaseColocated)
-		HandleK2PgStatus(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
-											 relationId,
-											 &colocated));
-
-	if (colocated)
-	{
-		/* Create table-level tombstone for colocated tables */
-		HandleK2PgStatus(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
-												 relationId,
-												 false,
-												 &handle));
-		HandleK2PgStatus(PgGate_DmlBindTable(handle));
-		int rows_affected_count = 0;
-		HandleK2PgStatus(PgGate_DmlExecWriteOp(handle, &rows_affected_count));
-	}
-	else
-	{
-		/* Send truncate table RPC to master for non-colocated tables */
-		HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
+	HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
 											 relationId,
 											 &handle));
-		HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
-	}
+	HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
 
 	if (!rel->rd_rel->relhasindex)
 		return;
@@ -396,30 +315,10 @@ K2PgTruncateTable(Relation rel) {
 		if (indexId == rel->rd_pkindex)
 			continue;
 
-		/* Determine if table is colocated */
-		if (MyDatabaseColocated)
-			HandleK2PgStatus(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
-												 relationId,
-												 &colocated));
-		if (colocated)
-		{
-			/* Create table-level tombstone for colocated tables */
-			HandleK2PgStatus(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
-													 relationId,
-													 false,
-													 &handle));
-			HandleK2PgStatus(PgGate_DmlBindTable(handle));
-			int rows_affected_count = 0;
-			HandleK2PgStatus(PgGate_DmlExecWriteOp(handle, &rows_affected_count));
-		}
-		else
-		{
-			/* Send truncate table RPC to master for non-colocated tables */
-			HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
+		HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
 												 indexId,
 												 &handle));
-			HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
-		}
+		HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
 	}
 
 	list_free(indexlist);
@@ -433,7 +332,6 @@ K2PgCreateIndex(const char *indexName,
 			   Datum reloptions,
 			   Oid indexId,
 			   Relation rel,
-//			   OptSplit *split_options,
 			   const bool skip_index_backfill)
 {
 	char *db_name	  = get_database_name(u_sess->proc_cxt.MyDatabaseId);
@@ -444,21 +342,6 @@ K2PgCreateIndex(const char *indexName,
 					 db_name,
 					 schema_name,
 					 indexName);
-
-	/* Check reloptions. */
-	ListCell	*opt_cell;
-	foreach(opt_cell, untransformRelOptions(reloptions))
-	{
-		DefElem *def = (DefElem *) lfirst(opt_cell);
-
-		if (strcmp(def->defname, "colocated") == 0)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot set option \"%s\" on index",
-							def->defname)));
-		}
-	}
 
     std::vector<K2PGColumnDef> columns;
 
@@ -498,7 +381,7 @@ K2PgCreateIndex(const char *indexName,
 	HandleK2PgStatus(PgGate_ExecCreateIndex(db_name,
 									   schema_name,
 									   indexName,
-									   MyDatabaseId,
+									   u_sess->proc_cxt.MyDatabaseId,
 									   indexId,
 									   RelationGetRelid(rel),
 									   indexInfo->ii_Unique,
@@ -669,34 +552,6 @@ void
 K2PgDropIndex(Oid relationId)
 {
 	K2PgStatement	handle;
-	bool			colocated = false;
-
-	/* Determine if table is colocated */
-	if (MyDatabaseColocated)
-	{
-		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_IsTableColocated(u_sess->proc_cxt.MyDatabaseId,
-																											 relationId,
-																											 &colocated),
-																 &not_found);
-	}
-
-	/* Create table-level tombstone for colocated tables */
-	if (colocated)
-	{
-		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_NewTruncateColocated(u_sess->proc_cxt.MyDatabaseId,
-																													 relationId,
-																													 false,
-																													 &handle),
-																 &not_found);
-		const bool valid_handle = !not_found;
-		if (valid_handle) {
-			HandleK2PgStatusIgnoreNotFound(PgGate_DmlBindTable(handle), &not_found);
-			int rows_affected_count = 0;
-			HandleK2PgStatusIgnoreNotFound(PgGate_DmlExecWriteOp(handle, &rows_affected_count), &not_found);
-		}
-	}
 
 	/* Drop the index table */
 	{

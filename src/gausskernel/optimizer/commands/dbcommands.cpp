@@ -526,7 +526,7 @@ void createdb(const CreatedbStmt* stmt)
     new_record[Anum_pg_database_compatibility - 1] = DirectFunctionCall1(namein, CStringGetDatum(dbcompatibility));
 
 	if (IsK2PgEnabled())
-		K2PgCreateDatabase(dboid, dbname, src_dboid, InvalidOid, false);
+		K2PgCreateDatabase(dboid, dbname, src_dboid, InvalidOid);
 
     /*
      * We deliberately set datacl to default (NULL), rather than copying it

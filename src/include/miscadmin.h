@@ -207,8 +207,6 @@ extern const uint32 BACKUP_SLOT_VERSION_NUM;
 #define DEBUG_MODE 1
 #define LLT_MODE 2
 
-extern PGDLLIMPORT bool MyDatabaseColocated;
-
 /*
  * Date/Time Configuration
  *

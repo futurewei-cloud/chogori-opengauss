@@ -214,7 +214,6 @@ typedef struct PgCallbacks {
 
 typedef struct PgTableProperties {
   uint32_t num_hash_key_columns;
-  bool is_colocated;
 } K2PgTableProperties;
 
 #ifdef __cplusplus

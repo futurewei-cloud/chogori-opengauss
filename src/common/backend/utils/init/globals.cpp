@@ -104,8 +104,6 @@ const uint32 TWOPHASE_FILE_VERSION = 92414;
 
 bool InplaceUpgradePrecommit = false;
 
-bool		MyDatabaseColocated = false;
-
 #ifdef PGXC
 bool useLocalXid = false;
 #endif

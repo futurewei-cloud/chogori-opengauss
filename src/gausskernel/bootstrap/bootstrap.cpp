@@ -419,8 +419,7 @@ static void BootstrapModeMain(void)
 		K2PgCreateDatabase(TemplateDbOid,
 		                  "template1",
 		                  InvalidOid,
-		                  FirstBootstrapObjectId,
-		                  false /* colocated */);
+		                  FirstBootstrapObjectId);
 	}
 
     /*
