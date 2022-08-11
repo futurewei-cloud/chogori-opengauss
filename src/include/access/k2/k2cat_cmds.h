@@ -40,7 +40,7 @@ extern void K2FinishInitDB();
 /*  Database Functions -------------------------------------------------------------------------- */
 
 extern void K2PgCreateDatabase(
-	Oid dboid, const char *dbname, Oid src_dboid, Oid next_oid, bool colocated);
+	Oid dboid, const char *dbname, Oid src_dboid, Oid next_oid);
 
 extern void K2PgDropDatabase(Oid dboid, const char *dbname);
 

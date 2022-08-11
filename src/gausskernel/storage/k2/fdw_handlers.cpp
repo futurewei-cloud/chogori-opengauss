@@ -107,15 +107,10 @@ struct PgSysColumns {
 //       index_only_scan = true if ROWID is wanted. Otherwise, regular rowset is wanted.
 //       use_secondary_index = false
 //
-// Attribute "querying_colocated_table"
-//   - If 'true', SELECT from SQL system catalogs or colocated tables.
-//   - Note that the system catalogs are specifically for Postgres API and not K2 SQL
-//     system-tables.
 struct PgPrepareParameters {
   Oid index_oid;
   bool index_only_scan;
   bool use_secondary_index;
-  bool querying_colocated_table;
 };
 
 // Structure to hold the execution-control parameters.

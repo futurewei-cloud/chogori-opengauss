@@ -4990,7 +4990,7 @@ retry:
 	{
 		K2PgPreloadRelCache();
 	}
-    
+
     /*
      * If we didn't get the critical system indexes loaded into relcache, do
      * so now.	These are critical because the catcache and/or opclass cache
@@ -7981,12 +7981,12 @@ void K2PgPreloadRelCache()
 	 *   Raise error if that OID is not MyDatabaseId, which must be either invalid or new DB.
 	 */
 	Oid dboid = InvalidOid;
-	const char *dbname = get_database_name(MyDatabaseId);
+	const char *dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
 	if (dbname != NULL)
 	{
 		dboid = get_database_oid(dbname, true);
 	}
-	if (dboid != MyDatabaseId) {
+	if (dboid != u_sess->proc_cxt.MyDatabaseId) {
 		ereport(FATAL,
 						(errcode(ERRCODE_CONNECTION_FAILURE),
 						 errmsg("Could not reconnect to database"),

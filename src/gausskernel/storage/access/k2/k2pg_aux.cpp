@@ -561,10 +561,10 @@ K2PgGetDatabaseName(Oid relid)
 	 * TODO Eventually K2PG should switch to using oid's everywhere so
 	 * that dbname and schemaname should not be needed at all.
 	 */
-	if (MyDatabaseId == TemplateDbOid || IsSharedRelation(relid))
+	if (u_sess->proc_cxt.MyDatabaseId == TemplateDbOid || IsSharedRelation(relid))
 		return "template1";
 	else
-		return get_database_name(MyDatabaseId);
+		return get_database_name(u_sess->proc_cxt.MyDatabaseId);
 }
 
 const char*
@@ -587,7 +587,7 @@ K2PgGetSchemaName(Oid schemaoid)
 Oid
 K2PgGetDatabaseOid(Relation rel)
 {
-	return rel->rd_rel->relisshared ? TemplateDbOid : MyDatabaseId;
+	return rel->rd_rel->relisshared ? TemplateDbOid : u_sess->proc_cxt.MyDatabaseId;
 }
 
 void

@@ -368,14 +368,6 @@ K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
-K2PgStatus PgGate_IsTableColocated(const K2PgOid database_oid,
-                                const K2PgOid table_oid,
-                                bool *colocated) {
-  elog(DEBUG5, "PgGateAPI: PgGate_IsTableColocated");
-  *colocated = false;
-  return K2PgStatusOK();
-}
-
 // INDEX -------------------------------------------------------------------------------------------
 
 // Create and drop index "database_name.schema_name.index_name()".
@@ -559,20 +551,6 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              int* rows_affected,
                              const std::vector<K2PgWriteColumnDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-// Colocated TRUNCATE ------------------------------------------------------------------------------
-K2PgStatus PgGate_NewTruncateColocated(K2PgOid database_oid,
-                                    K2PgOid table_oid,
-                                    bool is_single_row_txn,
-                                    K2PgStatement *handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewTruncateColocated %d, %d, %d", database_oid, table_oid, is_single_row_txn);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
-}
-
-K2PgStatus PgGate_ExecTruncateColocated(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecTruncateColocated");
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 

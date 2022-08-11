@@ -616,7 +616,7 @@ Oid GetNewObjectId(bool IsToastRel)
 			Oid begin_oid = InvalidOid;
 			Oid end_oid   = InvalidOid;
 
-            K2PgReservePgOids(MyDatabaseId,
+            K2PgReservePgOids(u_sess->proc_cxt.MyDatabaseId,
                         t_thrd.xact_cxt.ShmemVariableCache->nextOid,
 			            K2PG_OID_PREFETCH,
 			            &begin_oid,

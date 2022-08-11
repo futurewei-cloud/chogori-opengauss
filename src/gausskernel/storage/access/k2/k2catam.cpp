@@ -209,7 +209,7 @@ static void camBindColumnCondIn(CamScanDesc camScan, TupleDesc bind_desc, AttrNu
                                 int nvalues, Datum *values)
 {
     std::vector<K2PgConstant> constants;
-    
+
 	Oid	atttypid = cam_get_atttypid(bind_desc, attnum);
 
 	for (int i = 0; i < nvalues; i++) {
@@ -231,7 +231,7 @@ static void camBindColumnCondIn(CamScanDesc camScan, TupleDesc bind_desc, AttrNu
         .constraint = K2PG_CONSTRAINT_IN,
         .constants = std::move(constants)
     };
-    
+
     camScan->constraints.push_back(std::move(constraint));
 }
 
@@ -1598,7 +1598,7 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
 
     std::vector<K2PgConstraintDef> constraints;
     std::vector<int> targets;
-    
+
 	/* Bind k2pgctid to identify the current row. */
     K2PgConstant ctid_const = {
         .type_id = BYTEAOID,
