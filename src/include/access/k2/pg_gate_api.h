@@ -40,10 +40,6 @@ extern "C" {
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, K2PgCallbacks pg_callbacks);
 void PgGate_DestroyPgGate();
 
-// Initialize ENV within which PGSQL calls will be executed.
-K2PgStatus PgGate_CreateEnv(K2PgEnv *pg_env);
-K2PgStatus PgGate_DestroyEnv(K2PgEnv pg_env);
-
 // Initialize a session to process statements that come from the same client connection.
 K2PgStatus PgGate_InitSession(const K2PgEnv pg_env, const char *database_name);
 
@@ -266,6 +262,11 @@ struct K2PgConstraintDef {
     K2PgConstraintType constraint;
     std::vector<K2PgConstant> constants; // Only 1 element for EQ etc, 2 for BETWEEN, many for IN
 };
+    
+struct K2PgAttributeDef {
+    int attr_num;
+    K2PgConstant value;
+};
 
 class K2PgScanHandle;
 
@@ -291,39 +292,32 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *valu
 K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count);
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
-    K2PgStatus PgGate_DmlBuildPgTupleId(K2PgStatement handle, const K2PgAttrValueDescriptor *attrs,
-                                 int32_t nattrs, uint64_t *k2pgctid);
+K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_oid, const std::vector<K2PgAttributeDef>& attrs,
+                                    uint64_t *k2pgctid);
 
 // DB Operations: WHERE(partially supported by K2-SKV)
 // TODO: ORDER_BY, GROUP_BY, etc.
 
 // INSERT ------------------------------------------------------------------------------------------
-struct K2PgWriteColumnDef {
-    int attr_num;
-    Oid type_id;
-    Datum datum;
-    bool is_null;
-};
-
 K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
                              bool increment_catalog,
-                             const std::vector<K2PgWriteColumnDef>& columns);
+                             const std::vector<K2PgAttributeDef>& columns);
 
 // UPDATE ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool increment_catalog,
                              int* rows_affected,
-                             const std::vector<K2PgWriteColumnDef>& columns);
+                             const std::vector<K2PgAttributeDef>& columns);
 
 // DELETE ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool increment_catalog,
                              int* rows_affected,
-                             const std::vector<K2PgWriteColumnDef>& columns);
+                             const std::vector<K2PgAttributeDef>& columns);
 
 // SELECT ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,

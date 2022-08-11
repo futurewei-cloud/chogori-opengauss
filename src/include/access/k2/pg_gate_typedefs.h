@@ -200,13 +200,6 @@ typedef struct PgExecParameters {
 #endif
 } K2PgExecParameters;
 
-typedef struct PgAttrValueDescriptor {
-  int attr_num;
-  uint64_t datum;
-  bool is_null;
-  const K2PgTypeEntity *type_entity;
-} K2PgAttrValueDescriptor;
-
 typedef struct PgCallbacks {
   void (*FetchUniqueConstraintName)(K2PgOid, char*, size_t);
   K2PgMemctx (*GetCurrentK2Memctx)();
