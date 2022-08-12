@@ -52,9 +52,9 @@
 #include <string>
 #include <list>
 
-#include "entities/expr.h"
-#include "common/status.h"
-#include "pggate/pg_session.h"
+#include "../entities/expr.h"
+#include "../common/status.h"
+#include "pg_session.h"
 
 namespace k2pg {
 namespace gate {

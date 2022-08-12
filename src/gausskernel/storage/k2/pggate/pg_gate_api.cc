@@ -23,13 +23,13 @@ Copyright(c) 2021 Futurewei Cloud
 
 #include "pg_gate_api.h"
 
-#include "common/k2pg-internal.h"
-#include "common/k2pg_util.h"
-#include "entities/entity_ids.h"
-#include "pggate/pg_env.h"
-#include "pggate/pg_gate_defaults.h"
-#include "pggate/pg_gate_thread_local_vars.h"
-#include "pggate/pg_gate_impl.h"
+#include "../common/k2pg-internal.h"
+#include "../common/k2pg_util.h"
+#include "../entities/entity_ids.h"
+#include "pg_env.h"
+#include "pg_gate_defaults.h"
+#include "pg_gate_thread_local_vars.h"
+#include "pg_gate_impl.h"
 #include "k2_log.h"
 
 namespace k2pg {
@@ -243,7 +243,7 @@ void PgGate_InvalidateTableCache(
 K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
   K2LOG_V(log::pg, "PgGateAPI: PgGate_InvalidateTableCacheByTableId {}", table_uuid);
   if (table_uuid == NULL) {
-    return ToK2PgStatus(STATUS(InvalidArgument, "table_uuid is null"));
+    return ToK2PgStatus(STATUS_PG(InvalidArgument, "table_uuid is null"));
   }
   std::string table_uuid_str = table_uuid;
   const PgObjectId table_object_id(table_uuid_str);

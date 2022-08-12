@@ -31,9 +31,9 @@
 // or implied.  See the License for the specific language governing permissions and limitations
 // under the License.
 
-#include "pggate/pg_ddl.h"
-#include "pggate/pg_gate_typedefs.h"
-#include "entities/entity_ids.h"
+#include "pg_ddl.h"
+#include "pg_gate_typedefs.h"
+#include "../entities/entity_ids.h"
 
 namespace k2pg {
 namespace gate {
@@ -145,10 +145,10 @@ Status PgCreateTable::AddColumnImpl(const std::string& attr_name,
   bool is_nullable = true;
   if (is_hash) {
     if (!range_columns_.empty()) {
-      return STATUS(InvalidArgument, "Hash column not allowed after an ASC/DESC column");
+      return STATUS_PG(InvalidArgument, "Hash column not allowed after an ASC/DESC column");
     }
     if (sorting_type != ColumnSchema::SortingType::kNotSpecified) {
-      return STATUS(InvalidArgument, "Hash column can't have sorting order");
+      return STATUS_PG(InvalidArgument, "Hash column can't have sorting order");
     }
     // key should not be null
     is_nullable = false;
@@ -181,10 +181,10 @@ Status PgCreateTable::Exec() {
       if (if_not_exist_) {
         return Status::OK();
       }
-      return STATUS(InvalidArgument, "Duplicate table");
+      return STATUS_PG(InvalidArgument, "Duplicate table");
     }
     if (s.IsNotFound()) {
-      return STATUS(InvalidArgument, "Database not found", database_name_);
+      return STATUS_PG(InvalidArgument, "Database not found", database_name_);
     }
     return STATUS_FORMAT(
         InvalidArgument, "Invalid table definition: {}",
@@ -237,28 +237,28 @@ Status PgAlterTable::AddColumn(const std::string& name,
                                bool is_not_null) {
   ColumnSchema colSchema(name, static_cast<DataType>(attr_type->k2pg_type), is_not_null, false, false, order, ColumnSchema::SortingType::kNotSpecified);
   // TODO: add implementation
-  return STATUS(NotSupported, "AddColumn not supported");
+  return STATUS_PG(NotSupported, "AddColumn not supported");
 }
 
 Status PgAlterTable::RenameColumn(const std::string& old_name, const std::string& new_name) {
    // TODO: add implementation
-  return STATUS(NotSupported, "RenameColumn not supported");
+  return STATUS_PG(NotSupported, "RenameColumn not supported");
 }
 
 Status PgAlterTable::DropColumn(const std::string& name) {
   // TODO: add implementation
-  return STATUS(NotSupported, "DropColumn not supported");
+  return STATUS_PG(NotSupported, "DropColumn not supported");
 }
 
 Status PgAlterTable::RenameTable(const std::string& db_name, const std::string& new_name) {
   // TODO: add implementation
-  return STATUS(NotSupported, "RenameTable not supported");
+  return STATUS_PG(NotSupported, "RenameTable not supported");
 }
 
 Status PgAlterTable::Exec() {
   pg_session_->InvalidateTableCache(table_object_id_);
   // TODO: add implementation
-  return STATUS(NotSupported, "AlterTable not supported");
+  return STATUS_PG(NotSupported, "AlterTable not supported");
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -345,10 +345,10 @@ Status PgCreateIndex::Exec() {
       if (if_not_exist_) {
         return Status::OK();
       }
-      return STATUS(InvalidArgument, "Duplicate index table");
+      return STATUS_PG(InvalidArgument, "Duplicate index table");
     }
     if (s.IsNotFound()) {
-      return STATUS(InvalidArgument, "Database not found", database_name_);
+      return STATUS_PG(InvalidArgument, "Database not found", database_name_);
     }
     return STATUS_FORMAT(
         InvalidArgument, "Invalid index table definition: {}",

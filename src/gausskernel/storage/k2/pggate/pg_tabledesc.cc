@@ -46,9 +46,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_tabledesc.h"
+#include "pg_tabledesc.h"
 
-#include "pggate/catalog/sql_catalog_defaults.h"
+#include "catalog/sql_catalog_defaults.h"
 
 namespace k2pg {
 namespace gate {

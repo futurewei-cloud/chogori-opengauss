@@ -26,13 +26,11 @@ Copyright(c) 2020 Futurewei Cloud
 #include <atomic>
 
 #include "../common/result.h"
+#include "k2_txn.h"
 #include "k2_adapter.h"
-#include "../session.h"
 #include "k2_log.h"
 namespace k2pg {
 namespace gate {
-
-namespace sh=skv::http;
 
 // These should match XACT_READ_UNCOMMITED, XACT_READ_COMMITED, XACT_REPEATABLE_READ,
 // XACT_SERIALIZABLE from xact.h.
@@ -77,6 +75,7 @@ class PgTxnHandler {
 
   void ResetTransaction();
 
+  std::shared_ptr<K23SITxn> txn_ = nullptr;
 
   bool txn_in_progress_ = false;
 

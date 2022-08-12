@@ -36,12 +36,12 @@
 #include <string>
 #include <vector>
 
-#include "entities/entity_ids.h"
-#include "entities/schema.h"
-#include "entities/type.h"
-#include "entities/value.h"
-#include "pggate/pg_env.h"
-#include "pggate/pg_statement.h"
+#include "../entities/entity_ids.h"
+#include "../entities/schema.h"
+#include "../entities/type.h"
+#include "../entities/value.h"
+#include "pg_env.h"
+#include "pg_statement.h"
 #include "k2_log.h"
 
 namespace k2pg {
@@ -59,7 +59,7 @@ class PgDdl : public PgStatement {
   }
 
   virtual CHECKED_STATUS ClearBinds() {
-    return STATUS(InvalidArgument, "This statement cannot be bound to any values");
+    return STATUS_PG(InvalidArgument, "This statement cannot be bound to any values");
   }
 };
 

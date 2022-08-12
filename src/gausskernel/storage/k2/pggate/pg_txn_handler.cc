@@ -21,90 +21,19 @@ Copyright(c) 2020 Futurewei Cloud
     SOFTWARE.
 */
 
-#include "pggate/pg_txn_handler.h"
+#include "pg_txn_handler.h"
 
 namespace k2pg {
 namespace gate {
 
 using k2pg::Status;
-using k2fdw::TxMgr;
 
-Status K2StatusToK2PgStatus(const skv::http::Status& status) {
-    // TODO verify this translation with how the upper layers use the Status,
-    // especially the Aborted status
-    switch (status.code) {
-        case 200: // OK Codes
-        case 201:
-        case 202:
-            return Status();
-        case 400: // Bad request
-            return STATUS(InvalidCommand, status.message.c_str());
-        case 403: // Forbidden, used to indicate AbortRequestTooOld in K23SI
-            return STATUS(Aborted, status.message.c_str());
-        case 404: // Not found
-            return STATUS(NotFound, status.message.c_str());
-        case 405: // Not allowed, indicates a bug in K2 usage or operation
-        case 406: // Not acceptable, used to indicate BadFilterExpression
-            return STATUS(InvalidArgument, status.message.c_str());
-        case 408: // Timeout
-            return STATUS(TimedOut, status.message.c_str());
-        case 409: // Conflict, used to indicate K23SI transaction conflicts
-            return STATUS(Aborted, status.message.c_str());
-        case 410: // Gone, indicates a partition map error
-            return STATUS(ServiceUnavailable, status.message.c_str());
-        case 412: // Precondition failed, indicates a failed K2 insert operation
-            return STATUS(AlreadyPresent, status.message.c_str());
-        case 422: // Unprocessable entity, BadParameter in K23SI, indicates a bug in usage or operation
-            return STATUS(InvalidArgument, status.message.c_str());
-        case 500: // Internal error, indicates a bug in K2 code
-            return STATUS(Corruption, status.message.c_str());
-        case 503: // Service unavailable, indicates a partition is not assigned
-            return STATUS(ServiceUnavailable, status.message.c_str());
-        default:
-            return STATUS(Corruption, "Unknown K2 status code");
-    }
-}
-
-RequestStatus K2Adapter::K2StatusToPGStatus(const skv::http::Status& status) {
-    switch (status.code) {
-        case 200: // OK Codes
-        case 201:
-        case 202:
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_OK;
-        case 400: // Bad request
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_USAGE_ERROR;
-        case 403: // Forbidden, used to indicate AbortRequestTooOld in K23SI
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_RESTART_REQUIRED_ERROR;
-        case 404: // Not found
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_OK; // TODO: correct?
-        case 405: // Not allowed, indicates a bug in K2 usage or operation
-        case 406: // Not acceptable, used to indicate BadFilterExpression
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_USAGE_ERROR;
-        case 408: // Timeout
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_RUNTIME_ERROR;
-        case 409: // Conflict, used to indicate K23SI transaction conflicts
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_RESTART_REQUIRED_ERROR;
-        case 410: // Gone, indicates a partition map error
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_RUNTIME_ERROR;
-        case 412: // Precondition failed, indicates a failed K2 insert operation
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_DUPLICATE_KEY_ERROR;
-        case 422: // Unprocessable entity, BadParameter in K23SI, indicates a bug in usage or operation
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_USAGE_ERROR;
-        case 500: // Internal error, indicates a bug in K2 code
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_RUNTIME_ERROR;
-        case 503: // Service unavailable, indicates a partition is not assigned
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_RUNTIME_ERROR;
-        default:
-            return SqlOpResponse::RequestStatus::PGSQL_STATUS_RUNTIME_ERROR;
-    }
-}
-
-PgTxnHandler::PgTxnHandler(): adapter_(adapter) {
+PgTxnHandler::PgTxnHandler(std::shared_ptr<K2Adapter> adapter) : adapter_(adapter) {
 }
 
 PgTxnHandler::~PgTxnHandler() {
   // Abort the transaction before the transaction handler gets destroyed.
-  if ( TXMgr.HasTxn()) {
+  if (txn_ != nullptr) {
     auto status = AbortTransaction();
     if (!status.ok()) {
       K2LOG_E(log::pg, "Transaction abortion failed during destructor due to: {}", status.code());
@@ -115,15 +44,11 @@ PgTxnHandler::~PgTxnHandler() {
 Status PgTxnHandler::BeginTransaction() {
   K2LOG_D(log::pg, "BeginTransaction: txn_in_progress_={}", txn_in_progress_);
   if (txn_in_progress_) {
-    return STATUS(IllegalState, "Transaction is already in progress");
+    return STATUS_PG(IllegalState, "Transaction is already in progress");
   }
   ResetTransaction();
-  auto&& result = k2fdw::TXMgr.BeginTxn({});
-  auto&& status = result.get<0>();
-  if (!status.is2xxOK()) {
-      return K2StatusToK2PgStatus(status);
-  }
   txn_in_progress_ = true;
+  txn_ = std::make_shared<K23SITxn>(adapter_->BeginTransaction());
   return Status::OK();
 }
 
@@ -133,26 +58,26 @@ Status PgTxnHandler::CommitTransaction() {
     return Status::OK();
   }
 
-  // if ( k2fdw::TXMgr.GetTxn()!= nullptr && read_only_) {
-  //   K2LOG_D(log::pg, "This was a read-only transaction, nothing to commit.");
-  //   // currently for K2-3SI transaction, we actually just abort the transaction if it is read only
-  //   return AbortTransaction();
-  // }
+  if (txn_ != nullptr && read_only_) {
+    K2LOG_D(log::pg, "This was a read-only transaction, nothing to commit.");
+    // currently for K2-3SI transaction, we actually just abort the transaction if it is read only
+    return AbortTransaction();
+  }
 
   K2LOG_D(log::pg, "Committing transaction.");
   // Use synchronous call for now until PG supports additional state check after this call
-  auto result = TXMgr.EndTxn(skv::http::dto::EndAction.Commit);
-  if (!result.status.is2xxOK()) {
-    K2LOG_E(log::pg, "Transaction commit failed due to: {}", result.status);
+  auto [status] = adapter_->EndTransaction(txn_, true/*commit*/);
+  if (!status.is2xxOK()) {
+    K2LOG_E(log::pg, "Transaction commit failed due to: {}", status);
     // status: Not allowed - transaction is also aborted (no need for abort)
-    if (result.status == skv::http::Statuses::S410_Gone) {
+    if (status == sh::Statuses::S405_Method_Not_Allowed || status == sh::Statuses::S410_Gone)
       txn_already_aborted_ = true;
   } else {
      ResetTransaction();
      K2LOG_D(log::pg, "Transaction commit succeeded");
   }
 
-  return K2StatusToK2PgStatus(result.status);
+  return K2Adapter::K2StatusToK2PgStatus(status);
 }
 
 Status PgTxnHandler::AbortTransaction() {
@@ -160,17 +85,18 @@ Status PgTxnHandler::AbortTransaction() {
     return Status::OK();
   }
 
-  if (txn_already_aborted_ ) {
+  if (txn_already_aborted_ || (txn_ != nullptr && read_only_)) {
     // This was a already commited or read-only transaction, nothing to commit.
     ResetTransaction();
     return Status::OK();
   }
 
-  auto&& [status] = TxMgr.EndTransaction(skv::http::dto::EndAction.Abort);
+  // Use synchronous call for now until PG supports additional state check after this call
+  auto [status] = adapter_->EndTransaction(txn_, false/*abort*/);
   // always abandon current transaction and reset regardless abort success or not.
   ResetTransaction();
   if (!status.is2xxOK()) {
-    K2LOG_E(log::pg, "Transaction abort failed due to: {}", rstatus);
+    K2LOG_E(log::pg, "Transaction abort failed due to: {}", status);
   }
 
   return K2Adapter::K2StatusToK2PgStatus(status);
@@ -178,7 +104,7 @@ Status PgTxnHandler::AbortTransaction() {
 
 Status PgTxnHandler::RestartTransaction() {
   // TODO: how do we decide whether a transaction is restart required?
-  if (TxMgr.HasTxn()) {
+  if (txn_ != nullptr) {
     auto status = AbortTransaction();
     if (!status.ok()) {
       return status;
@@ -215,7 +141,7 @@ Status PgTxnHandler::ExitSeparateDdlTxnMode(bool success) {
 
 std::shared_ptr<K23SITxn> PgTxnHandler::GetTxn() {
   // start transaction if not yet started.
-  if (!TXMgr.HasTxn()) {
+  if (txn_ == nullptr) {
     auto status = BeginTransaction();
     if (!status.ok())
     {
@@ -224,13 +150,14 @@ std::shared_ptr<K23SITxn> PgTxnHandler::GetTxn() {
   }
 
   DCHECK(txn_in_progress_);
-  return TXMgr.GetTxn();
+  return txn_;
 }
 
 void PgTxnHandler::ResetTransaction() {
   read_only_ = false;
   txn_in_progress_ = false;
   txn_already_aborted_ = false;
+  txn_ = nullptr;
   can_restart_.store(true, std::memory_order_release);
 }
 

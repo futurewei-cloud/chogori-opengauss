@@ -48,7 +48,7 @@
 
 #pragma once
 
-#include "pggate/pg_dml_write.h"
+#include "pg_dml_write.h"
 
 namespace k2pg {
 namespace gate {

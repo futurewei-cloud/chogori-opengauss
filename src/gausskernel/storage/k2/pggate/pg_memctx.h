@@ -51,9 +51,9 @@
 #include <memory>
 #include <string>
 
-#include "common/status.h"
-#include "pggate/pg_tabledesc.h"
-#include "pggate/pg_statement.h"
+#include "../common/status.h"
+#include "pg_tabledesc.h"
+#include "pg_statement.h"
 
 namespace k2pg {
 namespace gate {

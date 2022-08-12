@@ -15,7 +15,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_op_api.h"
+#include "pg_op_api.h"
 
 namespace k2pg {
 namespace gate {

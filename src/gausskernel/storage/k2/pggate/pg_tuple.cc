@@ -46,8 +46,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "common/k2pg-internal.h"
-#include "pggate/pg_tuple.h"
+#include "../common/k2pg-internal.h"
+#include "pg_tuple.h"
 
 namespace k2pg {
 namespace gate {

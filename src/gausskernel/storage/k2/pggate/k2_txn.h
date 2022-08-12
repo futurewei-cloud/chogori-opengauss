@@ -30,7 +30,7 @@ Copyright(c) 2020 Futurewei Cloud
 #pragma once
 #include "k2_includes.h"
 #include "k2_log.h"
-// #include "k2_future.h"
+#include "k2_future.h"
 
 namespace k2pg {
 namespace gate {
@@ -60,7 +60,7 @@ private:
     // The result future is eventually satisfied with the result of the read.
     // Uncaught exceptions may also be propagated and show up as exceptional futures here.
     sh::Response<sh::dto::SKVRecord> read(sh::dto::SKVRecord&& rec);
-    sh::Response<sh::dto::SKVRecord> read(sh::dto::Key key, std::string collectionName);
+    // sh::Response<sh::dto::SKVRecord> read(sh::dto::Key key, std::string collectionName);
 
     // Writes a record (full) into sh::The erase flag is used if this write should delete
     // the record from skv::http::The result future is eventually satisfied with the result of the write

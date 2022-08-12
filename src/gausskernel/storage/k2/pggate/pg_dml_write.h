@@ -47,11 +47,12 @@
 //
 #pragma once
 
-#include "pggate/pg_dml.h"
+#include "pg_dml.h"
 #include "k2_log.h"
 
 namespace k2pg {
 namespace gate {
+namespace sh=skv::http;
 
 //--------------------------------------------------------------------------------------------------
 // DML WRITE - Insert, Update, Delete.

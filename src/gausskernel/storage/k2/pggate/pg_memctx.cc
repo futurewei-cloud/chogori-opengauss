@@ -46,7 +46,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_memctx.h"
+#include "pg_memctx.h"
 
 namespace k2pg {
 namespace gate {

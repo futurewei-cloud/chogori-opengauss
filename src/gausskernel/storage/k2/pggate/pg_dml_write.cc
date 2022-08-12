@@ -46,7 +46,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_dml_write.h"
+#include "pg_dml_write.h"
 
 namespace k2pg {
 namespace gate {
@@ -78,7 +78,7 @@ void PgDmlWrite::PrepareColumns() {
     if (col.attr_num() == k2pg::sql::to_underlying(PgSystemAttrNum::kPgRowId)) {
       // generate new rowid for kPgRowId column when no primary keys are defined
       std::string row_id = pg_session()->GenerateNewRowid();
-      K2LOG_D(log::pg, "Generated new row id {}", k2::HexCodec::encode(row_id));
+      K2LOG_D(log::pg, "Generated new row id {}", sh::HexCodec::encode(row_id));
       std::shared_ptr<BindVariable> bind_var = col.AllocKeyBindForRowId(this, write_req_, row_id);
       // set the row_id bind
       row_id_bind_.emplace(col.bind_var());
@@ -152,7 +152,7 @@ Status PgDmlWrite::DeleteEmptyPrimaryBinds() {
   K2LOG_D(log::pg, "Deleting empty primary binds and found missing primary key: {}", missing_primary_key);
   // Check for missing key.  This is okay when binding the whole table (for colocated truncate).
   if (missing_primary_key && !bind_table_) {
-    return STATUS(InvalidArgument, "Primary key must be fully specified for modifying table");
+    return STATUS_PG(InvalidArgument, "Primary key must be fully specified for modifying table");
   }
 
   return Status::OK();

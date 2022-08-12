@@ -47,7 +47,7 @@
 //
 #pragma once
 
-#include "pggate/pg_dml.h"
+#include "pg_dml.h"
 #include "k2_log.h"
 
 namespace k2pg {

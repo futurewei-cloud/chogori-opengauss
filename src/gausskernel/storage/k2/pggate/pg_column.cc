@@ -31,9 +31,9 @@
 // or implied.  See the License for the specific language governing permissions and limitations
 // under the License.
 
-#include "pggate/pg_column.h"
-#include "pggate/pg_gate_typedefs.h"
-#include "pggate/pg_statement.h"
+#include "pg_column.h"
+#include "pg_gate_typedefs.h"
+#include "pg_statement.h"
 #include "k2_includes.h"
 
 namespace k2pg

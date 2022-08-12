@@ -46,13 +46,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_gate_impl.h"
-#include "pggate/pg_ddl.h"
-#include "pggate/pg_dml.h"
-#include "pggate/pg_select.h"
-#include "pggate/pg_insert.h"
-#include "pggate/pg_update.h"
-#include "pggate/pg_delete.h"
+#include "pg_gate_impl.h"
+#include "pg_ddl.h"
+#include "pg_dml.h"
+#include "pg_select.h"
+#include "pg_insert.h"
+#include "pg_update.h"
+#include "pg_delete.h"
 
 namespace k2pg {
 namespace gate {
@@ -252,7 +252,7 @@ Status PgGateApiImpl::NewCreateDatabase(const char *database_name,
 Status PgGateApiImpl::ExecCreateDatabase(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_CREATE_DATABASE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   return dynamic_cast<PgCreateDatabase*>(handle)->Exec();
@@ -269,7 +269,7 @@ Status PgGateApiImpl::NewDropDatabase(const char *database_name,
 Status PgGateApiImpl::ExecDropDatabase(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_DROP_DATABASE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgDropDatabase*>(handle)->Exec();
 }
@@ -285,7 +285,7 @@ Status PgGateApiImpl::NewAlterDatabase(const char *database_name,
 Status PgGateApiImpl::AlterDatabaseRenameDatabase(PgStatement *handle, const char *new_name) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_ALTER_DATABASE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgAlterDatabase*>(handle)->RenameDatabase(new_name);
 }
@@ -293,7 +293,7 @@ Status PgGateApiImpl::AlterDatabaseRenameDatabase(PgStatement *handle, const cha
 Status PgGateApiImpl::ExecAlterDatabase(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_ALTER_DATABASE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgAlterDatabase*>(handle)->Exec();
 }
@@ -341,7 +341,7 @@ Status PgGateApiImpl::CreateTableAddColumn(PgStatement *handle, const char *attr
                                        bool is_desc, bool is_nulls_first) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_CREATE_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return AddColumn(dynamic_cast<PgCreateTable*>(handle), attr_name, attr_num, attr_type,
       is_hash, is_range, is_desc, is_nulls_first);
@@ -350,7 +350,7 @@ Status PgGateApiImpl::CreateTableAddColumn(PgStatement *handle, const char *attr
 Status PgGateApiImpl::ExecCreateTable(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_CREATE_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgCreateTable*>(handle)->Exec();
 }
@@ -367,7 +367,7 @@ Status PgGateApiImpl::AlterTableAddColumn(PgStatement *handle, const char *name,
                                       bool is_not_null) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_ALTER_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   PgAlterTable *pg_stmt = dynamic_cast<PgAlterTable*>(handle);
@@ -378,7 +378,7 @@ Status PgGateApiImpl::AlterTableRenameColumn(PgStatement *handle, const char *ol
                                          const char *newname) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_ALTER_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   PgAlterTable *pg_stmt = dynamic_cast<PgAlterTable*>(handle);
@@ -388,7 +388,7 @@ Status PgGateApiImpl::AlterTableRenameColumn(PgStatement *handle, const char *ol
 Status PgGateApiImpl::AlterTableDropColumn(PgStatement *handle, const char *name) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_ALTER_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   PgAlterTable *pg_stmt = dynamic_cast<PgAlterTable*>(handle);
@@ -399,7 +399,7 @@ Status PgGateApiImpl::AlterTableRenameTable(PgStatement *handle, const char *db_
                                         const char *newname) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_ALTER_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   PgAlterTable *pg_stmt = dynamic_cast<PgAlterTable*>(handle);
@@ -409,7 +409,7 @@ Status PgGateApiImpl::AlterTableRenameTable(PgStatement *handle, const char *db_
 Status PgGateApiImpl::ExecAlterTable(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_ALTER_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   PgAlterTable *pg_stmt = dynamic_cast<PgAlterTable*>(handle);
   return pg_stmt->Exec();
@@ -426,7 +426,7 @@ Status PgGateApiImpl::NewDropTable(const PgObjectId& table_object_id,
 Status PgGateApiImpl::ExecDropTable(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_DROP_TABLE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgDropTable*>(handle)->Exec();
 }
@@ -458,7 +458,7 @@ Status PgGateApiImpl::GetColumnInfo(PgTableDesc* table_desc,
 
 Status PgGateApiImpl::DmlModifiesRow(PgStatement *handle, bool *modifies_row) {
   if (!handle) {
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   *modifies_row = false;
@@ -477,7 +477,7 @@ Status PgGateApiImpl::DmlModifiesRow(PgStatement *handle, bool *modifies_row) {
 
 Status PgGateApiImpl::SetIsSysCatalogVersionChange(PgStatement *handle) {
   if (!handle) {
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   switch (handle->stmt_op()) {
@@ -490,12 +490,12 @@ Status PgGateApiImpl::SetIsSysCatalogVersionChange(PgStatement *handle) {
       break;
   }
 
-  return STATUS(InvalidArgument, "Invalid statement handle");
+  return STATUS_PG(InvalidArgument, "Invalid statement handle");
 }
 
 Status PgGateApiImpl::SetCatalogCacheVersion(PgStatement *handle, uint64_t catalog_cache_version) {
   if (!handle) {
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   switch (handle->stmt_op()) {
@@ -509,7 +509,7 @@ Status PgGateApiImpl::SetCatalogCacheVersion(PgStatement *handle, uint64_t catal
       break;
   }
 
-  return STATUS(InvalidArgument, "Invalid statement handle");
+  return STATUS_PG(InvalidArgument, "Invalid statement handle");
 }
 
 // Index --------------------------------------------------------------------------------------------
@@ -537,7 +537,7 @@ Status PgGateApiImpl::CreateIndexAddColumn(PgStatement *handle, const char *attr
                                        bool is_desc, bool is_nulls_first) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_CREATE_INDEX)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
 
   return AddColumn(dynamic_cast<PgCreateIndex*>(handle), attr_name, attr_num, attr_type,
@@ -547,7 +547,7 @@ Status PgGateApiImpl::CreateIndexAddColumn(PgStatement *handle, const char *attr
 Status PgGateApiImpl::ExecCreateIndex(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_CREATE_INDEX)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgCreateIndex*>(handle)->Exec();
 }
@@ -563,7 +563,7 @@ Status PgGateApiImpl::NewDropIndex(const PgObjectId& index_id,
 Status PgGateApiImpl::ExecDropIndex(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_DROP_INDEX)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgDropIndex*>(handle)->Exec();
 }
@@ -703,7 +703,7 @@ Status PgGateApiImpl::DmlExecWriteOp(PgStatement *handle, int32_t *rows_affected
     default:
       break;
   }
-  return STATUS(InvalidArgument, "Invalid statement handle");
+  return STATUS_PG(InvalidArgument, "Invalid statement handle");
 }
 
 bool PgGateApiImpl::ForeignKeyReferenceExists(K2PgOid table_oid, std::string&& k2pgctid) {
@@ -732,7 +732,7 @@ Status PgGateApiImpl::NewColumnRef(PgStatement *stmt, int attr_num, const PgType
                                const PgTypeAttrs *type_attrs, PgExpr **expr_handle) {
   if (!stmt) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   std::unique_ptr<PgExpr> colref = std::make_unique<PgColumnRef>(attr_num, type_entity, type_attrs);
   *expr_handle = colref.get();
@@ -747,7 +747,7 @@ Status PgGateApiImpl::NewConstant(PgStatement *stmt, const K2PgTypeEntity *type_
                               uint64_t datum, bool is_null, PgExpr **expr_handle) {
   if (!stmt) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   std::unique_ptr<PgExpr> pg_const = std::make_unique<PgConstant>(type_entity, datum, is_null);
   *expr_handle = pg_const.get();
@@ -760,7 +760,7 @@ Status PgGateApiImpl::NewConstantOp(PgStatement *stmt, const K2PgTypeEntity *typ
                               uint64_t datum, bool is_null, PgExpr **expr_handle, bool is_gt) {
   if (!stmt) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   std::unique_ptr<PgExpr> pg_const = std::make_unique<PgConstant>(type_entity, datum, is_null,
       is_gt ? PgExpr::Opcode::PG_EXPR_GT : PgExpr::Opcode::PG_EXPR_LT);
@@ -775,7 +775,7 @@ Status PgGateApiImpl::NewConstantOp(PgStatement *stmt, const K2PgTypeEntity *typ
 Status PgGateApiImpl::UpdateConstant(PgExpr *expr, const char *value, bool is_null) {
   if (expr->opcode() != PgExpr::Opcode::PG_EXPR_CONSTANT) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid expression handle for constant");
+    return STATUS_PG(InvalidArgument, "Invalid expression handle for constant");
   }
   dynamic_cast<PgConstant*>(expr)->UpdateConstant(value, is_null);
   return Status::OK();
@@ -784,7 +784,7 @@ Status PgGateApiImpl::UpdateConstant(PgExpr *expr, const char *value, bool is_nu
 Status PgGateApiImpl::UpdateConstant(PgExpr *expr, const char *value, int64_t bytes, bool is_null) {
   if (expr->opcode() != PgExpr::Opcode::PG_EXPR_CONSTANT) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid expression handle for constant");
+    return STATUS_PG(InvalidArgument, "Invalid expression handle for constant");
   }
   dynamic_cast<PgConstant*>(expr)->UpdateConstant(value, bytes, is_null);
   return Status::OK();
@@ -797,7 +797,7 @@ Status PgGateApiImpl::NewOperator(PgStatement *stmt, const char *opname,
                               PgExpr **op_handle) {
   if (!stmt) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   RETURN_NOT_OK(PgExpr::CheckOperatorName(opname));
 
@@ -812,7 +812,7 @@ Status PgGateApiImpl::NewOperator(PgStatement *stmt, const char *opname,
 Status PgGateApiImpl::OperatorAppendArg(PgExpr *op_handle, PgExpr *arg) {
   if (!op_handle || !arg) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid expression handle");
+    return STATUS_PG(InvalidArgument, "Invalid expression handle");
   }
   dynamic_cast<PgOperator*>(op_handle)->AppendArg(arg);
   return Status::OK();
@@ -834,7 +834,7 @@ Status PgGateApiImpl::NewSelect(const PgObjectId& table_object_id,
   std::shared_ptr<PgDmlRead> stmt;
   if (prepare_params && prepare_params->index_only_scan && prepare_params->use_secondary_index) {
     if (!index_object_id.IsValid()) {
-      return STATUS(InvalidArgument, "Cannot run query with invalid index ID");
+      return STATUS_PG(InvalidArgument, "Cannot run query with invalid index ID");
     }
     stmt = std::make_shared<PgSelectIndex>(pg_session_, table_object_id, index_object_id, prepare_params);
   } else {
@@ -850,7 +850,7 @@ Status PgGateApiImpl::NewSelect(const PgObjectId& table_object_id,
 Status PgGateApiImpl::SetForwardScan(PgStatement *handle, bool is_forward_scan) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_SELECT)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   dynamic_cast<PgDmlRead*>(handle)->SetForwardScan(is_forward_scan);
   return Status::OK();
@@ -859,7 +859,7 @@ Status PgGateApiImpl::SetForwardScan(PgStatement *handle, bool is_forward_scan) 
 Status PgGateApiImpl::ExecSelect(PgStatement *handle, const PgExecParameters *exec_params) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_SELECT)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgDmlRead*>(handle)->Exec(exec_params);
 }
@@ -879,7 +879,7 @@ Status PgGateApiImpl::NewInsert(const PgObjectId& table_object_id,
 Status PgGateApiImpl::ExecInsert(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_INSERT)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgInsert*>(handle)->Exec();
 }
@@ -887,7 +887,7 @@ Status PgGateApiImpl::ExecInsert(PgStatement *handle) {
 Status PgGateApiImpl::InsertStmtSetUpsertMode(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_INSERT)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   dynamic_cast<PgInsert*>(handle)->SetUpsertMode();
 
@@ -897,7 +897,7 @@ Status PgGateApiImpl::InsertStmtSetUpsertMode(PgStatement *handle) {
 Status PgGateApiImpl::InsertStmtSetWriteTime(PgStatement *handle, const uint64_t write_time) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_INSERT)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   RETURN_NOT_OK(dynamic_cast<PgInsert*>(handle)->SetWriteTime(write_time));
   return Status::OK();
@@ -918,7 +918,7 @@ Status PgGateApiImpl::NewUpdate(const PgObjectId& table_object_id,
 Status PgGateApiImpl::ExecUpdate(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_UPDATE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgUpdate*>(handle)->Exec();
 }
@@ -938,7 +938,7 @@ Status PgGateApiImpl::NewDelete(const PgObjectId& table_object_id,
 Status PgGateApiImpl::ExecDelete(PgStatement *handle) {
   if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_DELETE)) {
     // Invalid handle.
-    return STATUS(InvalidArgument, "Invalid statement handle");
+    return STATUS_PG(InvalidArgument, "Invalid statement handle");
   }
   return dynamic_cast<PgDelete*>(handle)->Exec();
 }

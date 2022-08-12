@@ -48,9 +48,9 @@
 
 #pragma once
 
-#include "entities/table.h"
-#include "pggate/pg_column.h"
-#include "pggate/pg_op_api.h"
+#include "../entities/table.h"
+#include "pg_column.h"
+#include "pg_op_api.h"
 #include "k2_log.h"
 
 namespace k2pg {

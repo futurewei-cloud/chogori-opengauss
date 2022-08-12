@@ -50,17 +50,17 @@
 #include <string>
 #include <vector>
 
-#include "entities/entity_ids.h"
-#include "entities/schema.h"
-#include "entities/type.h"
-#include "entities/value.h"
-#include "entities/expr.h"
-#include "pggate/pg_gate_typedefs.h"
-#include "pggate/pg_env.h"
-#include "pggate/pg_tuple.h"
-#include "pggate/pg_column.h"
-#include "pggate/pg_statement.h"
-#include "pggate/pg_op.h"
+#include "../entities/entity_ids.h"
+#include "../entities/schema.h"
+#include "../entities/type.h"
+#include "../entities/value.h"
+#include "../entities/expr.h"
+#include "pg_gate_typedefs.h"
+#include "pg_env.h"
+#include "pg_tuple.h"
+#include "pg_column.h"
+#include "pg_statement.h"
+#include "pg_op.h"
 #include "k2_log.h"
 
 namespace k2pg {

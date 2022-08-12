@@ -64,118 +64,99 @@ K23SITxn::~K23SITxn() {
     _inFlightOps++;
     session::in_flight_ops->observe(_inFlightOps);
     K2LOG_D(log::k2Client, "scanread: mtr={}, query={}", _txn, (*query));
-    auto result = txn->query(query).get();
+    auto result = _txn->query(*query).get();
     _inFlightOps--;
     session::scan_op_latency->observe(Clock::now() - Clock::now());
     return result;
 }
 
-CBFuture<ReadResult<dto::SKVRecord>> K23SITxn::read(dto::SKVRecord&& rec) {
+sh::Response<sh::dto::SKVRecord> K23SITxn::read(sh::dto::SKVRecord&& record) {
     _readOps++;
-    ReadRequest qr {.mtr = _mtr, .record=std::move(rec), .key=k2::dto::Key(), .collectionName="", .prom={}};
-
     _inFlightOps++;
-    session::in_flight_ops->observe(_inFlightOps);
-    auto result = CBFuture<ReadResult<dto::SKVRecord>>(qr.prom.get_future(), [this, st = Clock::now()] {
-        _inFlightOps--;
-        session::read_op_latency->observe(Clock::now() - st);
-    });
+    K2LOG_D(log::k2Client, "read: txn={}, coll={}, schema-name={}, schema-version={}, key-pk={}, key-rk={}",
+            _txn,
+            record.collectionName,
+            record.schema->name,
+            record.schema->version,
+            record.getPartitionKey(),
+            record.getRangeKey());
 
-    K2LOG_D(log::k2Client, "read: mtr={}, coll={}, schema-name={}, schema-version={}, key-pk={}, key-rk={}",
-            qr.mtr,
-            qr.record.collectionName,
-            qr.record.schema->name,
-            qr.record.schema->version,
-            qr.record.getPartitionKey(),
-            qr.record.getRangeKey());
-    pushQ(readTxQ, std::move(qr));
+    session::in_flight_ops->observe(_inFlightOps);
+    auto st = Clock::now();
+    auto result = _txn->read(record).get();
+    _inFlightOps--;
+    session::read_op_latency->observe(Clock::now() - st);
     return result;
 }
 
-CBFuture<k2::ReadResult<k2::dto::SKVRecord>> K23SITxn::read(k2::dto::Key key, std::string collectionName) {
-    _readOps++;
-    ReadRequest qr {.mtr = _mtr, .record=k2::dto::SKVRecord(), .key=std::move(key),
-                    .collectionName=std::move(collectionName), .prom={}};
+// TODO(akhan): Uncomment or remove
+// sh::Response<sh::dto::SKVRecord> K23SITxn::read(k2::dto::Key key, std::string collectionName) {
+//     _readOps++;
+//     _inFlightOps++;
+//     K2LOG_D(log::k2Client, "read: txn={}, coll={}, key-pk={}, key-rk={}",
+//       _txn,
+//       collectionName,
+//       key.partitionKey,
+//       key.rangeKey());
+//     // There is no api to read from key directly, build the skv record
+//     session::in_flight_ops->observe(_inFlightOps);
+//     auto st = Clock::now();
+//     result = 
+//     _inFlightOps--;
+//     session::read_op_latency->observe(Clock::now() - st);
 
-    _inFlightOps++;
-    session::in_flight_ops->observe(_inFlightOps);
-    auto result = CBFuture<ReadResult<dto::SKVRecord>>(qr.prom.get_future(), [this, st = Clock::now()] {
-        _inFlightOps--;
-        session::read_op_latency->observe(Clock::now() - st);
-    });
+//     return result;
+// }
 
-    K2LOG_D(log::k2Client, "read: mtr={}, coll={}, key-pk={}, key-rk={}",
-                qr.mtr,
-                qr.collectionName,
-                qr.key.partitionKey,
-                qr.key.rangeKey);
-    pushQ(readTxQ, std::move(qr));
-    return result;
-}
-
-CBFuture<WriteResult> K23SITxn::write(dto::SKVRecord&& rec, bool erase, k2::dto::ExistencePrecondition precondition) {
+sh::Response<> K23SITxn::write(sh::dto::SKVRecord&& record, bool erase, sh::dto::ExistencePrecondition precondition) {
     _writeOps++;
-    WriteRequest qr{.mtr = _mtr, .erase=erase, .precondition=precondition, .record=std::move(rec), .prom={}};
-
     _inFlightOps++;
     session::in_flight_ops->observe(_inFlightOps);
-    auto result = CBFuture<WriteResult>(qr.prom.get_future(), [this, st = Clock::now()] {
-        _inFlightOps--;
-        session::write_op_latency->observe(Clock::now() - st);
-    });
-
     K2LOG_D(log::k2Client,
         "write: mtr={}, erase={}, precondition={}, coll={}, schema-name={}, schema-version={}, key-pk={}, key-rk={}",
-        qr.mtr,
-        qr.erase,
-        qr.precondition,
-        qr.record.collectionName,
-        qr.record.schema->name,
-        qr.record.schema->version,
-        qr.record.getPartitionKey(),
-        qr.record.getRangeKey());
-
-    pushQ(writeTxQ, std::move(qr));
+        _txn,
+        erase,
+        precondition,
+        record.collectionName,
+        record.schema->name,
+        record.schema->version,
+        record.getPartitionKey(),
+        record.getRangeKey());
+    
+    auto st = Clock::now();
+    auto result =  _txn->write(record, erase, precondition).get();
+    _inFlightOps--;
+    session::write_op_latency->observe(Clock::now() - st);
     return result;
 }
 
-CBFuture<PartialUpdateResult> K23SITxn::partialUpdate(dto::SKVRecord&& rec,
+sh::Response<> K23SITxn::partialUpdate(sh::dto::SKVRecord&& record,
                                                          std::vector<uint32_t> fieldsForUpdate,
                                                          std::string partitionKey) {
     _writeOps++;
-    k2::dto::Key key{};
-    if (!partitionKey.empty()) {
-        key.schemaName = rec.schema->name;
-        key.partitionKey = partitionKey;
-        key.rangeKey = "";
-    }
-
-    UpdateRequest qr{.mtr = _mtr, .record=std::move(rec), .fieldsForUpdate=std::move(fieldsForUpdate),
-                     .key=std::move(key), .prom={}};
-
     _inFlightOps++;
     session::in_flight_ops->observe(_inFlightOps);
-    auto result = CBFuture<PartialUpdateResult>(qr.prom.get_future(), [this, st = Clock::now()] {
-        _inFlightOps--;
-        session::write_op_latency->observe(Clock::now() - st);
-    });
-
     K2LOG_D(log::k2Client,
-        "partial write: mtr={}, record={}, kkey-pk={}, kkey-rk={}, fieldsForUpdate={}",
-        qr.mtr,
-        qr.record,
-        qr.key.partitionKey,
-        qr.key.rangeKey,
-        qr.fieldsForUpdate);
-    pushQ(updateTxQ, std::move(qr));
-    return result;
+        "partial write: mtr={}, record={}, kkey-pk={}, fieldsForUpdate={}",
+        _txn,
+        record,
+        partitionKey,
+        fieldsForUpdate);
+    auto st = Clock::now();
+    _inFlightOps--;
+    session::write_op_latency->observe(Clock::now() - st);
+    // TODO(akhan): Implement partial udpate
+    // auto result = _txn->partialUpdate(record, fieldsForUpdate, partitionKey).get();
+    // return result;
+
+    return sh::Response<>(sh::Statuses::S200_OK);
 }
 
-const k2::dto::K23SI_MTR& K23SITxn::mtr() const {
-    return _mtr;
-}
+// const k2::dto::K23SI_MTR& K23SITxn::mtr() const {
+//     return _mtr;
+// }
 
-void K23SITxn::_reportEndMetrics(k2::TimePoint now) {
+void K23SITxn::_reportEndMetrics(sh::TimePoint now) {
     session::txn_latency->observe(now - _startTime);
     session::txn_ops->observe(_readOps + _writeOps + _scanOps);
     session::txn_read_ops->observe(_readOps);

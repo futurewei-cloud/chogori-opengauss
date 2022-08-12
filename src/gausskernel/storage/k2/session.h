@@ -30,7 +30,7 @@ namespace sh=skv::http;
 class TxnManager {
 public:
     // this method returns the current active transaction in this manager, creating a new one if needed
-    sh::Response<std::shared_ptr<sh::TxnHandle>> BeginTxn(const sh::dto::TxnOptions& opts);
+    sh::Response<std::shared_ptr<sh::TxnHandle>> BeginTxn(sh::dto::TxnOptions opts);
 
     // this method returns the current active transaction in this manager, or null ptr if one doesn't exist
     std::shared_ptr<sh::TxnHandle> GetTxn();

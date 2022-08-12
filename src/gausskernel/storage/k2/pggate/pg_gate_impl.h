@@ -53,19 +53,19 @@
 #include <thread>
 #include <unordered_map>
 
-#include "entities/entity_ids.h"
-#include "entities/expr.h"
-#include "entities/index.h"
-#include "pggate/pg_gate_typedefs.h"
-#include "pggate/pg_env.h"
-#include "pggate/pg_memctx.h"
-#include "pggate/pg_tabledesc.h"
-#include "pggate/pg_session.h"
-#include "pggate/pg_statement.h"
-#include "pggate/pg_txn_handler.h"
-#include "pggate/k2_adapter.h"
-#include "pggate/catalog/sql_catalog_client.h"
-#include "pggate/catalog/sql_catalog_manager.h"
+#include "../entities/entity_ids.h"
+#include "../entities/expr.h"
+#include "../entities/index.h"
+#include "pg_gate_typedefs.h"
+#include "pg_env.h"
+#include "pg_memctx.h"
+#include "pg_tabledesc.h"
+#include "pg_session.h"
+#include "pg_statement.h"
+#include "pg_txn_handler.h"
+#include "k2_adapter.h"
+#include "catalog/sql_catalog_client.h"
+#include "catalog/sql_catalog_manager.h"
 
 namespace k2pg {
 namespace gate {
@@ -409,7 +409,7 @@ class PgGateApiImpl {
   CHECKED_STATUS UpdateConstant(PgExpr *expr, value_type value, bool is_null) {
     if (expr->opcode() != PgExpr::Opcode::PG_EXPR_CONSTANT) {
       // Invalid handle.
-      return STATUS(InvalidArgument, "Invalid expression handle for constant");
+      return STATUS_PG(InvalidArgument, "Invalid expression handle for constant");
     }
     dynamic_cast<PgConstant*>(expr)->UpdateConstant(value, is_null);
     return Status::OK();

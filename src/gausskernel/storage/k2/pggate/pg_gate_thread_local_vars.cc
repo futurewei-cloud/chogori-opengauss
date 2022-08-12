@@ -14,12 +14,12 @@
 //--------------------------------------------------------------------------------------------------
 
 
-#include "pggate/pg_gate_thread_local_vars.h"
+#include "pg_gate_thread_local_vars.h"
 
 #include <setjmp.h>
 #include <unordered_map>
 
-#include "common/status.h"
+#include "../common/status.h"
 
 namespace k2pg {
 namespace gate {

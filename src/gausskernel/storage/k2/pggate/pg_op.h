@@ -52,26 +52,28 @@
 #include <list>
 #include <vector>
 
-#include "common/type/slice.h"
-#include "common/status.h"
-#include "entities/entity_ids.h"
-#include "entities/schema.h"
-#include "entities/type.h"
-#include "entities/value.h"
-#include "entities/expr.h"
-#include "entities/table.h"
+#include "../common/type/slice.h"
+#include "../common/status.h"
+#include "../entities/entity_ids.h"
+#include "../entities/schema.h"
+#include "../entities/type.h"
+#include "../entities/value.h"
+#include "../entities/expr.h"
+#include "../entities/table.h"
 
-#include "pggate/pg_gate_defaults.h"
-#include "pggate/pg_tuple.h"
-#include "pggate/pg_session.h"
-#include "pggate/pg_tabledesc.h"
-#include "pggate/pg_op_api.h"
+#include "pg_gate_defaults.h"
+#include "pg_tuple.h"
+#include "pg_session.h"
+#include "pg_tabledesc.h"
+#include "pg_op_api.h"
 
 #include "k2_includes.h"
 #include "k2_log.h"
 
 namespace k2pg {
 namespace gate {
+namespace sh=skv::http;
+
 using k2pg::Status;
 using k2pg::Slice;
 using k2pg::sql::PgObjectId;
@@ -80,8 +82,8 @@ using k2pg::sql::PgObjectId;
 // PgOpResult represents a batch of rows in ONE reply from storage layer.
 class PgOpResult {
 public:
-    explicit PgOpResult(std::vector<k2::dto::SKVRecord>&& data);
-    PgOpResult(std::vector<k2::dto::SKVRecord> &&data, std::list<int64_t> &&row_orders);
+    explicit PgOpResult(std::vector<sh::dto::SKVRecord>&& data);
+    PgOpResult(std::vector<sh::dto::SKVRecord> &&data, std::list<int64_t> &&row_orders);
     ~PgOpResult();
 
     // Get the order of the next row in this batch.
@@ -117,7 +119,7 @@ private:
 
     // Data selected from k2 storage.
     // TODO: refactor this based on SKV payload
-    std::vector<k2::dto::SKVRecord> data_;
+    std::vector<sh::dto::SKVRecord> data_;
 
     // The indexing order of the row in this batch.
     // These order values help to identify the row order across all batches
@@ -131,7 +133,7 @@ private:
     bool syscol_processed_ = false;
 
     // store computed k2pgctids;
-    std::vector<k2::String> k2pgctid_strings_;
+    std::vector<sh::String> k2pgctid_strings_;
     //... and also as slices so that we can return them to the PG Gate API
     std::vector<Slice> k2pgctids_;
 

@@ -19,7 +19,7 @@
 //
 #pragma once
 
-#include "pggate/pg_gate_typedefs.h"
+#include "pg_gate_typedefs.h"
 
 namespace k2pg {
 namespace gate {

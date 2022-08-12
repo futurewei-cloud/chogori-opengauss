@@ -10,7 +10,7 @@ top_builddir = ../../../..
 
 include $(top_builddir)/src/Makefile.global
 
-SUBDIRS     = pggate
+SUBDIRS     = common entities utf pggate
 
 OBJ_DIR = ./obj
 OBJS = $(OBJ_DIR)/k2_fdw.o $(OBJ_DIR)/config.o $(OBJ_DIR)/session.o $(OBJ_DIR)/error_reporting.o $(OBJ_DIR)/fdw_handlers.o $(OBJ_DIR)/parse.o

@@ -48,12 +48,12 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include "common/type/decimal.h"
-#include "common/k2pg-internal.h"
-#include "pggate/pg_op.h"
-#include "pggate/pg_env.h"
-#include "pggate/pg_gate_typedefs.h"
-#include "pggate/catalog/sql_catalog_defaults.h" // for the table/index name constants
+#include "../common/type/decimal.h"
+#include "../common/k2pg-internal.h"
+#include "pg_op.h"
+#include "pg_env.h"
+#include "pg_gate_typedefs.h"
+#include "catalog/sql_catalog_defaults.h" // for the table/index name constants
 #include <string>
 
 namespace k2pg {
@@ -67,7 +67,7 @@ constexpr bool isNumericType() { return std::is_arithmetic<T>::value || std::is_
 template <typename T>
 std::enable_if_t<!isNumericType<T>(), Status>
 TranslateUserCol(int index, const K2PgTypeEntity* type_entity, const PgTypeAttrs* type_attrs, std::optional<T> field, PgTuple* pg_tuple) {
-    return STATUS(InternalError, "unsupported type for user column");
+    return STATUS_PG(InternalError, "unsupported type for user column");
 }
 
 // translate numeric types (integers, bool, floats)
@@ -127,15 +127,15 @@ TranslateUserCol(int index, const K2PgTypeEntity* type_entity, const PgTypeAttrs
         }
         default:
             K2LOG_E(log::pg, "Internal error: unsupported type {}", type_entity->k2pg_type);
-            return STATUS(InternalError, "unsupported type for user column");
+            return STATUS_PG(InternalError, "unsupported type for user column");
     }
     return Status::OK();
 }
 
-// translate k2::String -based types
+// translate sh::String -based types
 template <>
 Status
-TranslateUserCol<k2::String>(int index, const K2PgTypeEntity* type_entity, const PgTypeAttrs* type_attrs, std::optional<k2::String> field, PgTuple* pg_tuple) {
+TranslateUserCol<sh::String>(int index, const K2PgTypeEntity* type_entity, const PgTypeAttrs* type_attrs, std::optional<sh::String> field, PgTuple* pg_tuple) {
     switch (type_entity->k2pg_type) {
         case K2SQL_DATA_TYPE_BINARY: {
             pg_tuple->WriteDatum(index, type_entity->k2pg_to_datum(field.value().c_str(), field.value().size(), type_attrs));
@@ -151,7 +151,7 @@ TranslateUserCol<k2::String>(int index, const K2PgTypeEntity* type_entity, const
             Decimal k2pg_decimal;
             if (!k2pg_decimal.DecodeFromComparable(serialized_decimal).ok()) {
                 K2LOG_E(log::pg, "Failed to deserialize DECIMAL from {}", serialized_decimal);
-                return STATUS(InternalError, "failed to deserialize DECIMAL");
+                return STATUS_PG(InternalError, "failed to deserialize DECIMAL");
             }
             auto plaintext = k2pg_decimal.ToString();
 
@@ -160,14 +160,14 @@ TranslateUserCol<k2::String>(int index, const K2PgTypeEntity* type_entity, const
         }
         default:
             K2LOG_E(log::pg, "Internal error: unsupported type {}", type_entity->k2pg_type);
-            return STATUS(InternalError, "unsupported type for user column");
+            return STATUS_PG(InternalError, "unsupported type for user column");
     }
     return Status::OK();
 }
 
 template<typename T>
 Status TranslateSysCol(int attr_num, std::optional<T> field, PgTuple* pg_tuple) {
-    return STATUS(InternalError, "unsupported type for system column");
+    return STATUS_PG(InternalError, "unsupported type for system column");
 }
 
 template<>
@@ -195,32 +195,32 @@ Status TranslateSysCol<int64_t>(int attr_num, std::optional<int64_t> field, PgTu
             pg_tuple->syscols()->tableoid = field.value();
             break;
         default:
-            return STATUS(InternalError, "system column is not int64_t compatible");
+            return STATUS_PG(InternalError, "system column is not int64_t compatible");
     }
     return Status::OK();
 }
 
 template <>
-Status TranslateSysCol<k2::String>(int attr_num, std::optional<k2::String> field, PgTuple* pg_tuple) {
+Status TranslateSysCol<sh::String>(int attr_num, std::optional<sh::String> field, PgTuple* pg_tuple) {
     switch (attr_num) {
         case static_cast<int>(PgSystemAttrNum::kPgTupleId): {
-            k2::String& val = field.value();
+            sh::String& val = field.value();
             pg_tuple->Write(&pg_tuple->syscols()->k2pgctid, (const uint8_t*)val.c_str(), val.size());
             break;
         }
         case static_cast<int>(PgSystemAttrNum::kPgIdxBaseTupleId): {
-            k2::String& val = field.value();
+            sh::String& val = field.value();
             pg_tuple->Write(&pg_tuple->syscols()->k2pgbasectid, (const uint8_t*)val.c_str(), val.size());
             break;
         }
         default:
-            return STATUS(InternalError, "system column is not string compatible");
+            return STATUS_PG(InternalError, "system column is not string compatible");
     }
     return Status::OK();
 }
 
 template<typename T>
-void FieldParser(std::optional<T> field, const k2::String& fieldName, const std::unordered_map<std::string, PgExpr*>& targets_by_name, PgTuple* pg_tuple, Status& result, int32_t* num) {
+void FieldParser(std::optional<T> field, const sh::String& fieldName, const std::unordered_map<std::string, PgExpr*>& targets_by_name, PgTuple* pg_tuple, Status& result, int32_t* num) {
     auto iter = targets_by_name.find(fieldName.c_str());
     if (iter == targets_by_name.end()) {
         if (k2pg::sql::catalog::CatalogConsts::TABLE_ID_COLUMN_NAME == fieldName.c_str() ||
@@ -233,7 +233,7 @@ void FieldParser(std::optional<T> field, const k2::String& fieldName, const std:
         return;
     }
     if (!iter->second->is_colref()) {
-        result= STATUS(InternalError, "Unexpected expression, only column refs supported in SKV");
+        result= STATUS_PG(InternalError, "Unexpected expression, only column refs supported in SKV");
         return;
     }
     const PgColumnRef* target = (PgColumnRef*)iter->second;
@@ -241,7 +241,7 @@ void FieldParser(std::optional<T> field, const k2::String& fieldName, const std:
 
     if (attr_num < 0) {
         if (!field) {
-            result= STATUS(InternalError, "Null system column encountered");
+            result= STATUS_PG(InternalError, "Null system column encountered");
             return;
         }
         result = TranslateSysCol(attr_num, std::move(field), pg_tuple);
@@ -260,11 +260,11 @@ void FieldParser(std::optional<T> field, const k2::String& fieldName, const std:
             fieldName, (*num), targets_by_name.size());
 }
 
-PgOpResult::PgOpResult(std::vector<k2::dto::SKVRecord>&& data) : data_(std::move(data)) {
+PgOpResult::PgOpResult(std::vector<sh::dto::SKVRecord>&& data) : data_(std::move(data)) {
     ProcessSystemColumns();
 }
 
-PgOpResult::PgOpResult(std::vector<k2::dto::SKVRecord>&& data, std::list<int64_t>&& row_orders):
+PgOpResult::PgOpResult(std::vector<sh::dto::SKVRecord>&& data, std::list<int64_t>&& row_orders):
     data_(std::move(data)), row_orders_(move(row_orders)) {
     ProcessSystemColumns();
 }
@@ -282,7 +282,11 @@ Status PgOpResult::WritePgTuple(const std::vector<PgExpr *> &targets, const std:
     K2ASSERT(log::pg, targets_by_name.size() > 0, "targets should not be empty");
     K2ASSERT(log::pg, syscol_processed_, "System columns have not been processed yet");
     int32_t num = 0;
-    FOR_EACH_RECORD_FIELD(data_[nextToConsume_], FieldParser, targets_by_name, pg_tuple, result, &num);
+    data_[nextToConsume_].visitRemainingFields([this, targets_by_name, pg_tuple, &result, &num](const auto& field, auto&& value) {
+        using T = typename std::remove_reference_t<decltype(value)>::value_type;        
+        FieldParser<T>(value, field.name, targets_by_name, pg_tuple, result, &num);
+    });
+    // FOR_EACH_RECORD_FIELD(data_[nextToConsume_], FieldParser, targets_by_name, pg_tuple, result, &num);
      if (targets_by_name.find("k2pgctid") != targets_by_name.end()) {
         // k2pgctid is a virtual column and won't be in the SKV record
         num++;
@@ -309,8 +313,8 @@ Status PgOpResult::WritePgTuple(const std::vector<PgExpr *> &targets, const std:
 void PgOpResult::GetBaseRowIdBatch(std::vector<std::string>& baseRowIds) {
     if (!is_eof())
     {
-        for (k2::dto::SKVRecord& record : data_) {
-            std::optional<k2::String> basek2pgctid = record.deserializeField<k2::String>("k2pgidxbasectid");
+        for (sh::dto::SKVRecord& record : data_) {
+            std::optional<sh::String> basek2pgctid = record.deserializeField<sh::String>("k2pgidxbasectid");
 
             if (!basek2pgctid.has_value()) {
                 CHECK(basek2pgctid.has_value()) << "k2pgidxbasectid for index row was null";
@@ -751,7 +755,7 @@ Result<std::list<PgOpResult>> PgWriteOp::ProcessResponseImpl() {
 }
 
 Status PgWriteOp::PopulateDmlByRowIdOps(const std::vector<std::string>& k2pgctids) {
-    return STATUS(NotSupported, "PopulateDmlByRowIdOps() is not supported for PgWriteOp");
+    return STATUS_PG(NotSupported, "PopulateDmlByRowIdOps() is not supported for PgWriteOp");
 }
 
 Status PgWriteOp::CreateRequests() {

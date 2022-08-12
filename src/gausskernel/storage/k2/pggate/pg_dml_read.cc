@@ -46,9 +46,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_dml_read.h"
-#include "pggate/pg_select.h"
-#include "pggate/pg_gate_typedefs.h"
+#include "pg_dml_read.h"
+#include "pg_select.h"
+#include "pg_gate_typedefs.h"
 
 namespace k2pg {
 namespace gate {

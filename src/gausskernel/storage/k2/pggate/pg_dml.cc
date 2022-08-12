@@ -46,8 +46,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_dml.h"
-#include "pggate/pg_select.h"
+#include "pg_dml.h"
+#include "pg_select.h"
 
 namespace k2pg {
 namespace gate {
@@ -94,7 +94,7 @@ Status PgDml::AppendTargetVar(PgExpr *target) {
   targets_.push_back(target);
 
   if (!target->is_colref()) {
-      return STATUS(InternalError, "Unexpected expression, only column refs supported in SKV");
+      return STATUS_PG(InternalError, "Unexpected expression, only column refs supported in SKV");
   }
 
   PgColumnRef *col_ref = static_cast<PgColumnRef *>(target);
@@ -238,7 +238,7 @@ Status PgDml::UpdateAssignVars() {
 }
 
 Status PgDml::ClearBinds() {
-  return STATUS(NotSupported, "Clearing binds for prepared statement is not yet implemented");
+  return STATUS_PG(NotSupported, "Clearing binds for prepared statement is not yet implemented");
 }
 
 Status PgDml::Fetch(int32_t natts, uint64_t *values, bool *isnulls, PgSysColumns *syscols, bool *has_data) {

@@ -33,11 +33,11 @@
 
 #pragma once
 
-#include "entities/entity_ids.h"
-#include "entities/type.h"
-#include "entities/expr.h"
-#include "entities/schema.h"
-#include "pggate/pg_op_api.h"
+#include "../entities/entity_ids.h"
+#include "../entities/type.h"
+#include "../entities/expr.h"
+#include "../entities/schema.h"
+#include "../pggate/pg_op_api.h"
 #include "k2_log.h"
 
 namespace k2pg {

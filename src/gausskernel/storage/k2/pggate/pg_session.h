@@ -51,19 +51,19 @@
 #include <optional>
 #include <unordered_set>
 
-#include <k2/common/Chrono.h>
+#include <k2/logging/Chrono.h>
 
-#include "entities/entity_ids.h"
-#include "entities/index.h"
-#include "entities/schema.h"
-#include "pggate/k2_adapter.h"
-#include "pggate/pg_env.h"
-#include "pggate/pg_gate_defaults.h"
-#include "pggate/pg_tabledesc.h"
-#include "pggate/pg_op_api.h"
-#include "pggate/pg_gate_api.h"
-#include "pggate/pg_txn_handler.h"
-#include "pggate/catalog/sql_catalog_client.h"
+#include "../entities/entity_ids.h"
+#include "../entities/index.h"
+#include "../entities/schema.h"
+#include "k2_adapter.h"
+#include "pg_env.h"
+#include "pg_gate_defaults.h"
+#include "pg_tabledesc.h"
+#include "pg_op_api.h"
+#include "pg_gate_api.h"
+#include "pg_txn_handler.h"
+#include "catalog/sql_catalog_client.h"
 
 #include "k2_log.h"
 

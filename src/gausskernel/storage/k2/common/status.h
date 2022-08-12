@@ -569,7 +569,7 @@ inline std::ostream& operator<<(std::ostream& out, const Status& status) {
   do { \
     auto v1_tmp = (var1); \
     auto v2_tmp = (var2); \
-    if (PREDICT_FALSE(!((v1_tmp)op(v2_tmp)))) return STATUS(type, \
+    if (PREDICT_FALSE(!((v1_tmp)op(v2_tmp)))) return STATUS_PG(type, \
       fmt::format("$0: $1 vs. $2", (msg), v1_tmp, v2_tmp)); \
   } while (0)
 #define SCHECK(expr, type, msg) SCHECK_OP(expr, ==, true, type, msg)

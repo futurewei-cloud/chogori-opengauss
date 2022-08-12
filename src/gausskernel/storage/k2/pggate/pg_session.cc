@@ -46,8 +46,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#include "pggate/pg_op.h"
-#include "pggate/pg_session.h"
+#include "pg_op.h"
+#include "pg_session.h"
 
 namespace k2pg {
 namespace gate {
@@ -132,7 +132,7 @@ Status PgSession::DropDatabase(const string& database_name, PgOid database_oid) 
 
 Status PgSession::RenameDatabase(const std::string& database_name, PgOid database_oid, std::optional<std::string> rename_to) {
   // TODO: add implementation
-  return STATUS(NotSupported, "RenameDatabase not supported");
+  return STATUS_PG(NotSupported, "RenameDatabase not supported");
 }
 
 Status PgSession::CreateTable(
