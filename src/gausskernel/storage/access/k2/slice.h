@@ -174,7 +174,7 @@ class Slice {
   Status consume_byte(char c);
 
   // Checks that this slice has size() = 'expected_size' and returns
-  // STATUS(Corruption, ) otherwise.
+  // K2_STATUS(Corruption, ) otherwise.
   Status check_size(size_t expected_size) const;
 
   // Compare two slices and returns the offset of the first byte where they differ.

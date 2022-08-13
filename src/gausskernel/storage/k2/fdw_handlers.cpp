@@ -69,7 +69,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "catalog/pg_proc.h"
 #include "utils/lsyscache.h"
 
-#include "error_reporting.h"
+#include "access/k2/error_reporting.h"
 #include "parse.h"
 
 namespace k2fdw {
@@ -356,7 +356,7 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
       std::cout << "range_conds not AND" << std::endl;
     std::string msg = "Only AND top-level condition is supported in range expression";
         //K2LOG_E(log::k2Adapter, "{}", msg);
-        //return STATUS(InvalidCommand, msg);
+        //return K2_STATUS(InvalidCommand, msg);
          throw std::invalid_argument(msg);
     }
 
@@ -1097,7 +1097,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
   Oid foid = RelationGetRelid(resultRelInfo->ri_RelationDesc);
   auto schema = getSchema(foid);
   if (schema == nullptr) {
-      reportRC(RCStatus::RC_TABLE_NOT_FOUND, "Schema not found for insert op");
+      reportRC(k2pg::RCStatus::RC_TABLE_NOT_FOUND, "Schema not found for insert op");
     return nullptr;
   }
 
@@ -1145,11 +1145,11 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
     auto&& [writeStatus] = writeFut.get();
     if (!writeStatus.is2xxOK()) {
       // TODO error types
-        reportRC(RCStatus::RC_ERROR, "K2 Write failed");
+        reportRC(k2pg::RCStatus::RC_ERROR, "K2 Write failed");
       return nullptr;
     }
   } else {
-      reportRC(RCStatus::RC_ERROR, "K2 begin txn failed");
+      reportRC(k2pg::RCStatus::RC_ERROR, "K2 begin txn failed");
       return nullptr;
   }
 
@@ -1157,7 +1157,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
   auto&&[endStatus] = endFut.get();
   if (!endStatus.is2xxOK()) {
     // TODO error types
-      reportRC(RCStatus::RC_ERROR, "K2 end txn failed");
+      reportRC(k2pg::RCStatus::RC_ERROR, "K2 end txn failed");
     return nullptr;
   }
 

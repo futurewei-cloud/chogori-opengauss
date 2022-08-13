@@ -58,11 +58,11 @@ void FreeK2PgStatus(K2PgStatus status) {
 
 K2PgStatus K2PgStatusNotSupport(const std::string& feature_name) {
   if (feature_name.empty()) {
-    return ToK2PgStatus(STATUS(NotSupported, "Feature is not supported"));
+    return ToK2PgStatus(K2_STATUS(NotSupported, "Feature is not supported"));
   } else {
     std::stringstream oss;
     oss << "Feature " << feature_name << " not supported";
-    return ToK2PgStatus(STATUS(NotSupported, oss.str()));
+    return ToK2PgStatus(K2_STATUS(NotSupported, oss.str()));
   }
 }
 

@@ -21,9 +21,9 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
-#include "error_reporting.h"
+#include "access/k2/error_reporting.h"
 
-namespace k2fdw {
+namespace k2pg {
 
 void reportRC(const RCode& rc, const std::string& detail) {
     // exceptions to the common case:

@@ -14,41 +14,27 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#pragma once
+#include "access/k2/config.h"
 
-#include <nlohmann/json.hpp>
-#include <string>
-#include <k2/logging/Log.h>
+#include <stdlib.h>
+#include <fstream>
 
-namespace k2fdw {
-namespace log {
-inline thread_local k2::logging::Logger k2fdw("k2::fdw");
+namespace k2pg {
+
+Config::Config() {
+    const char* configFileName = getenv("K2_CONFIG_FILE");
+    if (NULL == configFileName) {
+        K2LOG_W(log::k2gate, "No config file given for K2 configuration in the K2_CONFIG_FILE env variable");
+        return;
+    }
+
+    // read the config file
+    K2LOG_I(log::k2gate, "{}", configFileName);
+    std::ifstream ifile(configFileName);
+    ifile >> _config;
 }
 
-class Config {
-public:
-    Config();
-    ~Config();
-    nlohmann::json& operator()() {
-        return _config;
-    }
+Config::~Config(){
+}
 
-    template<typename T>
-    T get(const std::string& key, T defaultV) {
-        auto iter = _config.find(key);
-        if (iter != _config.end()) {
-            return iter.value();
-        }
-        else {
-            return std::move(defaultV);
-        }
-    }
-
-    k2::Duration getDurationMillis(const std::string& key, k2::Duration defaultV) {
-        return k2::Duration(get<uint64_t>(key, k2::msec(defaultV).count())*1'000'000);
-    }
-private:
-    nlohmann::json _config;
-};
-
-} // ns
+}

@@ -11,8 +11,8 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
 OBJ_DIR = ./obj
-OBJS = $(OBJ_DIR)/k2_fdw.o $(OBJ_DIR)/config.o $(OBJ_DIR)/session.o $(OBJ_DIR)/error_reporting.o $(OBJ_DIR)/fdw_handlers.o $(OBJ_DIR)/parse.o
-DEPS := $(OBJ_DIR)/k2_fdw.d $(OBJ_DIR)/config.d $(OBJ_DIR)/session.d $(OBJ_DIR)/error_reporting.d $(OBJ_DIR)/fdw_handlers.d $(OBJ_DIR)/parse.d
+OBJS = $(OBJ_DIR)/k2_fdw.o $(OBJ_DIR)/fdw_handlers.o $(OBJ_DIR)/parse.o
+DEPS := $(OBJ_DIR)/k2_fdw.d $(OBJ_DIR)/fdw_handlers.d $(OBJ_DIR)/parse.d
 
 include $(top_srcdir)/src/gausskernel/common.mk
 

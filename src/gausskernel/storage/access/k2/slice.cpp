@@ -45,7 +45,7 @@ Status Slice::check_size(size_t expected_size) const {
   if (size() != expected_size) {
     std::stringstream oss;
     oss << "Unexpected Slice size, expected " << expected_size << " but got " << size();
-    return STATUS(Corruption, oss.str());
+    return K2_STATUS(Corruption, oss.str());
   }
   return Status::OK();
 }
@@ -136,7 +136,7 @@ Status Slice::consume_byte(char c) {
   if (consumed != c) {
     std::stringstream oss;
     oss << "Wrong first byte, expected " << static_cast<int>(c) << " but found " << static_cast<int>(consumed);
-    return STATUS(Corruption, oss.str());
+    return K2_STATUS(Corruption, oss.str());
   }
 
   return Status::OK();

@@ -36,7 +36,7 @@ The error message is then returned to the user
 Error code definitions available here:
 /src/common/backend/utils/errcodes.txt
 */
-namespace k2fdw {
+namespace k2pg {
 struct RCode {
     const int err;
     const char* msg;

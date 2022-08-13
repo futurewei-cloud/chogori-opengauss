@@ -20,6 +20,9 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
+#include "storage/lock/s_lock.h"
+
+#include "access/k2/session.h"
 
 #include "access/k2/pg_gate_api.h"
 
@@ -70,18 +73,21 @@ void PgGate_DestroyPgGate() {
 
 K2PgStatus PgGate_CreateEnv(K2PgEnv *pg_env) {
   elog(DEBUG5, "PgGateAPI: PgGate_CreateEnv");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_DestroyEnv(K2PgEnv pg_env) {
   elog(DEBUG5, "PgGateAPI: PgGate_DestroyEnv");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Initialize a session to process statements that come from the same client connection.
 K2PgStatus PgGate_InitSession(const K2PgEnv pg_env, const char *database_name) {
   elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  // invalidate any ongoing transactions
+  TXMgr::EndTxn().get();
+
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Initialize K2PgMemCtx.
@@ -98,31 +104,31 @@ K2PgMemctx PgGate_CreateMemctx() {
 
 K2PgStatus PgGate_DestroyMemctx(K2PgMemctx memctx) {
   elog(DEBUG5, "PgGateAPI: PgGate_DestroyMemctx");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx) {
   elog(DEBUG5, "PgGateAPI: PgGate_ResetMemctx");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Invalidate the sessions table cache.
 K2PgStatus PgGate_InvalidateCache() {
   elog(DEBUG5, "PgGateAPI: PgGate_InvalidateCache");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Check if initdb has been already run.
 K2PgStatus PgGate_IsInitDbDone(bool* initdb_done) {
   elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbDone");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Sets catalog_version to the local tserver's catalog version stored in shared
 // memory, or an error if the shared memory has not been initialized (e.g. in initdb).
 K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetSharedCatalogVersion");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -133,20 +139,20 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
 K2PgStatus PgGate_InitPrimaryCluster()
 {
   elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_FinishInitDB()
 {
   elog(DEBUG5, "PgGateAPI: PgGate_FinishInitDB()");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // DATABASE ----------------------------------------------------------------------------------------
 // Connect database. Switch the connected database to the given "database_name".
 K2PgStatus PgGate_ConnectDatabase(const char *database_name) {
   elog(DEBUG5, "PgGateAPI: PgGate_ConnectDatabase %s", database_name);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Create database.
@@ -156,14 +162,14 @@ K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
                                  K2PgOid next_oid) {
   elog(LOG, "PgGateAPI: PgGate_ExecCreateDatabase %s, %d, %d, %d",
          database_name, database_oid, source_database_oid, next_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Drop database.
 K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
                                    K2PgOid database_oid) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Alter database.
@@ -171,17 +177,17 @@ K2PgStatus PgGate_NewAlterDatabase(const char *database_name,
                                K2PgOid database_oid,
                                K2PgStatement *handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_NewAlterDatabase %s, %d", database_name, database_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_AlterDatabaseRenameDatabase(K2PgStatement handle, const char *new_name) {
   elog(DEBUG5, "PgGateAPI: PgGate_AlterDatabaseRenameDatabase %s", new_name);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ExecAlterDatabase(K2PgStatement handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecAlterDatabase");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Reserve oids.
@@ -191,12 +197,12 @@ K2PgStatus PgGate_ReserveOids(K2PgOid database_oid,
                            K2PgOid *begin_oid,
                            K2PgOid *end_oid) {
   elog(DEBUG5, "PgGateAPI: PgGate_ReserveOids %d, %d, %d", database_oid, next_oid, count);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_GetCatalogMasterVersion(uint64_t *version) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetCatalogMasterVersion");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 void PgGate_InvalidateTableCache(
@@ -208,9 +214,9 @@ void PgGate_InvalidateTableCache(
 K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
   elog(DEBUG5, "PgGateAPI: PgGate_InvalidateTableCacheByTableId %s", table_uuid);
   if (table_uuid == NULL) {
-    return ToK2PgStatus(STATUS(InvalidArgument, "table_uuid is null"));
+    return ToK2PgStatus(K2_STATUS(InvalidArgument, "table_uuid is null"));
   }
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Sequence Operations -----------------------------------------------------------------------------
@@ -221,7 +227,7 @@ K2PgStatus PgGate_InsertSequenceTuple(int64_t db_oid,
                                  int64_t last_val,
                                  bool is_called) {
   elog(DEBUG5, "PgGateAPI: PgGate_InsertSequenceTuple %ld, %ld, %ld", db_oid, seq_oid, psql_catalog_version);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateSequenceTupleConditionally(int64_t db_oid,
@@ -233,7 +239,7 @@ K2PgStatus PgGate_UpdateSequenceTupleConditionally(int64_t db_oid,
                                               bool expected_is_called,
                                               bool *skipped) {
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateSequenceTupleConditionally %ld, %ld, %ld", db_oid, seq_oid, psql_catalog_version);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateSequenceTuple(int64_t db_oid,
@@ -243,7 +249,7 @@ K2PgStatus PgGate_UpdateSequenceTuple(int64_t db_oid,
                                  bool is_called,
                                  bool* skipped) {
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateSequenceTuple %ld, %ld, %ld", db_oid, seq_oid, psql_catalog_version);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ReadSequenceTuple(int64_t db_oid,
@@ -252,12 +258,12 @@ K2PgStatus PgGate_ReadSequenceTuple(int64_t db_oid,
                                int64_t *last_val,
                                bool *is_called) {
   elog(DEBUG5, "PgGateAPI: PgGate_ReadSequenceTuple %ld, %ld, %ld", db_oid, seq_oid, psql_catalog_version);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_DeleteSequenceTuple(int64_t db_oid, int64_t seq_oid) {
   elog(DEBUG5, "PgGateAPI: PgGate_DeleteSequenceTuple %ld, %ld", db_oid, seq_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // TABLE -------------------------------------------------------------------------------------------
@@ -274,42 +280,42 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
                              K2PgOid table_oid,
                              K2PgStatement *handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewAlterTable %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_AlterTableAddColumn(K2PgStatement handle, const char *name, int order,
                                    const K2PgTypeEntity *attr_type, bool is_not_null){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableAddColumn %s", name);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_AlterTableRenameColumn(K2PgStatement handle, const char *oldname,
                                       const char *newname){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableRenameColumn %s, %s", oldname, newname);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_AlterTableDropColumn(K2PgStatement handle, const char *name){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableDropColumn %s", name);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_AlterTableRenameTable(K2PgStatement handle, const char *db_name,
                                      const char *newname){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableRenameTable %s, %s", db_name, newname);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ExecAlterTable(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecAlterTable");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
@@ -317,31 +323,31 @@ K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
                             bool if_exist,
                             K2PgStatement *handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_NewDropTable %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDropTable");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_NewTruncateTable(K2PgOid database_oid,
                                 K2PgOid table_oid,
                                 K2PgStatement *handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewTruncateTable %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ExecTruncateTable(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecTruncateTable");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
@@ -349,23 +355,23 @@ K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              bool *is_primary,
                              bool *is_hash) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
                                   K2PgTableProperties *properties){
   elog(DEBUG5, "PgGateAPI: PgGate_GetTableProperties");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_cache_version){
   elog(DEBUG5, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // INDEX -------------------------------------------------------------------------------------------
@@ -384,7 +390,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               bool if_not_exist,
                               const std::vector<K2PGColumnDef>& columns){
   elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
@@ -392,12 +398,12 @@ K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
                             bool if_exist,
                             K2PgStatement *handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewDropIndex %d, %d", database_oid, index_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDropIndex");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_WaitUntilIndexPermissionsAtLeast(
@@ -407,14 +413,14 @@ K2PgStatus PgGate_WaitUntilIndexPermissionsAtLeast(
     const uint32_t target_index_permissions,
     uint32_t *actual_index_permissions) {
   elog(DEBUG5, "PgGateAPI: PgGate_WaitUntilIndexPermissionsAtLeast %d, %d, %d", database_oid, table_oid, index_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_AsyncUpdateIndexPermissions(
     const K2PgOid database_oid,
     const K2PgOid indexed_table_oid){
   elog(DEBUG5, "PgGateAPI: PgGate_AsyncUpdateIndexPermissions %d, %d", database_oid,  indexed_table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -426,7 +432,7 @@ K2PgStatus PgGate_AsyncUpdateIndexPermissions(
 // - INSERT / UPDATE / DELETE ... RETURNING target_expr1, target_expr2, ...
 K2PgStatus PgGate_DmlAppendTarget(K2PgStatement handle, K2PgExpr target){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlAppendTarget");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Binding Columns: Bind column with a value (expression) in a statement.
@@ -455,40 +461,40 @@ K2PgStatus PgGate_DmlAppendTarget(K2PgStatement handle, K2PgExpr target){
 //   the main-table, and therefore the bind-arguments are not associated with columns in main table.
 K2PgStatus PgGate_DmlBindColumn(K2PgStatement handle, int attr_num, K2PgExpr attr_value){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindColumn %d", attr_num);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_DmlBindColumnCondEq(K2PgStatement handle, int attr_num, K2PgExpr attr_value){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindColumnCondEq %d", attr_num);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_DmlBindColumnCondBetween(K2PgStatement handle, int attr_num, K2PgExpr attr_value,
     K2PgExpr attr_value_end){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindColumnCondBetween %d", attr_num);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_DmlBindColumnCondIn(K2PgStatement handle, int attr_num, int n_attr_values,
     K2PgExpr *attr_values){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindColumnCondIn %d", attr_num);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_DmlBindRangeConds(K2PgStatement handle, K2PgExpr range_conds) {
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindRangeConds");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_DmlBindWhereConds(K2PgStatement handle, K2PgExpr where_conds) {
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindWhereConds");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Binding Tables: Bind the whole table in a statement.  Do not use with BindColumn.
 K2PgStatus PgGate_DmlBindTable(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindTable");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // API for SET clause.
@@ -496,7 +502,7 @@ K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
                                int attr_num,
                                K2PgExpr attr_value){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlAssignColumn %d", attr_num);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // This function is to fetch the targets in PgGate_DmlAppendTarget() from the rows that were defined
@@ -504,20 +510,20 @@ K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
 K2PgStatus PgGate_DmlFetch(K2PgStatement handle, int32_t natts, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", natts);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Utility method that checks stmt type and calls either exec insert, update, or delete internally.
 K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlExecWriteOp");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
 K2PgStatus PgGate_DmlBuildPgTupleId(const K2PgAttrValueDescriptor *attrs,
                                  int32_t nattrs, uint64_t *k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %d", nattrs);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // DB Operations: WHERE(partially supported by K2-SKV)
@@ -531,7 +537,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              bool increment_catalog,
                              const std::vector<K2PgWriteColumnDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // UPDATE ------------------------------------------------------------------------------------------
@@ -541,7 +547,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
                              int* rows_affected,
                              const std::vector<K2PgWriteColumnDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecUpdate %u, %u", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // DELETE ------------------------------------------------------------------------------------------
@@ -551,7 +557,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              int* rows_affected,
                              const std::vector<K2PgWriteColumnDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // SELECT ------------------------------------------------------------------------------------------
@@ -560,65 +566,65 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          const K2PgPrepareParameters *prepare_params,
                          K2PgStatement *handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Set forward/backward scan direction.
 K2PgStatus PgGate_SetForwardScan(K2PgStatement handle, bool is_forward_scan){
   elog(DEBUG5, "PgGateAPI: PgGate_SetForwardScan %d", is_forward_scan);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ExecSelect(K2PgStatement handle, const K2PgExecParameters *exec_params){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecSelect");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Transaction control -----------------------------------------------------------------------------
 
 K2PgStatus PgGate_BeginTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_BeginTransaction");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_RestartTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_RestartTransaction");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_CommitTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_CommitTransaction");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_AbortTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_AbortTransaction");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_SetTransactionIsolationLevel(int isolation){
   elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionIsolationLevel %d", isolation);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_SetTransactionReadOnly(bool read_only){
   elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionReadOnly %d", read_only);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_SetTransactionDeferrable(bool deferrable){
   elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionReadOnly %d", deferrable);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_EnterSeparateDdlTxnMode(){
   elog(DEBUG5, "PgGateAPI: PgGate_EnterSeparateDdlTxnMode");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
   elog(DEBUG5, "PgGateAPI: PgGate_ExitSeparateDdlTxnMode");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -628,57 +634,57 @@ K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
 K2PgStatus PgGate_NewColumnRef(K2PgStatement stmt, int attr_num, const K2PgTypeEntity *type_entity,
                             const K2PgTypeAttrs *type_attrs, K2PgExpr *expr_handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewColumnRef %d", attr_num);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Constant expressions.
 K2PgStatus PgGate_NewConstant(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
                            uint64_t datum, bool is_null, K2PgExpr *expr_handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewConstant %ld, %d", datum, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_NewConstantOp(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
                            uint64_t datum, bool is_null, K2PgExpr *expr_handle, bool is_gt){
   elog(DEBUG5, "PgGateAPI: PgGate_NewConstantOp %lu, %d, %d", datum, is_null, is_gt);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // The following update functions only work for constants.
 // Overwriting the constant expression with new value.
 K2PgStatus PgGate_UpdateConstInt2(K2PgExpr expr, int16_t value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt2 %d, %d", value, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateConstInt4(K2PgExpr expr, int32_t value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt4 %d, %d", value, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateConstInt8(K2PgExpr expr, int64_t value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt8 %ld, %d", value, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateConstFloat4(K2PgExpr expr, float value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstFloat4 %f, %d", value, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateConstFloat8(K2PgExpr expr, double value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstFloat8 %f, %d", value, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateConstText(K2PgExpr expr, const char *value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstText %s, %d", value, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_UpdateConstChar(K2PgExpr expr, const char *value, int64_t bytes, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstChar %s, %ld, %d", value, bytes, is_null);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Expressions with operators "=", "+", "between", "in", ...
@@ -686,31 +692,31 @@ K2PgStatus PgGate_NewOperator(K2PgStatement stmt, const char *opname,
                            const K2PgTypeEntity *type_entity,
                            K2PgExpr *op_handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewOperator %s", opname);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg){
   elog(DEBUG5, "PgGateAPI: PgGate_OperatorAppendArg");
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Referential Integrity Check Caching.
 // Check if foreign key reference exists in cache.
 bool PgGate_ForeignKeyReferenceExists(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size) {
   elog(DEBUG5, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Add an entry to foreign key reference cache.
 K2PgStatus PgGate_CacheForeignKeyReference(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size){
   elog(DEBUG5, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 // Delete an entry from foreign key reference cache.
 K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DeleteFromForeignKeyReferenceCache %d, %lu", table_oid, k2pgctid);
-  return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
+  return ToK2PgStatus(K2_STATUS(NotSupported, "Not implemented"));
 }
 
 void PgGate_ClearForeignKeyReferenceCache() {

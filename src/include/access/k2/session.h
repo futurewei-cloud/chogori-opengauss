@@ -24,7 +24,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <skvhttp/client/SKVClient.h>
 #include "config.h"
 
-namespace k2fdw {
+namespace k2pg {
 namespace sh=skv::http;
 
 class TxnManager {
@@ -54,4 +54,7 @@ private:
 // in particular, non-fdw threads of execution.
 // The general execution model is that we can have at most one active transaction per thread.
 inline thread_local TxnManager TXMgr;
+
+inline thread_local bool sessionInitialized=false;
+
 } // ns
