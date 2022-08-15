@@ -213,36 +213,36 @@ Datum K2PgGetPgTupleIdFromSlot(TupleTableSlot *slot)
 Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 							   HeapTuple tuple,
 							   TupleDesc tupleDesc) {
-	Oid            dboid    = K2PgGetDatabaseOid(rel);
-	Oid            relid    = RelationGetRelid(rel);
+	Oid dboid = K2PgGetDatabaseOid(rel);
+	Oid relid = RelationGetRelid(rel);
 	Bitmapset *pkey = GetFullK2PgTablePrimaryKey(rel);
 	AttrNumber minattr = K2PgSystemFirstLowInvalidAttributeNumber + 1;
 	const int nattrs = bms_num_members(pkey);
-    std::vector<K2PgAttributeDef> attrs;
+	std::vector<K2PgAttributeDef> attrs;
 	uint64_t tuple_id = 0;
 	int col = -1;
 	while ((col = bms_next_member(pkey, col)) >= 0) {
 		AttrNumber attnum = col + minattr;
-        K2PgAttributeDef k2attr{};
+		K2PgAttributeDef k2attr{};
         k2attr.attr_num = attnum;
 		/*
 		 * Don't need to fill in for the K2 PG RowId column, however we still
 		 * need to add the column to the statement to construct the k2pgctid.
 		 */
 		if (attnum != K2PgRowIdAttributeNumber) {
-            // TODO double check this type_id is correct for system columns
+			// TODO double check this type_id is correct for system columns
 			k2attr.value.type_id = (attnum > 0) ?
 					TupleDescAttr(tupleDesc, attnum - 1)->atttypid : InvalidOid;
-            k2attr.value.datum = heap_getattr(tuple, attnum, tupleDesc, &k2attr.value.is_null);
+			k2attr.value.datum = heap_getattr(tuple, attnum, tupleDesc, &k2attr.value.is_null);
 		} else {
-            // RowID is supposed to be used for tables without primary keys defined, not sure
-            // if this code adapted from chogori-sql is correct
-            k2attr.value.datum = 0;
-            k2attr.value.is_null = false;
-            k2attr.value.type_id = OIDOID;
+			// RowID is supposed to be used for tables without primary keys defined, not sure
+			// if this code adapted from chogori-sql is correct
+			k2attr.value.datum = 0;
+			k2attr.value.is_null = false;
+			k2attr.value.type_id = OIDOID;
 		}
 
-        attrs.push_back(k2attr);
+		attrs.push_back(k2attr);
 	}
 
 	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(dboid, relid, attrs, &tuple_id));

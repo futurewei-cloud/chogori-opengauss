@@ -2877,36 +2877,36 @@ BuildPgTupleId(Relation pk_rel, Relation fk_rel, Relation idx_rel,
 				void **value, int64_t *bytes)
 {
 	Oid db_oid = K2PgGetDatabaseOid(idx_rel);
-    Oid table_oid = RelationGetRelid(idx_rel);
+	Oid table_oid = RelationGetRelid(idx_rel);
 
 	TupleDesc	tupdesc = fk_rel->rd_att;
 	bool using_index = idx_rel->rd_index != NULL && !idx_rel->rd_index->indisprimary;
 
 	Bitmapset *pkey = GetFullK2PgTablePrimaryKey(idx_rel);
 	const int nattrs = bms_num_members(pkey);
-    std::vector<K2PgAttributeDef> attrs;
+	std::vector<K2PgAttributeDef> attrs;
 	uint64_t tuple_id;
 
 	elog(DEBUG1, "riinfo->nkeys = %d, nattrs = %d, using_index = %d", riinfo->nkeys, nattrs, using_index);
 
 	for (int i = 0; i < riinfo->nkeys; i++)
 	{
-        K2PgAttributeDef k2attr{};
+		K2PgAttributeDef k2attr{};
 		k2attr.attr_num = using_index ? (i + 1) : riinfo->pk_attnums[i];
 		const int fk_attnum = riinfo->fk_attnums[i];
 		k2attr.value.type_id = TupleDescAttr(tupdesc, fk_attnum - 1)->atttypid;
 		k2attr.value.datum = heap_getattr(tup, fk_attnum, tupdesc, &k2attr.value.is_null);
 		elog(DEBUG1, "key: attr_num = %d, type_id = %d, is_null = %d", k2attr.attr_num, k2attr.value.type_id, k2attr.value.is_null);
-        attrs.push_back(k2attr);
+		attrs.push_back(k2attr);
 	}
 
 	if (using_index) {
-        K2PgAttributeDef k2attr{};
+		K2PgAttributeDef k2attr{};
 		k2attr.attr_num = K2PgUniqueIdxKeySuffixAttributeNumber;
-        k2attr.value.type_id = BYTEAOID;
-        k2attr.value.datum = NULL;
-        k2attr.value.is_null = true;
-	 	elog(DEBUG1, "K2PgUniqueIdxKey: attr_num = %d, type_id = %d, is_null = %d", k2attr.attr_num, BYTEAOID, k2attr.value.is_null);
+		k2attr.value.type_id = BYTEAOID;
+		k2attr.value.datum = NULL;
+		k2attr.value.is_null = true;
+		elog(DEBUG1, "K2PgUniqueIdxKey: attr_num = %d, type_id = %d, is_null = %d", k2attr.attr_num, BYTEAOID, k2attr.value.is_null);
 	}
 
 	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(db_oid, table_oid, attrs, &tuple_id));
