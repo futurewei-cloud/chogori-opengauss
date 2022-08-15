@@ -514,9 +514,9 @@ K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_co
 }
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
-K2PgStatus PgGate_DmlBuildPgTupleId(const K2PgAttrValueDescriptor *attrs,
-                                 int32_t nattrs, uint64_t *k2pgctid){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %d", nattrs);
+K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
+                                    uint64_t *k2pgctid){
+  elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %d", attrs.size());
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
 
@@ -529,7 +529,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
                              bool increment_catalog,
-                             const std::vector<K2PgWriteColumnDef>& columns) {
+                             const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
@@ -539,7 +539,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool increment_catalog,
                              int* rows_affected,
-                             const std::vector<K2PgWriteColumnDef>& columns) {
+                             const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecUpdate %u, %u", database_oid, table_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }
@@ -549,7 +549,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool increment_catalog,
                              int* rows_affected,
-                             const std::vector<K2PgWriteColumnDef>& columns) {
+                             const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
   return ToK2PgStatus(STATUS(NotSupported, "Not implemented"));
 }

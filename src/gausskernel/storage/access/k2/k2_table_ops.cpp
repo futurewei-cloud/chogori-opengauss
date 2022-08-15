@@ -213,37 +213,39 @@ Datum K2PgGetPgTupleIdFromSlot(TupleTableSlot *slot)
 Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 							   HeapTuple tuple,
 							   TupleDesc tupleDesc) {
+	Oid dboid = K2PgGetDatabaseOid(rel);
+	Oid relid = RelationGetRelid(rel);
 	Bitmapset *pkey = GetFullK2PgTablePrimaryKey(rel);
 	AttrNumber minattr = K2PgSystemFirstLowInvalidAttributeNumber + 1;
 	const int nattrs = bms_num_members(pkey);
-	K2PgAttrValueDescriptor *attrs =
-			(K2PgAttrValueDescriptor*)palloc(nattrs * sizeof(K2PgAttrValueDescriptor));
+	std::vector<K2PgAttributeDef> attrs;
 	uint64_t tuple_id = 0;
-	K2PgAttrValueDescriptor *next_attr = attrs;
 	int col = -1;
 	while ((col = bms_next_member(pkey, col)) >= 0) {
 		AttrNumber attnum = col + minattr;
-		next_attr->attr_num = attnum;
+		K2PgAttributeDef k2attr{};
+        k2attr.attr_num = attnum;
 		/*
 		 * Don't need to fill in for the K2 PG RowId column, however we still
 		 * need to add the column to the statement to construct the k2pgctid.
 		 */
 		if (attnum != K2PgRowIdAttributeNumber) {
-			Oid	type_id = (attnum > 0) ?
+			// TODO double check this type_id is correct for system columns
+			k2attr.value.type_id = (attnum > 0) ?
 					TupleDescAttr(tupleDesc, attnum - 1)->atttypid : InvalidOid;
-
-			next_attr->type_entity = K2PgDataTypeFromOidMod(attnum, type_id);
-			next_attr->datum = heap_getattr(tuple, attnum, tupleDesc, &next_attr->is_null);
+			k2attr.value.datum = heap_getattr(tuple, attnum, tupleDesc, &k2attr.value.is_null);
 		} else {
-			next_attr->datum = 0;
-			next_attr->is_null = false;
-			next_attr->type_entity = NULL;
+			// RowID is supposed to be used for tables without primary keys defined, not sure
+			// if this code adapted from chogori-sql is correct
+			k2attr.value.datum = 0;
+			k2attr.value.is_null = false;
+			k2attr.value.type_id = OIDOID;
 		}
-		++next_attr;
+
+		attrs.push_back(k2attr);
 	}
-    // TODO see if statement parameter is necessary
-	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(NULL, attrs, nattrs, &tuple_id));
-	pfree(attrs);
+
+	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(dboid, relid, attrs, &tuple_id));
 	return (Datum)tuple_id;
 }
 
@@ -269,7 +271,7 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 	int            natts    = RelationGetNumberOfAttributes(rel);
 	Bitmapset      *pkey    = GetK2PgTablePrimaryKey(rel);
 	bool           is_null  = false;
-    std::vector<K2PgWriteColumnDef> columns;
+    std::vector<K2PgAttributeDef> columns;
 
 	/* Generate a new oid for this row if needed */
 	if (rel->rd_rel->relhasoids)
@@ -298,11 +300,13 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 		}
 
 		/* Add the column value to the insert request */
-        K2PgWriteColumnDef column {
+        K2PgAttributeDef column {
             .attr_num = attnum,
-            .type_id = type_id,
-            .datum = datum,
-            .is_null = is_null
+            .value = {
+                .type_id = type_id,
+                .datum = datum,
+                .is_null = is_null
+            }
         };
         columns.push_back(std::move(column));
 	}
@@ -351,7 +355,7 @@ static void PrepareIndexWriteStmt(Relation index,
                                   int natts,
                                   Datum k2pgbasectid,
                                   bool k2pgctid_as_value,
-                                  std::vector<K2PgWriteColumnDef>& columns)
+                                  std::vector<K2PgAttributeDef>& columns)
 {
 	TupleDesc tupdesc = RelationGetDescr(index);
 
@@ -369,11 +373,13 @@ static void PrepareIndexWriteStmt(Relation index,
 		Datum value   = values[attnum - 1];
 		bool  is_null = isnull[attnum - 1];
 		has_null_attr = has_null_attr || is_null;
-        K2PgWriteColumnDef column {
+        K2PgAttributeDef column {
             .attr_num = attnum,
-            .type_id = type_id,
-            .datum = value,
-            .is_null = is_null
+            .value = {
+                .type_id = type_id,
+                .datum = value,
+                .is_null = is_null
+            }
         };
         columns.push_back(std::move(column));
 	}
@@ -386,11 +392,13 @@ static void PrepareIndexWriteStmt(Relation index,
 	 * - to NULL otherwise (setting is_null to true is enough).
 	 */
 	if (unique_index) {
-         K2PgWriteColumnDef column {
+         K2PgAttributeDef column {
             .attr_num = K2PgUniqueIdxKeySuffixAttributeNumber,
-            .type_id = BYTEAOID,
-            .datum = k2pgbasectid,
-            .is_null = !has_null_attr
+            .value = {
+                .type_id = BYTEAOID,
+                .datum = k2pgbasectid,
+                .is_null = !has_null_attr
+            }
         };
         columns.push_back(std::move(column));
    }
@@ -401,11 +409,13 @@ static void PrepareIndexWriteStmt(Relation index,
 	 * - for non-unique indexes always (it is a key column).
 	 */
 	if (k2pgctid_as_value || !unique_index) {
-          K2PgWriteColumnDef column {
+          K2PgAttributeDef column {
             .attr_num =	K2PgIdxBaseTupleIdAttributeNumber,
-            .type_id = BYTEAOID,
-            .datum = k2pgbasectid,
-            .is_null = false
+            .value = {
+                .type_id = BYTEAOID,
+                .datum = k2pgbasectid,
+                .is_null = false
+            }
         };
         columns.push_back(std::move(column));
     }
@@ -466,7 +476,7 @@ void K2PgExecuteInsertIndex(Relation index,
 
 	Oid            dboid    = K2PgGetDatabaseOid(index);
 	Oid            relid    = RelationGetRelid(index);
-    std::vector<K2PgWriteColumnDef> columns;
+    std::vector<K2PgAttributeDef> columns;
     bool upsert = false;
 
 	PrepareIndexWriteStmt(index, values, isnull,
@@ -493,7 +503,7 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	// TODO: consider removing this logic if not needed
 	bool           isSingleRow    = mtstate->k2pg_mt_is_single_row_update_or_delete;
 	Datum          k2pgctid         = 0;
-    std::vector<K2PgWriteColumnDef> columns;
+    std::vector<K2PgAttributeDef> columns;
 
 	/*
 	 * Look for k2pgctid. Raise error if k2pgctid is not found.
@@ -521,11 +531,13 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	}
 
 	/* Bind k2pgctid to identify the current row. */
-    K2PgWriteColumnDef k2id {
+    K2PgAttributeDef k2id {
         .attr_num = K2PgTupleIdAttributeNumber,
-        .type_id = BYTEAOID,
-        .datum = k2pgctid,
-        .is_null = false
+        .value = {
+            .type_id = BYTEAOID,
+            .datum = k2pgctid,
+            .is_null = false
+        }
     };
     columns.push_back(std::move(k2id));
 
@@ -564,7 +576,7 @@ void K2PgExecuteDeleteIndex(Relation index, Datum *values, bool *isnull, Datum k
 
 	Oid            dboid    = K2PgGetDatabaseOid(index);
 	Oid            relid    = RelationGetRelid(index);
-    std::vector<K2PgWriteColumnDef> columns;
+    std::vector<K2PgAttributeDef> columns;
 
 	PrepareIndexWriteStmt(index, values, isnull,
 	                      IndexRelationGetNumberOfKeyAttributes(index),
@@ -588,7 +600,7 @@ bool K2PgExecuteUpdate(Relation rel,
 	Oid            relid          = RelationGetRelid(rel);
 	bool           isSingleRow    = mtstate->k2pg_mt_is_single_row_update_or_delete;
 	Datum          k2pgctid         = 0;
-    std::vector<K2PgWriteColumnDef> columns;
+    std::vector<K2PgAttributeDef> columns;
 
 	/*
 	 * Look for k2pgctid. Raise error if k2pgctid is not found.
@@ -615,11 +627,13 @@ bool K2PgExecuteUpdate(Relation rel,
 	}
 
 	/* Bind k2pgctid to identify the current row. */
-    K2PgWriteColumnDef k2id {
+    K2PgAttributeDef k2id {
         .attr_num = K2PgTupleIdAttributeNumber,
-        .type_id = BYTEAOID,
-        .datum = k2pgctid,
-        .is_null = false
+        .value = {
+            .type_id = BYTEAOID,
+            .datum = k2pgctid,
+            .is_null = false
+        }
     };
     columns.push_back(std::move(k2id));
 
@@ -661,11 +675,13 @@ bool K2PgExecuteUpdate(Relation rel,
 
         bool is_null = false;
         Datum d = heap_getattr(tuple, attnum, tupleDesc, &is_null);
-        K2PgWriteColumnDef column {
+        K2PgAttributeDef column {
             .attr_num = attnum,
-            .type_id = type_id,
-            .datum = d,
-            .is_null = is_null
+            .value = {
+                .type_id = type_id,
+                .datum = d,
+                .is_null = is_null
+            }
         };
         columns.push_back(std::move(column));
 	}
@@ -707,7 +723,7 @@ void K2PgDeleteSysCatalogTuple(Relation rel, HeapTuple tuple)
 {
 	Oid            dboid       = K2PgGetDatabaseOid(rel);
 	Oid            relid       = RelationGetRelid(rel);
-    std::vector<K2PgWriteColumnDef> columns;
+    std::vector<K2PgAttributeDef> columns;
 
 	if (tuple->t_k2pgctid == 0)
 		ereport(ERROR,
@@ -715,11 +731,13 @@ void K2PgDeleteSysCatalogTuple(Relation rel, HeapTuple tuple)
 				        "Missing column k2pgctid in DELETE request to K2PG database")));
 
 	/* Bind k2pgctid to identify the current row. */
-    K2PgWriteColumnDef k2id {
+    K2PgAttributeDef k2id {
         .attr_num = K2PgTupleIdAttributeNumber,
-        .type_id = BYTEAOID,
-        .datum = tuple->t_k2pgctid,
-        .is_null = false
+        .value = {
+            .type_id = BYTEAOID,
+            .datum = tuple->t_k2pgctid,
+            .is_null = false
+        }
     };
     columns.push_back(std::move(k2id));
 
@@ -744,17 +762,19 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
 	Oid            relid       = RelationGetRelid(rel);
 	TupleDesc      tupleDesc   = RelationGetDescr(rel);
 	int            natts       = RelationGetNumberOfAttributes(rel);
-    std::vector<K2PgWriteColumnDef> columns;
+    std::vector<K2PgAttributeDef> columns;
 
 	AttrNumber minattr = FirstLowInvalidHeapAttributeNumber + 1;
 	Bitmapset  *pkey   = GetK2PgTablePrimaryKey(rel);
 
 	/* Bind the k2pgctid to the statement. */
-    K2PgWriteColumnDef tidColumn {
+    K2PgAttributeDef tidColumn {
         .attr_num = K2PgTupleIdAttributeNumber,
-        .type_id = BYTEAOID,
-        .datum = tuple->t_k2pgctid,
-        .is_null = false
+        .value = {
+            .type_id = BYTEAOID,
+            .datum = tuple->t_k2pgctid,
+            .is_null = false
+        }
     };
     columns.push_back(std::move(tidColumn));
 
@@ -771,11 +791,13 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
 
 		bool is_null = false;
 		Datum d = heap_getattr(tuple, attnum, tupleDesc, &is_null);
-        K2PgWriteColumnDef column {
+        K2PgAttributeDef column {
             .attr_num = attnum,
-            .type_id = TupleDescAttr(tupleDesc, idx)->atttypid,
-            .datum = d,
-            .is_null = is_null
+            .value = {
+                .type_id = TupleDescAttr(tupleDesc, idx)->atttypid,
+                .datum = d,
+                .is_null = is_null
+            }
         };
         columns.push_back(std::move(column));
 	}
