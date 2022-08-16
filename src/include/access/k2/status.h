@@ -20,34 +20,16 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
+
 #pragma once
 
-#include "status.h"
+#include "utils/elog.h" // PG error codes
 
-#include <stddef.h>
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-
-struct varlena;
-
-#endif
-
-void K2PgResolveHostname();
-
-#define CHECKED_K2PGSTATUS __attribute__ ((warn_unused_result)) K2PgStatus
-
-typedef void* (*K2PgPAllocFn)(size_t size);
-
-typedef struct varlena* (*K2PgCStringToTextWithLenFn)(const char* c, int size);
-
-// Global initialization of the K2PG subsystem.
-CHECKED_K2PGSTATUS K2PgInit(
-    const char* argv0,
-    K2PgPAllocFn palloc_fn,
-    K2PgCStringToTextWithLenFn cstring_to_text_with_len_fn);
-
-#ifdef __cplusplus
-} // extern "C"
-#endif
+struct K2PgStatus {
+    int pg_code;
+    int k2_code;
+    // These strings will be passed to and owned by PG code, so if they are not assigned from literals then they
+    // need to be allocated with palloc so they can be freed on session close
+    const char* msg;
+    const char* detail;
+};
