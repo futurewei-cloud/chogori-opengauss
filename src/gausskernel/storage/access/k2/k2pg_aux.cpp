@@ -184,35 +184,22 @@ K2PgShouldReportErrorStatus()
 void
 HandleK2PgStatus(K2PgStatus status)
 {
-	if (!status) {
-		return;
-	}
-	/* Copy the message to the current memory context and free the K2PgStatus. */
-	const uint32_t pg_err_code = K2PgStatusPgsqlError(status);
-	char* msg_buf = DupK2PgStatusMessage(status, pg_err_code == ERRCODE_UNIQUE_VIOLATION);
+    if (status.pg_code == ERRCODE_SUCCESSFUL_COMPLETION) {
+        return;
+    }
 
 	if (K2PgShouldReportErrorStatus()) {
-		elog(ERROR, "HandleK2PgStatus: %s", msg_buf);
+		elog(ERROR, "HandleK2PgStatus: %s", status.msg);
 	}
-	const uint16_t txn_err_code = K2PgStatusTransactionError(status);
-	K2PgFreeStatus(status);
-    elog(ERROR, "TransactionError %d", txn_err_code);
-/* 	ereport(ERROR,
-			(errmsg("%s", msg_buf),
-			 errcode(pg_err_code),
-			 k2pg_txn_errcode(txn_err_code),
-			 errhidecontext(true)));*/
+    
+    ereport(ERROR, (errcode(status.pg_code), errmsg("%s: %s", status.msg, status.detail)));
 }
 
 void
 HandleK2PgStatusIgnoreNotFound(K2PgStatus status, bool *not_found)
 {
-	if (!status) {
-		return;
-	}
-	if (K2PgStatusIsNotFound(status)) {
+	if (status.k2_code == 404) {
 		*not_found = true;
-		K2PgFreeStatus(status);
 		return;
 	}
 	*not_found = false;
@@ -224,9 +211,6 @@ HandleK2PgStatusWithOwner(K2PgStatus status,
 												K2PgScanHandle* k2pg_stmt,
 												ResourceOwner owner)
 {
-	if (!status)
-		return;
-
 	if (k2pg_stmt)
 	{
 		if (owner != NULL)
@@ -240,9 +224,6 @@ HandleK2PgStatusWithOwner(K2PgStatus status,
 void
 HandleK2PgTableDescStatus(K2PgStatus status, K2PgTableDesc table)
 {
-	if (!status)
-		return;
-
 	HandleK2PgStatus(status);
 }
 

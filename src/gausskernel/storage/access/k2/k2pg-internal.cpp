@@ -11,6 +11,7 @@
 // or implied.  See the License for the specific language governing permissions and limitations
 // under the License.
 
+#include <cstring>
 #include <sstream>
 #include <assert.h>
 #include "k2pg-internal.h"
@@ -40,30 +41,6 @@ void K2PgSetCStringToTextWithLenFn(K2PgCStringToTextWithLenFn fn) {
 void* K2PgCStringToTextWithLen(const char* c, int size) {
   assert(g_cstring_to_text_with_len_fn != NULL);
   return g_cstring_to_text_with_len_fn(c, size);
-}
-
-K2PgStatus ToK2PgStatus(const Status& status) {
-  return status.RetainStruct();
-}
-
-K2PgStatus ToK2PgStatus(Status&& status) {
-  return status.DetachStruct();
-}
-
-void FreeK2PgStatus(K2PgStatus status) {
-  // Create Status object that receives control over provided status, so it will be destoyed with
-  // k2pg_status.
-  Status k2pg_status(status, false);
-}
-
-K2PgStatus K2PgStatusNotSupport(const std::string& feature_name) {
-  if (feature_name.empty()) {
-    return ToK2PgStatus(STATUS(NotSupported, "Feature is not supported"));
-  } else {
-    std::stringstream oss;
-    oss << "Feature " << feature_name << " not supported";
-    return ToK2PgStatus(STATUS(NotSupported, oss.str()));
-  }
 }
 
 const char* K2PgPAllocStdString(const std::string& s) {

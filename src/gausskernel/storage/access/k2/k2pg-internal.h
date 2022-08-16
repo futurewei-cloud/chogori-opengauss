@@ -23,14 +23,8 @@
 #include <string>
 
 #include "access/k2/k2pg_util.h"
-#include "status.h"
 
 namespace k2pg {
-
-// Convert our C++ status to K2PgStatus, which can be returned to PostgreSQL C code.
-K2PgStatus ToK2PgStatus(const Status& status);
-K2PgStatus ToK2PgStatus(Status&& status);
-void FreeK2PgStatus(K2PgStatus status);
 
 void K2PgSetPAllocFn(K2PgPAllocFn pg_palloc_fn);
 void* K2PgPAlloc(size_t size);
