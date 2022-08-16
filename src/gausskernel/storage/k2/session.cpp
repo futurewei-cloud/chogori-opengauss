@@ -65,4 +65,16 @@ sh::Response<> TxnManager::EndTxn(sh::dto::EndAction endAction) {
     return sh::Response<>(std::move(status));
 }
 
+sh::Response<std::shared_ptr<sh::dto::Schema>> TxnManager::GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
+    return _client->getSchema(collectionName, schemaName, schemaVersion).get();
+}
+
+sh::Response<> TxnManager::CreateCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds) {
+    return _client->createCollection(metadata, rangeEnds).get();
+}
+
+sh::Response<> TxnManager::CreateSchema(const sh::String& collectionName, const sh::dto::Schema& schema) {
+    return _client->createSchema(collectionName, schema).get();
+}
+
 } // ns

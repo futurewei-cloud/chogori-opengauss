@@ -20,7 +20,7 @@
 
 #include "../common/status.h"
 #include "../entities/schema.h"
-#include "../entities/expr.h"
+// #include "../entities/expr.h"
 #include "k2_config.h"
 #include "k2_gate.h"
 #include "k2_includes.h"
@@ -28,7 +28,7 @@
 #include "k2_thread_pool.h"
 #include "k2_txn.h"
 #include "pg_env.h"
-#include "pg_op_api.h"
+// #include "pg_op_api.h"
 #include "../common/result.h"
 #include "../session.h"
 
@@ -36,9 +36,9 @@ namespace k2pg {
 namespace gate {
 
 using k2pg::Status;
-using k2pg::sql::PgExpr;
-using k2pg::sql::PgConstant;
-using k2pg::sql::PgOperator;
+// using k2pg::sql::PgExpr;
+// using k2pg::sql::PgConstant;
+// using k2pg::sql::PgOperator;
 
 using k2fdw::TXMgr;
 namespace sh=skv::http;
@@ -49,14 +49,14 @@ namespace sh=skv::http;
 //  2) K2-3SI transaction APIs (Begin, Commit, Abort)
 //  3) Transactional SKV Record/data API (CRUD, QueryScan, etc, similar to DML)
 //  4) (static) Utility functions, e.g. K2 type conversion to PG types
-//  5) K2Adapter self-managment APIs, e.g. ctor, dtor, Init() etc.
+//  5) K2Adapter selcf-managment APIs, e.g. ctor, dtor, Init() etc.
 class K2Adapter {
 public:
   // 1/5 SKV Schema and collection APIs (CPO opera// tions)
     sh::Response<> CreateSchema(const std::string& collectionName, std::shared_ptr<sh::dto::Schema> schema)
     { return TXMgr.CreateSchema(collectionName, *schema.get()); };
 
- sh::Response<std::shared_ptr<sh::dto::Schema>> GetSchema(const std::string& collectionName, const std::string& schemaName, uint64_t schemaVersion)
+    sh::Response<std::shared_ptr<sh::dto::Schema>> GetSchema(const std::string& collectionName, const std::string& schemaName, uint64_t schemaVersion=sh::dto::ANY_SCHEMA_VERSION)
     { return TXMgr.GetSchema(collectionName, schemaName, schemaVersion); }
 
     sh::Response<> CreateCollection(const std::string& collection_name, const std::string& DBName);
@@ -82,23 +82,17 @@ public:
     sh::Response<> DeleteRecord(std::shared_ptr<K23SITxn> k23SITxn, sh::dto::SKVRecord& record)
     { return WriteRecord(k23SITxn, record, true/*isDelete*/); }
 
-  skv::http::Response<skv::http::dto::QueryRequest> CreateScanRead(const std::string& collectionName, const std::string& schemaName);
-    sh::Response<sh::dto::QueryResponse> ScanRead(std::shared_ptr<K23SITxn> k23SITxn, std::shared_ptr<sh::dto::QueryRequest> query)
+    skv::http::Response<skv::http::dto::QueryRequest> CreateScanRead(std::shared_ptr<K23SITxn> k23SITxn, const sh::String& collectionName, const sh::String& schemaName, sh::dto::SKVRecord& startKey, sh::dto::SKVRecord& endKey, sh::dto::expression::Expression&& filter=sh::dto::expression::Expression{},
+    std::vector<sh::String>&& projection=std::vector<sh::String>{}, int32_t recordLimit=-1, bool reverseDirection=false, bool includeVersionMismatch=false);
+    
+    sh::Response<sh::dto::QueryResponse> ScanRead(std::shared_ptr<K23SITxn> k23SITxn, sh::dto::QueryRequest query)
     { return k23SITxn->scanRead(query); }
 
-  CBFuture<Status> Exec(std::shared_ptr<K23SITxn> k23SITxn, std::shared_ptr<PgOpTemplate> op);
-
-  CBFuture<Status> BatchExec(std::shared_ptr<K23SITxn> k23SITxn, const std::vector<std::shared_ptr<PgOpTemplate>>& ops);
-
-  // 4/5 Utility APIs and Misc.
-  std::string GetRowId(std::shared_ptr<SqlOpWriteRequest> request);
-  std::string GetRowId(const std::string& collection_name, const std::string& schema_name, uint32_t schema_version,
-    k2pg::sql::PgOid base_table_oid, k2pg::sql::PgOid index_oid, std::unordered_map<std::string, SqlValue *>& key_values);
  static std::string GetRowIdFromReadRecord(sh::dto::SKVRecord& record);
 
-  static void SerializeValueToSKVRecord(const SqlValue& value, sh::dto::SKVRecordBuilder& builder);
+  // static void SerializeValueToSKVRecord(const SqlValue& value, sh::dto::SKVRecordBuilder& builder);
   static Status K2StatusToK2PgStatus(const sh::Status& status);
-  static SqlOpResponse::RequestStatus K2StatusToPGStatus(const sh::Status& status);
+  // static SqlOpResponse::RequestStatus K2StatusToPGStatus(const sh::Status& status);
 
   // We have two implicit fields (tableID and indexID) in the SKV, so this is the offset to get a user field
   static constexpr uint32_t SKV_FIELD_OFFSET = 2;
@@ -112,13 +106,6 @@ public:
   CHECKED_STATUS Init();
   CHECKED_STATUS Shutdown();
 
-  static sh::dto::expression::Expression ToK2Expression(PgExpr* pg_expr);
-  static sh::dto::expression::Expression ToK2AndOrOperator(sh::dto::expression::Operation op, std::vector<PgExpr*> args);
-  static sh::dto::expression::Expression ToK2BinaryLogicOperator(PgOperator* pg_opr);
-  static sh::dto::expression::Expression ToK2BetweenOperator(PgOperator* pg_opr);
-  static sh::dto::expression::Operation ToK2OperationType(PgExpr* pg_expr) ;
-  static sh::dto::expression::Value ToK2Value(PgConstant* pg_const);
-  static sh::dto::expression::Value ToK2ColumnRef(PgColumnRef* pg_colref);
 
   private:
 
@@ -131,27 +118,27 @@ public:
     sh::Response<> WriteRecord(std::shared_ptr<K23SITxn> k23SITxn, sh::dto::SKVRecord& record, bool isDelete)
     { return k23SITxn->write(std::move(record), isDelete); }
 
-  CBFuture<Status> handleReadOp(std::shared_ptr<K23SITxn> k23SITxn, std::shared_ptr<PgReadOpTemplate> op);
-  CBFuture<Status> handleWriteOp(std::shared_ptr<K23SITxn> k23SITxn, std::shared_ptr<PgWriteOpTemplate> op);
+  // CBFuture<Status> handleReadOp(std::shared_ptr<K23SITxn> k23SITxn, std::shared_ptr<PgReadOpTemplate> op);
+  // CBFuture<Status> handleWriteOp(std::shared_ptr<K23SITxn> k23SITxn, std::shared_ptr<PgWriteOpTemplate> op);
 
-    Status HandleRangeConditions(PgExpr *range_conds, std::vector<PgExpr *>& leftover_exprs, std::shared_ptr<sh::dto::Schema> schema, sh::dto::SKVRecordBuilder& start, sh::dto::SKVRecordBuilder& end);
+    // Status HandleRangeConditions(PgExpr *range_conds, std::vector<PgExpr *>& leftover_exprs, std::shared_ptr<sh::dto::Schema> schema, sh::dto::SKVRecordBuilder& start, sh::dto::SKVRecordBuilder& end);
 
-  // Helper funcxtion for handleReadOp when k2pgctid is set in the request
-  void handleReadByRowIds(std::shared_ptr<K23SITxn> k23SITxn,
-                           std::shared_ptr<PgReadOpTemplate> op,
-                           std::shared_ptr<std::promise<Status>> prom);
+  // // Helper funcxtion for handleReadOp when k2pgctid is set in the request
+  // void handleReadByRowIds(std::shared_ptr<K23SITxn> k23SITxn,
+  //                          std::shared_ptr<PgReadOpTemplate> op,
+  //                          std::shared_ptr<std::promise<Status>> prom);
      std::tuple<Status, std::shared_ptr<sh::dto::Schema>> getSchema(const sh::String& collectionName, const sh::String& schemaName, uint64_t schemaVersion);
 
   template <class T> // Works with SqlOpWriteRequest and SqlOpReadRequest types
   std::pair<sh::dto::SKVRecordBuilder, Status> MakeSKVRecordWithKeysSerialized(T& request, std::shared_ptr<sh::dto::Schema> schema, bool existYbctids, bool ignoreK2PGTID=false);
 
   // Sorts values by field index, serializes values into SKVRecord, and returns skv indexes of written fields
-  std::vector<uint32_t> SerializeSKVValueFields(sh::dto::SKVRecordBuilder& record, std::shared_ptr<sh::dto::Schema> schema,
-                                                std::vector<std::shared_ptr<BindVariable>>& values);
+  // std::vector<uint32_t> SerializeSKVValueFields(sh::dto::SKVRecordBuilder& record, std::shared_ptr<sh::dto::Schema> schema,
+  //                                               std::vector<std::shared_ptr<BindVariable>>& values);
 
-  static std::string K2PGTIDToString(std::shared_ptr<BindVariable> k2pgctid_column_value);
+  // static std::string K2PGTIDToString(std::shared_ptr<BindVariable> k2pgctid_column_value);
   static std::string SerializeSKVRecordToString(sh::dto::SKVRecord& record);
-  static sh::dto::SKVRecord K2PGTIDToRecord(const std::string& collection, std::shared_ptr<sh::dto::Schema> schema, std::shared_ptr<BindVariable> k2pgctid_column_value);
+  // static sh::dto::SKVRecord K2PGTIDToRecord(const std::string& collection, std::shared_ptr<sh::dto::Schema> schema, std::shared_ptr<BindVariable> k2pgctid_column_value);
 
   // Column ID of the virtual column which is not stored in k2 data
   static constexpr int32_t VIRTUAL_COLUMN = -8;

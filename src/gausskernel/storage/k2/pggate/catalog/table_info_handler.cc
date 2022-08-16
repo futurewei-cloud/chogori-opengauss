@@ -173,58 +173,63 @@ ListTablesResult TableInfoHandler::ListTables(std::shared_ptr<PgTxnHandler> txnH
 ListTableIdsResult TableInfoHandler::ListTableIds(std::shared_ptr<PgTxnHandler> txnHandler, const std::string& collection_name, bool isSysTableIncluded) {
     ListTableIdsResult response;
     try {
-        // TODO(akhan): Uncomment
-        // auto [status] = k2_adapter_->CreateScanRead(collection_name, table_meta_SKVSchema_->name);
-        // if (!status.is2xxOK()) {
-        //     K2LOG_E(log::catalog, "Failed to create scan read due to {}", status);
-        //     response.status = K2Adapter::K2StatusToK2PgStatus(status);
-        //     return response;
-        // }
+        
+        auto&& startKey =  buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
+        auto&& endKey =  buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
+        
+        // TODO: consider to use the same additional table_id /index_id fields for the fixed system tables
+        // find all the tables (not include indexes)
+        std::vector<sh::dto::expression::Value> values;
+        values.emplace_back(sh::dto::expression::makeValueReference("IsIndex"));
+        values.emplace_back(sh::dto::expression::makeValueLiteral<bool>(false));
+        sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), {});
 
-        // std::shared_ptr<sh::Query> query = create_result.query;
-        // std::vector<sh::dto::expression::Value> values;
-        // // TODO: consider to use the same additional table_id /index_id fields for the fixed system tables
-        // // find all the tables (not include indexes)
-        // values.emplace_back(sh::dto::expression::makeValueReference("IsIndex"));
-        // values.emplace_back(sh::dto::expression::makeValueLiteral<bool>(false));
-        // sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), {});
-        // query->setFilterExpression(std::move(filterExpr));
-        // query->startScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
-        // query->endScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
-        // do {
-        //     auto query_result = k2_adapter_->ScanRead(txnHandler->GetTxn(), query).get();
-        //     if (!query_result.status.is2xxOK()) {
-        //         K2LOG_E(log::catalog, "Failed to run scan read due to {}", query_result.status);
-        //         response.status = K2Adapter::K2StatusToK2PgStatus(query_result.status);
-        //         return response;
-        //     }
+        auto txn = txnHandler->GetTxn();
+        auto [status, query] = k2_adapter_->CreateScanRead(txn, collection_name,  table_meta_SKVSchema_->name, startKey, endKey, std::move(filterExpr));;
+        
+        if (!status.is2xxOK()) {
+            K2LOG_E(log::catalog, "Failed to create scan read due to {}", status);
+            response.status = K2Adapter::K2StatusToK2PgStatus(status);
+            return response;
+        }
 
-        //     for (sh::dto::SKVRecord& record : query_result.records) {
-        //         // deserialize table meta
-        //         // SchemaTableId
-        //         record.deserializeNext<int64_t>();
-        //         // SchemaIndexId
-        //         record.deserializeNext<int64_t>();
-        //         // TableId
-        //         std::string table_id = record.deserializeNext<sh::String>().value();
-        //         // TableName
-        //         record.deserializeNext<sh::String>();
-        //         // TableOid
-        //         record.deserializeNext<int64_t>();
-        //         // TableUuid
-        //         record.deserializeNext<sh::String>();
-        //         // IsSysTable
-        //         bool is_sys_table = record.deserializeNext<bool>().value();
-        //         if (isSysTableIncluded) {
-        //             response.tableIds.push_back(std::move(table_id));
-        //         } else {
-        //             if (!is_sys_table) {
-        //                 response.tableIds.push_back(std::move(table_id));
-        //             }
-        //         }
-        //     }
-        //     // if the query is not done, the query itself is updated with the pagination token for the next call
-        // } while (!query->isDone());
+        bool done = false;
+        do {
+            auto&& [status, result]  = k2_adapter_->ScanRead(txn, query);
+            if (!status.is2xxOK()) {
+                K2LOG_E(log::catalog, "Failed to run scan read due to {}", status);
+                response.status = K2Adapter::K2StatusToK2PgStatus(status);
+                return response;
+            }
+            done = result.done;
+            for (sh::dto::SKVRecord::Storage& storage : result.records) {
+                // TODO(ahsank): Query response should return schema or shcema version to support multi version schema
+                sh::dto::SKVRecord record(collection_name, table_meta_SKVSchema_, std::move(storage), true);
+                // deserialize table meta
+                // SchemaTableId
+                record.deserializeNext<int64_t>();
+                // SchemaIndexId
+                record.deserializeNext<int64_t>();
+                // TableId
+                std::string table_id = record.deserializeNext<sh::String>().value();
+                // TableName
+                record.deserializeNext<sh::String>();
+                // TableOid
+                record.deserializeNext<int64_t>();
+                // TableUuid
+                record.deserializeNext<sh::String>();
+                // IsSysTable
+                bool is_sys_table = record.deserializeNext<bool>().value();
+                if (isSysTableIncluded) {
+                    response.tableIds.push_back(std::move(table_id));
+                } else {
+                    if (!is_sys_table) {
+                        response.tableIds.push_back(std::move(table_id));
+                    }
+                }
+            }
+            // if the query is not done, the query itself is updated with the pagination token for the next call
+        } while (!done);
 
         response.status = Status(); // OK
     }
@@ -344,44 +349,43 @@ CopySKVTableResult TableInfoHandler::CopySKVTable(std::shared_ptr<PgTxnHandler> 
         response.status = K2Adapter::K2StatusToK2PgStatus(source_status);
         return response;
     }
+    auto startScanRecord = buildRangeRecord(source_coll_name, source_schema, source_table_oid, source_index_oid, std::nullopt);
+    auto endScanRecord = buildRangeRecord(source_coll_name, source_schema, source_table_oid, source_index_oid, std::nullopt);
+    auto txn = source_txnHandler->GetTxn();
+    // create scan for source table
+    auto [status, query]  = k2_adapter_->CreateScanRead(txn, source_coll_name, source_schema->name, startScanRecord, endScanRecord);
+    if (!status.is2xxOK()) {
+        K2LOG_E(log::catalog, "Failed to create scan read for {} in {} due to {}", source_schema_name, source_coll_name, status.message);
+        response.status = K2Adapter::K2StatusToK2PgStatus(status);
+        return response;
+    }
 
-    // TODO(akhan): Uncomment
-    // // create scan for source table
-    // CreateScanReadResult create_source_scan_result = k2_adapter_->CreateScanRead(source_coll_name, source_result.schema->name).get();
-    // if (!create_source_scan_result.status.is2xxOK()) {
-    //     K2LOG_E(log::catalog, "Failed to create scan read for {} in {} due to {}", source_schema_name, source_coll_name, create_source_scan_result.status.message);
-    //     response.status = K2Adapter::K2StatusToK2PgStatus(create_source_scan_result.status);
-    //     return response;
-    // }
-
-    // // scan the source table
-    // std::shared_ptr<sh::Query> query = create_source_scan_result.query;
-    // query->startScanRecord = buildRangeRecord(source_coll_name, source_result.schema, source_table_oid, source_index_oid, std::nullopt);
-    // query->endScanRecord = buildRangeRecord(source_coll_name, source_result.schema, source_table_oid, source_index_oid, std::nullopt);
+    // scan the source table
     int count = 0;
-    // do {
-    //     auto query_result = k2_adapter_->ScanRead(source_txnHandler->GetTxn(), query).get();
-    //     if (!query_result.status.is2xxOK()) {
-    //         K2LOG_E(log::catalog, "Failed to run scan read for table {} in {} due to {}",
-    //             source_schema_name, source_coll_name, query_result.status);
-    //         response.status = K2Adapter::K2StatusToK2PgStatus(query_result.status);
-    //         return response;
-    //     }
+    bool done = false;
+    do {
+        auto [status, query_result] = k2_adapter_->ScanRead(txn, query);
+        if (!status.is2xxOK()) {
+            K2LOG_E(log::catalog, "Failed to run scan read for table {} in {} due to {}",
+                source_schema_name, source_coll_name, status);
+            response.status = K2Adapter::K2StatusToK2PgStatus(status);
+            return response;
+        }
 
-    //     for (sh::dto::SKVRecord& record : query_result.records) {
-    //         // clone and persist SKV record to target table
-    //         sh::dto::SKVRecord target_record = record.cloneToOtherSchema(target_coll_name, target_result.schema);
-    //         auto upsertRes = k2_adapter_->UpsertRecord(target_txnHandler->GetTxn(), target_record).get();
-    //         if (!upsertRes.status.is2xxOK())
-    //         {
-    //             K2LOG_E(log::catalog, "Failed to upsert target_record due to {}", upsertRes.status);
-    //             response.status = K2Adapter::K2StatusToK2PgStatus(upsertRes.status);
-    //             return response;
-    //         }
-    //         count++;
-    //     }
-    //     // if the query is not done, the query itself is updated with the pagination token for the next call
-    // } while (!query->isDone());
+        for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
+            // clone and persist SKV record to target table
+            sh::dto::SKVRecord target_record(target_coll_name, target_schema, std::move(storage), true); 
+            auto [upsert_status] = k2_adapter_->UpsertRecord(target_txnHandler->GetTxn(), target_record);
+            if (!upsert_status.is2xxOK())
+            {
+                K2LOG_E(log::catalog, "Failed to upsert target_record due to {}", upsert_status);
+                response.status = K2Adapter::K2StatusToK2PgStatus(upsert_status);
+                return response;
+            }
+            count++;
+        }
+        done = query_result.done;
+    } while (!done);
     K2LOG_I(log::catalog, "Finished copying {} in {} to {} in {} with {} records", source_schema_name, source_coll_name, target_schema_name, target_coll_name, count);
     response.status = Status(); // OK
     return response;
@@ -1291,119 +1295,121 @@ Status TableInfoHandler::FetchTableMetaSKVRecord(std::shared_ptr<PgTxnHandler> t
 }
 
 std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexMetaSKVRecords(std::shared_ptr<PgTxnHandler> txnHandler, const std::string& collection_name, const std::string& base_table_id) {
-    // TODO(akhan): Uncomment
-    // auto [status, query] = k2_adapter_->CreateScanRead(collection_name, table_meta_SKVSchema_->name);
-    // if (!status.is2xxOK()) {
-    //     auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
-    //     base_table_id, collection_name, status);
-    //     K2LOG_E(log::catalog, "{}", msg);
-    //     throw std::runtime_error(msg);
-    // }
-
     std::vector<sh::dto::SKVRecord> records;
-    // std::shared_ptr<sh::Query> query = create_result.query;
-    // std::vector<sh::dto::expression::Value> values;
-    // std::vector<sh::dto::expression::Expression> exps;
-    // // find all the indexes for the base table, i.e., by BaseTableId
-    // values.emplace_back(sh::dto::expression::makeValueReference(CatalogConsts::BASE_TABLE_ID_COLUMN_NAME));
-    // values.emplace_back(sh::dto::expression::makeValueLiteral<sh::String>(base_table_id));
-    // sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), std::move(exps));
-    // query->setFilterExpression(std::move(filterExpr));
-    // query->startScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
-    // query->endScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
-    // do {
-    //     K2LOG_D(log::catalog, "Fetching Table meta SKV records for indexes on base table {}", base_table_id);
-    //     auto query_result = k2_adapter_->ScanRead(txnHandler->GetTxn(), query).get();
-    //     if (!query_result.status.is2xxOK()) {
-    //         auto msg = fmt::format("Failed to run scan read for indexes in base table {} in {} due to {}",
-    //             base_table_id, collection_name, query_result.status);
-    //         K2LOG_E(log::catalog, "{}", msg);
-    //         throw std::runtime_error(msg);
-    //     }
+    std::vector<sh::dto::expression::Value> values;
+    std::vector<sh::dto::expression::Expression> exps;
+    // find all the indexes for the base table, i.e., by BaseTableId
+    values.emplace_back(sh::dto::expression::makeValueReference(CatalogConsts::BASE_TABLE_ID_COLUMN_NAME));
+    values.emplace_back(sh::dto::expression::makeValueLiteral<sh::String>(sh::String(base_table_id)));
+    sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), std::move(exps));
+    auto startScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
+    auto endScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, CatalogConsts::oid_table_meta, 0/*index_oid*/, std::nullopt);
 
-    //     for (sh::dto::SKVRecord& record : query_result.records) {
-    //         records.push_back(std::move(record));
-    //     }
-    //     // if the query is not done, the query itself is updated with the pagination token for the next call
-    // } while (!query->isDone());
+    auto txn = txnHandler->GetTxn();
+    auto [status, query] = k2_adapter_->CreateScanRead(txn, collection_name, table_meta_SKVSchema_->name, startScanRecord, endScanRecord, std::move(filterExpr));
+    if (!status.is2xxOK()) {
+        auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
+        base_table_id, collection_name, status);
+        K2LOG_E(log::catalog, "{}", msg);
+        throw std::runtime_error(msg);
+    }
+
+    bool done = false;
+    do {
+        K2LOG_D(log::catalog, "Fetching Table meta SKV records for indexes on base table {}", base_table_id);
+        auto [status, query_result] = k2_adapter_->ScanRead(txn, query);
+        if (!status.is2xxOK()) {
+            auto msg = fmt::format("Failed to run scan read for indexes in base table {} in {} due to {}", base_table_id, collection_name, status);
+            K2LOG_E(log::catalog, "{}", msg);
+            throw std::runtime_error(msg);
+        }
+
+        for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
+            sh::dto::SKVRecord record(collection_name,  table_meta_SKVSchema_, std::move(storage), true);
+            records.push_back(std::move(record));
+        }
+        // if the query is not done, the query itself is updated with the pagination token for the next call
+        done = query_result.done;
+    } while (!done);
 
     return records;
 }
 
 std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchTableColumnMetaSKVRecords(std::shared_ptr<PgTxnHandler> txnHandler, const std::string& collection_name, const std::string& table_id) {
-    // TODO(akhan): Uncomment
-    // auto create_result = k2_adapter_->CreateScanRead(collection_name, tablecolumn_meta_SKVSchema_->name).get();
-    // if (!create_result.status.is2xxOK()) {
-    //     auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
-    //     table_id, collection_name, create_result.status);
-    //     K2LOG_E(log::catalog, "{}", msg);
-    //     throw std::runtime_error(msg);
-    // }
-
+    std::vector<sh::dto::expression::Value> values;
+    std::vector<sh::dto::expression::Expression> exps;
+    // find all the columns for a table by TableId
+    values.emplace_back(sh::dto::expression::makeValueReference(sh::String(CatalogConsts::TABLE_ID_COLUMN_NAME)));
+    values.emplace_back(sh::dto::expression::makeValueLiteral<sh::String>(sh::String(table_id)));
+    sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), std::move(exps));
+    auto startScanRecord = buildRangeRecord(collection_name, tablecolumn_meta_SKVSchema_, CatalogConsts::oid_tablecolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
+    auto endScanRecord = buildRangeRecord(collection_name, tablecolumn_meta_SKVSchema_, CatalogConsts::oid_tablecolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
+    auto txn = txnHandler->GetTxn();
+    auto [status, query] = k2_adapter_->CreateScanRead(txn, collection_name, tablecolumn_meta_SKVSchema_->name, startScanRecord, endScanRecord, std::move(filterExpr));
+    if (!status.is2xxOK()) {
+        auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
+        table_id, collection_name, status);
+        K2LOG_E(log::catalog, "{}", msg);
+        throw std::runtime_error(msg);
+    }
     std::vector<sh::dto::SKVRecord> records;
-    // auto& query = create_result.query;
-    // std::vector<sh::dto::expression::Value> values;
-    // std::vector<sh::dto::expression::Expression> exps;
-    // // find all the columns for a table by TableId
-    // values.emplace_back(sh::dto::expression::makeValueReference(CatalogConsts::TABLE_ID_COLUMN_NAME));
-    // values.emplace_back(sh::dto::expression::makeValueLiteral<sh::String>(table_id));
-    // sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), std::move(exps));
-    // query->setFilterExpression(std::move(filterExpr));
-    // query->startScanRecord = buildRangeRecord(collection_name, tablecolumn_meta_SKVSchema_, CatalogConsts::oid_tablecolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
-    // query->endScanRecord = buildRangeRecord(collection_name, tablecolumn_meta_SKVSchema_, CatalogConsts::oid_tablecolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
-    // do {
-    //     auto query_result = k2_adapter_->ScanRead(txnHandler->GetTxn(), query).get();
-    //     if (!query_result.status.is2xxOK()) {
-    //         auto msg = fmt::format("Failed to run scan read for {} in {} due to {}",
-    //             table_id, collection_name, query_result.status);
-    //         K2LOG_E(log::catalog, "{}", msg);
-    //         throw std::runtime_error(msg);
-    //     }
+    bool done = false;
+    do {
+        auto [status, query_result] = k2_adapter_->ScanRead(txn, query);
+        if (!status.is2xxOK()) {
+            auto msg = fmt::format("Failed to run scan read for {} in {} due to {}",
+                table_id, collection_name,status);
+            K2LOG_E(log::catalog, "{}", msg);
+            throw std::runtime_error(msg);
+        }
 
-    //     for (sh::dto::SKVRecord& record : query_result.records) {
-    //         records.push_back(std::move(record));
-    //     }
-    //     // if the query is not done, the query itself is updated with the pagination token for the next call
-    // } while (!query->isDone());
+        for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
+            sh::dto::SKVRecord record(collection_name, table_meta_SKVSchema_, std::move(storage), true);
+            records.push_back(std::move(record));
+        }
+        // if the query is not done, the query itself is updated with the pagination token for the next call
+        done = query_result.done;
+    } while (!done);
 
     return records;
 }
 
 std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexColumnMetaSKVRecords(std::shared_ptr<PgTxnHandler> txnHandler, const std::string& collection_name, const std::string& table_id) {
-    // TODO (akhan): Uncomment
-    // auto create_result = k2_adapter_->CreateScanRead(collection_name, indexcolumn_meta_SKVSchema_->name);
-    // if (!create_result.status.is2xxOK()) {
-    //     auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
-    //     table_id, collection_name, create_result.status);
-    //     K2LOG_E(log::catalog, "{}", msg);
-    //     throw std::runtime_error(msg);
-    // }
-
     std::vector<sh::dto::SKVRecord> records;
-    // std::shared_ptr<sh::Query> query = create_result.query;
-    // std::vector<sh::dto::expression::Value> values;
-    // std::vector<sh::dto::expression::Expression> exps;
-    // // find all the columns for an index table by TableId
-    // values.emplace_back(sh::dto::expression::makeValueReference(CatalogConsts::TABLE_ID_COLUMN_NAME));
-    // values.emplace_back(sh::dto::expression::makeValueLiteral<sh::String>(table_id));
-    // sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), std::move(exps));
-    // query->setFilterExpression(std::move(filterExpr));
-    // query->startScanRecord = buildRangeRecord(collection_name, indexcolumn_meta_SKVSchema_, CatalogConsts::oid_indexcolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
-    // query->endScanRecord = buildRangeRecord(collection_name, indexcolumn_meta_SKVSchema_, CatalogConsts::oid_indexcolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
-    // do {
-    //     auto query_result = k2_adapter_->ScanRead(txnHandler->GetTxn(), query).get();
-    //     if (!query_result.status.is2xxOK()) {
-    //         auto msg = fmt::format("Failed to run scan read for {} in {} due to {}",
-    //             table_id, collection_name, query_result.status);
-    //         K2LOG_E(log::catalog, "{}", msg);
-    //         throw std::runtime_error(msg);
-    //     }
+    std::vector<sh::dto::expression::Value> values;
+    std::vector<sh::dto::expression::Expression> exps;
+    // find all the columns for an index table by TableId
+    values.emplace_back(sh::dto::expression::makeValueReference(sh::String(CatalogConsts::TABLE_ID_COLUMN_NAME)));
+    values.emplace_back(sh::dto::expression::makeValueLiteral<sh::String>(sh::String(table_id)));
+    sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), std::move(exps));
+    auto startScanRecord = buildRangeRecord(collection_name, indexcolumn_meta_SKVSchema_, CatalogConsts::oid_indexcolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
+    auto endScanRecord = buildRangeRecord(collection_name, indexcolumn_meta_SKVSchema_, CatalogConsts::oid_indexcolumn_meta, 0/*index_oid*/, std::make_optional(table_id));
+    auto txn = txnHandler->GetTxn();
+    auto [status, query] = k2_adapter_->CreateScanRead(txn, collection_name, indexcolumn_meta_SKVSchema_->name, startScanRecord, endScanRecord, std::move(filterExpr));
+    if (!status.is2xxOK()) {
+        auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
+        table_id, collection_name, status);
+        K2LOG_E(log::catalog, "{}", msg);
+        throw std::runtime_error(msg);
+    }
 
-    //     for (sh::dto::SKVRecord& record : query_result.records) {
-    //         records.push_back(std::move(record));
-    //     }
-    //     // if the query is not done, the query itself is updated with the pagination token for the next call
-    // } while (!query->isDone());
+    bool done = false;
+    do {
+        auto [status, query_result] = k2_adapter_->ScanRead(txn, query);
+        if (!status.is2xxOK()) {
+            auto msg = fmt::format("Failed to run scan read for {} in {} due to {}",
+                table_id, collection_name, status);
+            K2LOG_E(log::catalog, "{}", msg);
+            throw std::runtime_error(msg);
+        }
+
+        for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
+            sh::dto::SKVRecord record(collection_name,  table_meta_SKVSchema_, std::move(storage), true);            
+            records.push_back(std::move(record));
+        }
+        done = query_result.done;
+
+    } while (!done);
 
     return records;
 }

@@ -59,12 +59,12 @@ K23SITxn::~K23SITxn() {
 }
 
 
- sh::Response<sh::dto::QueryResponse> K23SITxn::scanRead(std::shared_ptr<sh::dto::QueryRequest> query) {
+ sh::Response<sh::dto::QueryResponse> K23SITxn::scanRead(sh::dto::QueryRequest query) {
     _scanOps++;
     _inFlightOps++;
     session::in_flight_ops->observe(_inFlightOps);
-    K2LOG_D(log::k2Client, "scanread: mtr={}, query={}", _txn, (*query));
-    auto result = _txn->query(*query).get();
+    K2LOG_D(log::k2Client, "scanread: mtr={}, query={}", _txn, query);
+    auto result = _txn->query(query).get();
     _inFlightOps--;
     session::scan_op_latency->observe(Clock::now() - Clock::now());
     return result;
@@ -88,25 +88,6 @@ sh::Response<sh::dto::SKVRecord> K23SITxn::read(sh::dto::SKVRecord&& record) {
     session::read_op_latency->observe(Clock::now() - st);
     return result;
 }
-
-// TODO(akhan): Uncomment or remove
-// sh::Response<sh::dto::SKVRecord> K23SITxn::read(k2::dto::Key key, std::string collectionName) {
-//     _readOps++;
-//     _inFlightOps++;
-//     K2LOG_D(log::k2Client, "read: txn={}, coll={}, key-pk={}, key-rk={}",
-//       _txn,
-//       collectionName,
-//       key.partitionKey,
-//       key.rangeKey());
-//     // There is no api to read from key directly, build the skv record
-//     session::in_flight_ops->observe(_inFlightOps);
-//     auto st = Clock::now();
-//     result = 
-//     _inFlightOps--;
-//     session::read_op_latency->observe(Clock::now() - st);
-
-//     return result;
-// }
 
 sh::Response<> K23SITxn::write(sh::dto::SKVRecord&& record, bool erase, sh::dto::ExistencePrecondition precondition) {
     _writeOps++;

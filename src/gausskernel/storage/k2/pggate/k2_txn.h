@@ -30,7 +30,7 @@ Copyright(c) 2020 Futurewei Cloud
 #pragma once
 #include "k2_includes.h"
 #include "k2_log.h"
-#include "k2_future.h"
+// #include "k2_future.h"
 
 namespace k2pg {
 namespace gate {
@@ -54,7 +54,7 @@ private:
 
     // Scans records from sh::The result future is eventually satisfied with the resulting SKVRecords of the scan.
     // Uncaught exceptions may also be propagated and show up as exceptional futures here.
-    sh::Response<sh::dto::QueryResponse> scanRead(std::shared_ptr<sh::dto::QueryRequest> query);
+    sh::Response<sh::dto::QueryResponse> scanRead(sh::dto::QueryRequest query);
 
     // Reads a record from K2.
     // The result future is eventually satisfied with the result of the read.

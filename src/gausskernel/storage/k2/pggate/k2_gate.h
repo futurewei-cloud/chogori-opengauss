@@ -56,9 +56,9 @@ public:
     sh::Response<std::shared_ptr<sh::dto::Schema>> getSchema(const sh::String& collectionName, const sh::String& schemaName, uint64_t schemaVersion);
     sh::Response<> createSchema(const sh::String& collectionName, sh::dto::Schema& schema);
     sh::Response<> createCollection(const sh::dto::CollectionMetadata& metadata, const std::vector<sh::String>& rangeEnds);
+    // TODO(ahsank): Add DeleteColection later when it is supported on CPO/K23si
     sh::Response<> dropCollection(const sh::String& collectionName);
-    // TODO: Add DeleteColection later when it is supported on CPO/K23si
-    sh::Response<sh::dto::QueryRequest> createScanRead(const sh::String& collectionName, const sh::String& schemaName);
+    // sh::Response<sh::dto::QueryRequest> createScanRead(const sh::String& collectionName, const sh::String& schemaName);
 
 private:
     bool _syncFinalize;

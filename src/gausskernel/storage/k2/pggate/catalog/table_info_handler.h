@@ -29,6 +29,7 @@ Copyright(c) 2020 Futurewei Cloud
 #include "sql_catalog_entity.h"
 #include "../k2_adapter.h"
 #include "../../entities/entity_ids.h"
+#include "../../entities/table.h"
 #include "catalog_log.h"
 
 namespace k2pg {

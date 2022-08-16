@@ -7,6 +7,8 @@ SUBDIRS     = type
 OBJ_DIR = ./obj
 OBJS = $(OBJ_DIR)/malloc.o $(OBJ_DIR)/common-utils.o $(OBJ_DIR)/errno.o $(OBJ_DIR)/flag_tags.o $(OBJ_DIR)/k2pg-internal.o $(OBJ_DIR)/pgsql_error.o $(OBJ_DIR)/status.o $(OBJ_DIR)/stol_utils.o $(OBJ_DIR)/transaction_error.o
 
+DEPS =  $(OBJS:.o=.d)
+
 include $(top_srcdir)/src/gausskernel/common.mk
 
 $(OBJ_DIR)/%.o: %.cc
