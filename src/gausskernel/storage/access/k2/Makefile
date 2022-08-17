@@ -10,6 +10,6 @@ ifneq "$(MAKECMDGOALS)" "clean"
   endif
 endif
 
-OBJS = k2pg-internal.o k2pg_util.o k2pg_aux.o pg_gate_thread_local.o pg_gate_api.o k2_expr.o k2_type.o k2catam.o k2cat_cmds.o k2_plan.o k2_table_ops.o k2_index_ops.o k2_bootstrap.o
+OBJS = k2pg-internal.o k2pg_util.o k2pg_aux.o pg_gate_thread_local.o pg_gate_api.o k2_expr.o k2_type.o k2catam.o k2cat_cmds.o k2_plan.o k2_table_ops.o k2_index_ops.o k2_bootstrap.o session.o
 
 include $(top_srcdir)/src/gausskernel/common.mk

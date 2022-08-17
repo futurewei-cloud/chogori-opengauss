@@ -193,40 +193,4 @@ Datum k2_fdw_validator(PG_FUNCTION_ARGS)
 }
 
 
-static void K2XactCallback(XactEvent event, void* arg)
-{
-    auto currentTxn = TXMgr.GetTxn();
-    elog(DEBUG2, "xact_callback event %u, txn %s", event, TXNFMT(currentTxn));
-
-    if (event == XACT_EVENT_START) {
-        elog(DEBUG2, "XACT_EVENT_START, txn %s", TXNFMT(currentTxn));
-        if (currentTxn) {
-            auto [status] = TXMgr.EndTxn(sh::dto::EndAction::Abort);
-            if (!status.is2xxOK()) {
-                reportRC(RCStatus::RC_ERROR, status.message);
-            }
-        }
-        auto [status, txh] = TXMgr.BeginTxn(sh::dto::TxnOptions{
-                .timeout= Config().getDurationMillis("k2.txn_op_timeout_ms", 1s),
-                .priority= static_cast<sh::dto::TxnPriority>(Config().get<uint8_t>("k2.txn_priority", 128)), // 0 is highest, 255 is lowest.
-                .syncFinalize = Config().get<bool>("k2.sync_finalize_txn", false)
-            });
-        if (!status.is2xxOK()) {
-            reportRC(RCStatus::RC_ERROR, status.message);
-        }
-    } else if (event == XACT_EVENT_COMMIT) {
-        elog(DEBUG2, "XACT_EVENT_COMMIT, txn %s", TXNFMT(currentTxn));
-        auto [status] = TXMgr.EndTxn(sh::dto::EndAction::Commit);
-        if (!status.is2xxOK()) {
-            reportRC(RCStatus::RC_ERROR, status.message);
-        }
-    } else if (event == XACT_EVENT_ABORT) {
-        elog(DEBUG2, "XACT_EVENT_ABORT, txn %s", TXNFMT(currentTxn));
-
-        auto [status] = TXMgr.EndTxn(sh::dto::EndAction::Abort);
-        if (!status.is2xxOK()) {
-            reportRC(RCStatus::RC_ERROR, status.message);
-        }
-    }
-}
 } // ns
