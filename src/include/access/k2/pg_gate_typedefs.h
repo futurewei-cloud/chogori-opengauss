@@ -54,9 +54,6 @@ extern "C" {
 #endif  // __cplusplus
 
 
-// Handle to Env. Each Postgres process might need just one ENV, maybe more.
-K2_DEFINE_HANDLE_TYPE(PgEnv, PgEnv)
-
 // Handle to a session. Postgres should create one PgSession per client connection.
 K2_DEFINE_HANDLE_TYPE(PgSession, PgSession)
 

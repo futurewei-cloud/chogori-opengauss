@@ -36,14 +36,14 @@ Copyright(c) 2022 Futurewei Cloud
 extern "C" {
 #endif
 
-   
+
 // This must be called exactly once to initialize the YPostgreSQL/SKV gateway API before any other
 // functions in this API are called.
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, K2PgCallbacks pg_callbacks);
 void PgGate_DestroyPgGate();
 
 // Initialize a session to process statements that come from the same client connection.
-K2PgStatus PgGate_InitSession(const K2PgEnv pg_env, const char *database_name);
+K2PgStatus PgGate_InitSession(const char *database_name);
 
 // Initialize K2PgMemCtx.
 // - Postgres uses memory context to hold all of its allocated space. Once all associated operations
@@ -264,7 +264,7 @@ struct K2PgConstraintDef {
     K2PgConstraintType constraint;
     std::vector<K2PgConstant> constants; // Only 1 element for EQ etc, 2 for BETWEEN, many for IN
 };
-    
+
 struct K2PgAttributeDef {
     int attr_num;
     K2PgConstant value;

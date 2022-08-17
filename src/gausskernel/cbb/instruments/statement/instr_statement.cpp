@@ -1422,7 +1422,7 @@ void instr_stmt_report_basic_info()
         ResourceOwnerDelete(tmpOwner);
         if (to_update_db_name || to_update_user_name || to_update_client_addr) {
             // start a new PG Gate session if any changes in db, user name, or client address
-            PgGate_InitSession(NULL, u_sess->statement_cxt.db_name);
+            PgGate_InitSession(u_sess->statement_cxt.db_name);
         }
     }
 }

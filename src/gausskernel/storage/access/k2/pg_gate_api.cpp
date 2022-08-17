@@ -58,33 +58,8 @@ void PgGate_DestroyPgGate() {
     }
 }
 
-K2PgStatus PgGate_CreateEnv(K2PgEnv *pg_env) {
-  elog(DEBUG5, "PgGateAPI: PgGate_CreateEnv");
-  
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-  
-  return status;
-}
-
-K2PgStatus PgGate_DestroyEnv(K2PgEnv pg_env) {
-  elog(DEBUG5, "PgGateAPI: PgGate_DestroyEnv");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-  
-  return status;
-}
-
 // Initialize a session to process statements that come from the same client connection.
-K2PgStatus PgGate_InitSession(const K2PgEnv pg_env, const char *database_name) {
+K2PgStatus PgGate_InitSession(const char *database_name) {
   elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
   K2PgStatus status {
       .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
@@ -92,7 +67,7 @@ K2PgStatus PgGate_InitSession(const K2PgEnv pg_env, const char *database_name) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -116,7 +91,7 @@ K2PgStatus PgGate_DestroyMemctx(K2PgMemctx memctx) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -128,7 +103,7 @@ K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -141,7 +116,7 @@ K2PgStatus PgGate_InvalidateCache() {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -154,7 +129,7 @@ K2PgStatus PgGate_IsInitDbDone(bool* initdb_done) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -168,7 +143,7 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -186,7 +161,7 @@ K2PgStatus PgGate_InitPrimaryCluster()
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -199,7 +174,7 @@ K2PgStatus PgGate_FinishInitDB()
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -213,7 +188,7 @@ K2PgStatus PgGate_ConnectDatabase(const char *database_name) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -230,7 +205,7 @@ K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -244,7 +219,7 @@ K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -259,7 +234,7 @@ K2PgStatus PgGate_NewAlterDatabase(const char *database_name,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -271,7 +246,7 @@ K2PgStatus PgGate_AlterDatabaseRenameDatabase(K2PgStatement handle, const char *
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -283,7 +258,7 @@ K2PgStatus PgGate_ExecAlterDatabase(K2PgStatement handle) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -300,7 +275,7 @@ K2PgStatus PgGate_ReserveOids(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -312,7 +287,7 @@ K2PgStatus PgGate_GetCatalogMasterVersion(uint64_t *version) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -341,7 +316,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -359,7 +334,7 @@ K2PgStatus PgGate_InsertSequenceTuple(int64_t db_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -378,7 +353,7 @@ K2PgStatus PgGate_UpdateSequenceTupleConditionally(int64_t db_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -395,7 +370,7 @@ K2PgStatus PgGate_UpdateSequenceTuple(int64_t db_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -411,7 +386,7 @@ K2PgStatus PgGate_ReadSequenceTuple(int64_t db_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -423,7 +398,7 @@ K2PgStatus PgGate_DeleteSequenceTuple(int64_t db_oid, int64_t seq_oid) {
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -447,7 +422,7 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -461,7 +436,7 @@ K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -474,7 +449,7 @@ K2PgStatus PgGate_AlterTableAddColumn(K2PgStatement handle, const char *name, in
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -487,7 +462,7 @@ K2PgStatus PgGate_AlterTableRenameColumn(K2PgStatement handle, const char *oldna
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -499,7 +474,7 @@ K2PgStatus PgGate_AlterTableDropColumn(K2PgStatement handle, const char *name){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -512,7 +487,7 @@ K2PgStatus PgGate_AlterTableRenameTable(K2PgStatement handle, const char *db_nam
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -524,7 +499,7 @@ K2PgStatus PgGate_ExecAlterTable(K2PgStatement handle){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -539,7 +514,7 @@ K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -551,7 +526,7 @@ K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -565,7 +540,7 @@ K2PgStatus PgGate_NewTruncateTable(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -577,7 +552,7 @@ K2PgStatus PgGate_ExecTruncateTable(K2PgStatement handle){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -591,7 +566,7 @@ K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -606,7 +581,7 @@ K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -619,7 +594,7 @@ K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -631,7 +606,7 @@ K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -643,7 +618,7 @@ K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -669,7 +644,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -684,7 +659,7 @@ K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -696,7 +671,7 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -713,7 +688,7 @@ K2PgStatus PgGate_WaitUntilIndexPermissionsAtLeast(
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -727,7 +702,7 @@ K2PgStatus PgGate_AsyncUpdateIndexPermissions(
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -746,7 +721,7 @@ K2PgStatus PgGate_DmlAppendTarget(K2PgStatement handle, K2PgExpr target){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -782,7 +757,7 @@ K2PgStatus PgGate_DmlBindColumn(K2PgStatement handle, int attr_num, K2PgExpr att
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -794,7 +769,7 @@ K2PgStatus PgGate_DmlBindRangeConds(K2PgStatement handle, K2PgExpr range_conds) 
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -806,7 +781,7 @@ K2PgStatus PgGate_DmlBindWhereConds(K2PgStatement handle, K2PgExpr where_conds) 
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -819,7 +794,7 @@ K2PgStatus PgGate_DmlBindTable(K2PgStatement handle){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -834,7 +809,7 @@ K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -849,7 +824,7 @@ K2PgStatus PgGate_DmlFetch(K2PgStatement handle, int32_t natts, uint64_t *values
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -862,7 +837,7 @@ K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_co
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -876,7 +851,7 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -897,7 +872,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -914,7 +889,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -931,7 +906,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -947,7 +922,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -960,7 +935,7 @@ K2PgStatus PgGate_SetForwardScan(K2PgStatement handle, bool is_forward_scan){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -972,7 +947,7 @@ K2PgStatus PgGate_ExecSelect(K2PgStatement handle, const K2PgExecParameters *exe
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -986,7 +961,7 @@ K2PgStatus PgGate_BeginTransaction(){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -998,7 +973,7 @@ K2PgStatus PgGate_RestartTransaction(){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1010,7 +985,7 @@ K2PgStatus PgGate_CommitTransaction(){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1022,7 +997,7 @@ K2PgStatus PgGate_AbortTransaction(){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1034,7 +1009,7 @@ K2PgStatus PgGate_SetTransactionIsolationLevel(int isolation){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1046,7 +1021,7 @@ K2PgStatus PgGate_SetTransactionReadOnly(bool read_only){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1058,7 +1033,7 @@ K2PgStatus PgGate_SetTransactionDeferrable(bool deferrable){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1070,7 +1045,7 @@ K2PgStatus PgGate_EnterSeparateDdlTxnMode(){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1082,7 +1057,7 @@ K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1099,7 +1074,7 @@ K2PgStatus PgGate_NewColumnRef(K2PgStatement stmt, int attr_num, const K2PgTypeE
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1113,7 +1088,7 @@ K2PgStatus PgGate_NewConstant(K2PgStatement stmt, const K2PgTypeEntity *type_ent
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1126,7 +1101,7 @@ K2PgStatus PgGate_NewConstantOp(K2PgStatement stmt, const K2PgTypeEntity *type_e
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1140,7 +1115,7 @@ K2PgStatus PgGate_UpdateConstInt2(K2PgExpr expr, int16_t value, bool is_null){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1152,7 +1127,7 @@ K2PgStatus PgGate_UpdateConstInt4(K2PgExpr expr, int32_t value, bool is_null){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1164,7 +1139,7 @@ K2PgStatus PgGate_UpdateConstInt8(K2PgExpr expr, int64_t value, bool is_null){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1176,7 +1151,7 @@ K2PgStatus PgGate_UpdateConstFloat4(K2PgExpr expr, float value, bool is_null){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1188,7 +1163,7 @@ K2PgStatus PgGate_UpdateConstFloat8(K2PgExpr expr, double value, bool is_null){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1200,7 +1175,7 @@ K2PgStatus PgGate_UpdateConstText(K2PgExpr expr, const char *value, bool is_null
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1212,7 +1187,7 @@ K2PgStatus PgGate_UpdateConstChar(K2PgExpr expr, const char *value, int64_t byte
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1227,7 +1202,7 @@ K2PgStatus PgGate_NewOperator(K2PgStatement stmt, const char *opname,
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1239,7 +1214,7 @@ K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg){
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1259,7 +1234,7 @@ K2PgStatus PgGate_CacheForeignKeyReference(K2PgOid table_oid, const char* k2pgct
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1272,7 +1247,7 @@ K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t
       .msg = "Not implemented",
       .detail = ""
   };
-  
+
   return status;
 }
 
@@ -1410,7 +1385,7 @@ K2PgStatus PgGate_InitPgGateBackend() {
       .msg = "OK",
       .detail = "InitPgGateBackend OK"
   };
-  
+
   return status;
 }
 

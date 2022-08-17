@@ -191,7 +191,7 @@ HandleK2PgStatus(K2PgStatus status)
 	if (K2PgShouldReportErrorStatus()) {
 		elog(ERROR, "HandleK2PgStatus: %s", status.msg);
 	}
-    
+
     ereport(ERROR, (errcode(status.pg_code), errmsg("%s: %s", status.msg, status.detail)));
 }
 
@@ -284,9 +284,8 @@ K2PgInitPostgresBackend(
 		 * For each process, we create one K2PG session for PostgreSQL to use
 		 * when accessing K2PG storage.
 		 *
-		 * TODO: do we really need to DB name / username here?
 		 */
-    HandleK2PgStatus(PgGate_InitSession(/* pg_env */ NULL, db_name ? db_name : user_name));
+        HandleK2PgStatus(PgGate_InitSession(db_name ? db_name : user_name));
 	}
 }
 
