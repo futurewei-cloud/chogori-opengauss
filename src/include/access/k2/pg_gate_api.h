@@ -157,12 +157,6 @@ K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
 
 K2PgStatus PgGate_ExecDropTable(K2PgStatement handle);
 
-K2PgStatus PgGate_NewTruncateTable(K2PgOid database_oid,
-                                K2PgOid table_oid,
-                                K2PgStatement *handle);
-
-K2PgStatus PgGate_ExecTruncateTable(K2PgStatement handle);
-
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle);

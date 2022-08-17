@@ -448,32 +448,6 @@ K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
   return status;
 }
 
-K2PgStatus PgGate_NewTruncateTable(K2PgOid database_oid,
-                                K2PgOid table_oid,
-                                K2PgStatement *handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewTruncateTable %d, %d", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
-}
-
-K2PgStatus PgGate_ExecTruncateTable(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecTruncateTable");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
-}
-
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
