@@ -16,21 +16,20 @@
 
 #include "config.h"
 
-#include <stdlib.h>
-
+#include <cstdlib>
 #include <fstream>
 
-namespace k2fdw {
+namespace k2pg {
 
 Config::Config() {
     const char* configFileName = getenv("K2_CONFIG_FILE");
     if (NULL == configFileName) {
-        K2LOG_W(log::k2fdw, "No config file given for K2 configuration in the K2_CONFIG_FILE env variable");
+        K2LOG_W(log::k2pg, "No config file given for K2 configuration in the K2_CONFIG_FILE env variable");
         return;
     }
 
     // read the config file
-    K2LOG_I(log::k2fdw, "{}", configFileName);
+    K2LOG_I(log::k2pg, "{}", configFileName);
     std::ifstream ifile(configFileName);
     ifile >> _config;
 }

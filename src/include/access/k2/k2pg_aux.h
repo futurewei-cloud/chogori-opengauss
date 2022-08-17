@@ -119,7 +119,7 @@ extern bool K2PgTransactionsEnabled();
  * Given a status returned by K2 PgGate C++ code, reports that status using ereport if
  * it is not OK.
  */
-extern void	HandleK2PgStatus(K2PgStatus status);
+extern void	HandleK2PgStatus(const K2PgStatus& status);
 
 /*
  * Since DDL metadata in K2 platform and postgres system tables is not modified
@@ -129,13 +129,13 @@ extern void	HandleK2PgStatus(K2PgStatus status);
  * the same name. So in this case we just ignore the K2 platform 'NotFound' error and
  * delete our metadata.
  */
-extern void HandleK2PgStatusIgnoreNotFound(K2PgStatus status, bool *not_found);
+extern void HandleK2PgStatusIgnoreNotFound(const K2PgStatus& status, bool *not_found);
 
 /*
  * Same as HandleK2PgStatus but also ask the given resource owner to forget
  * the given K2PG statement.
  */
-extern void HandleK2PgStatusWithOwner(K2PgStatus status,
+extern void HandleK2PgStatusWithOwner(const K2PgStatus& status,
 																		K2PgScanHandle* k2pg_stmt,
 																		ResourceOwner owner);
 
@@ -143,7 +143,7 @@ extern void HandleK2PgStatusWithOwner(K2PgStatus status,
  * Same as HandleK2PgStatus but delete the table description first if the
  * status is not ok.
  */
-extern void HandleK2PgTableDescStatus(K2PgStatus status, K2PgTableDesc table);
+extern void HandleK2PgTableDescStatus(const K2PgStatus& status, K2PgTableDesc table);
 /*
  * K2PG initialization that needs to happen when a PostgreSQL backend process
  * is started. Reports errors using ereport.

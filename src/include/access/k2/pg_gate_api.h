@@ -298,7 +298,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
 // - For Index Scan, the target columns of the bind are those in the index table.
 //   The index-scan will use the bind to find base-k2pgctid which is then use to read data from
 //   the main-table, and therefore the bind-arguments are not associated with columns in main table.
-K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, std::vector<K2PgConstraintDef> constraints, std::vector<int> targets_attrnum,
+K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
                              bool whole_table_scan, bool forward_scan, const K2PgExecParameters *exec_params);
 
 // Transaction control -----------------------------------------------------------------------------

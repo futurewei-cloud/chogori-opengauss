@@ -21,9 +21,14 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
+// When we mix certain C++ standard lib code and pg code there seems to be a macro conflict that
+// will cause compiler errors in libintl.h. Including as the first thing fixes this.
+#include <libintl.h>
+
 #include "access/k2/pg_gate_api.h"
 
 #include "k2pg-internal.h"
+#include "session.h"
 #include "access/k2/k2pg_util.h"
 
 #include "utils/elog.h"
@@ -61,6 +66,10 @@ void PgGate_DestroyPgGate() {
 // Initialize a session to process statements that come from the same client connection.
 K2PgStatus PgGate_InitSession(const char *database_name) {
   elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
+
+  k2pg::TXMgr.Init();
+  k2pg::TXMgr.EndTxn(skv::http::dto::EndAction::Abort);
+  
   K2PgStatus status {
       .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
       .k2_code = 501,
@@ -707,7 +716,7 @@ K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
 
 // This function is to fetch the targets in PgGate_DmlAppendTarget() from the rows that were defined
 // by PgGate_DmlBindColumn().
-K2PgStatus PgGate_DmlFetch(K2PgStatement handle, int32_t natts, uint64_t *values, bool *isnulls,
+K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", natts);
   K2PgStatus status {
@@ -806,7 +815,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
                          const K2PgPrepareParameters *prepare_params,
-                         K2PgStatement *handle){
+                         K2PgScanHandle **handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
   K2PgStatus status {
       .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
@@ -830,8 +839,9 @@ K2PgStatus PgGate_SetForwardScan(K2PgStatement handle, bool is_forward_scan){
 
   return status;
 }
-
-K2PgStatus PgGate_ExecSelect(K2PgStatement handle, const K2PgExecParameters *exec_params){
+    
+K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
+                             bool whole_table_scan, bool forward_scan, const K2PgExecParameters *exec_params) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecSelect");
   K2PgStatus status {
       .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
@@ -1114,7 +1124,7 @@ K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg){
 // Check if foreign key reference exists in cache.
 bool PgGate_ForeignKeyReferenceExists(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size) {
   elog(DEBUG5, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
-  false;
+  return false;
 }
 
 // Add an entry to foreign key reference cache.

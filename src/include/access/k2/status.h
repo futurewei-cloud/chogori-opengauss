@@ -25,11 +25,13 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "utils/elog.h" // PG error codes
 
+#include <string>
+
 struct K2PgStatus {
     int pg_code;
     int k2_code;
     // These strings will be passed to and owned by PG code, so if they are not assigned from literals then they
     // need to be allocated with palloc so they can be freed on session close
-    const char* msg;
-    const char* detail;
+    std::string msg;
+    std::string detail;
 };
