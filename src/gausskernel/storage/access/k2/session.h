@@ -24,7 +24,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <skvhttp/client/SKVClient.h>
 #include "config.h"
 
-namespace k2fdw {
+namespace k2pg {
 namespace sh=skv::http;
 
 class TxnManager {
@@ -38,16 +38,17 @@ public:
     // transactions should be ended via this call to ensure the thread-local state is maintained
     sh::Response<> EndTxn(sh::dto::EndAction endAction);
 
-private:
-    // Helper used to initialize the manager.
-    void _Init();
+    // Helper used to initialize the skv client and register txn callbacks
+    void Init();
 
+private:
     // this txn is managed by this manager.
     std::shared_ptr<sh::TxnHandle> _txn;
 
     // share the client among all threads
     static inline std::shared_ptr<sh::Client> _client;
     static inline thread_local Config _config;
+    static inline thread_local bool _initialized{false};
 };
 
 // the thread-local TxnManager. It allows access to k2 from any thread in opengauss,

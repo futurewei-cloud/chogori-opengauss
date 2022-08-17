@@ -23,7 +23,6 @@ Copyright(c) 2022 Futurewei Cloud
 
 
 #include "k2_fdw.h"
-#include "session.h"
 #include "error_reporting.h"
 
 #include "postgres.h"
@@ -36,16 +35,12 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "fdw_handlers.h"
 
-#define TXNFMT(txn) (txn ? "null" : fmt::format("{}", *txn).c_str())
-
 namespace k2fdw {
 /*
  * SQL functions
  */
 extern "C" Datum k2_fdw_handler(PG_FUNCTION_ARGS);
 extern "C" Datum k2_fdw_validator(PG_FUNCTION_ARGS);
-
-static void K2XactCallback(XactEvent event, void* arg);
 
 PG_FUNCTION_INFO_V1(k2_fdw_handler);
 PG_FUNCTION_INFO_V1(k2_fdw_validator);
@@ -98,15 +93,6 @@ Datum k2_fdw_handler(PG_FUNCTION_ARGS)
     routine->GetForeignSessionMemSize = NULL;
     routine->NotifyForeignConfigChange = NULL;
 
-    // make sure we only initialize once per thread
-    thread_local bool initialized{false};
-    if (!initialized) {
-        initialized = true;
-        RegisterXactCallback(K2XactCallback, NULL);
-        // We don't really handle nested transactions separately - all ops are just bundled in the parent
-        // if we did, register this callback to handle nested txns:
-        // RegisterSubXactCallback(K2SubxactCallback, NULL);
-    }
     PG_RETURN_POINTER(routine);
 }
 

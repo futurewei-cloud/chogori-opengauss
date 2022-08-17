@@ -182,7 +182,7 @@ K2PgShouldReportErrorStatus()
 }
 
 void
-HandleK2PgStatus(K2PgStatus status)
+HandleK2PgStatus(const K2PgStatus& status)
 {
     if (status.pg_code == ERRCODE_SUCCESSFUL_COMPLETION) {
         return;
@@ -192,11 +192,11 @@ HandleK2PgStatus(K2PgStatus status)
 		elog(ERROR, "HandleK2PgStatus: %s", status.msg);
 	}
 
-    ereport(ERROR, (errcode(status.pg_code), errmsg("%s: %s", status.msg, status.detail)));
+    ereport(ERROR, (errcode(status.pg_code), errmsg("%s: %s", status.msg.c_str(), status.detail.c_str())));
 }
 
 void
-HandleK2PgStatusIgnoreNotFound(K2PgStatus status, bool *not_found)
+HandleK2PgStatusIgnoreNotFound(const K2PgStatus& status, bool *not_found)
 {
 	if (status.k2_code == 404) {
 		*not_found = true;
@@ -207,7 +207,7 @@ HandleK2PgStatusIgnoreNotFound(K2PgStatus status, bool *not_found)
 }
 
 void
-HandleK2PgStatusWithOwner(K2PgStatus status,
+HandleK2PgStatusWithOwner(const K2PgStatus& status,
 												K2PgScanHandle* k2pg_stmt,
 												ResourceOwner owner)
 {
@@ -222,7 +222,7 @@ HandleK2PgStatusWithOwner(K2PgStatus status,
 }
 
 void
-HandleK2PgTableDescStatus(K2PgStatus status, K2PgTableDesc table)
+HandleK2PgTableDescStatus(const K2PgStatus& status, K2PgTableDesc table)
 {
 	HandleK2PgStatus(status);
 }

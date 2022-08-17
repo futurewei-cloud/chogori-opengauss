@@ -20,9 +20,9 @@
 #include <string>
 #include <k2/logging/Log.h>
 
-namespace k2fdw {
+namespace k2pg {
 namespace log {
-inline thread_local k2::logging::Logger k2fdw("k2::fdw");
+inline thread_local k2::logging::Logger k2pg("k2::pg");
 }
 
 class Config {
