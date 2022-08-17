@@ -56,8 +56,6 @@ extern void K2PgCreateTable(CreateStmt *stmt,
 
 extern void K2PgDropTable(Oid relationId);
 
-extern void K2PgTruncateTable(Relation rel);
-
 extern void K2PgCreateIndex(const char *indexName,
 						   IndexInfo *indexInfo,
 						   TupleDesc indexTupleDesc,

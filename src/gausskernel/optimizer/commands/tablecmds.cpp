@@ -4008,20 +4008,6 @@ void ExecuteTruncate(TruncateStmt* stmt)
             continue;
         }
 
-		/*
-		 * Normally, we need a transaction-safe truncation here.  However, if
-		 * the table was either created in the current (sub)transaction or has
-		 * a new relfilenode in the current (sub)transaction, then we can just
-		 * truncate it in-place, because a rollback would cause the whole
-		 * table or the current physical file to be thrown away anyway.
-		 */
-		if (IsK2PgRelation(rel))
-		{
-			// Call K2PG API to truncate tables.
-			K2PgTruncateTable(rel);
-            continue;
-		}
-
 #ifdef ENABLE_MOT
         if (RelationIsForeignTable(rel) && isMOTFromTblOid(RelationGetRelid(rel))) {
             FdwRoutine* fdwroutine = GetFdwRoutineByRelId(RelationGetRelid(rel));

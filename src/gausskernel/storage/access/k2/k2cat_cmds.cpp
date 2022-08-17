@@ -292,39 +292,6 @@ K2PgDropTable(Oid relationId)
 }
 
 void
-K2PgTruncateTable(Relation rel) {
-	K2PgStatement	handle;
-	Oid				relationId = RelationGetRelid(rel);
-
-	HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
-											 relationId,
-											 &handle));
-	HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
-
-	if (!rel->rd_rel->relhasindex)
-		return;
-
-	/* Truncate the associated secondary indexes */
-	List	 *indexlist = RelationGetIndexList(rel);
-	ListCell *lc;
-
-	foreach(lc, indexlist)
-	{
-		Oid indexId = lfirst_oid(lc);
-
-		if (indexId == rel->rd_pkindex)
-			continue;
-
-		HandleK2PgStatus(PgGate_NewTruncateTable(u_sess->proc_cxt.MyDatabaseId,
-												 indexId,
-												 &handle));
-		HandleK2PgStatus(PgGate_ExecTruncateTable(handle));
-	}
-
-	list_free(indexlist);
-}
-
-void
 K2PgCreateIndex(const char *indexName,
 			   IndexInfo *indexInfo,
 			   TupleDesc indexTupleDesc,

@@ -81,16 +81,6 @@ bool IsK2PgSystemColumn(int attrNum)
 }
 
 /*
- * Returns whether relation is capable of single row execution.
- */
-bool K2PgIsSingleRowTxnCapableRel(ResultRelInfo *resultRelInfo)
-{
-	bool has_triggers = resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->numtriggers > 0;
-	bool has_indices = K2PgRelInfoHasSecondaryIndices(resultRelInfo);
-	return !has_indices && !has_triggers;
-}
-
-/*
  * Get the type ID of a real or virtual attribute (column).
  * Returns InvalidOid if the attribute number is invalid.
  */
@@ -430,15 +420,6 @@ Oid K2PgExecuteInsert(Relation rel,
                                      tuple);
 }
 
-Oid K2PgExecuteNonTxnInsert(Relation rel,
-						   TupleDesc tupleDesc,
-						   HeapTuple tuple)
-{
-	return K2PgExecuteInsertInternal(rel,
-	                                tupleDesc,
-                                     tuple);
-}
-
 Oid K2PgHeapInsert(TupleTableSlot *slot,
 				  HeapTuple tuple,
 				  EState *estate)
@@ -449,21 +430,7 @@ Oid K2PgHeapInsert(TupleTableSlot *slot,
 	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
 	Relation resultRelationDesc = resultRelInfo->ri_RelationDesc;
 
-	if (estate->es_k2pg_is_single_row_modify_txn)
-	{
-		/*
-		 * Try to execute the statement as a single row transaction (rather
-		 * than a distributed transaction) if it is safe to do so.
-		 * I.e. if we are in a single-statement transaction that targets a
-		 * single row (i.e. single-row-modify txn), and there are no indices
-		 * or triggers on the target table.
-		 */
-		return K2PgExecuteNonTxnInsert(resultRelationDesc, slot->tts_tupleDescriptor, tuple);
-	}
-	else
-	{
-		return K2PgExecuteInsert(resultRelationDesc, slot->tts_tupleDescriptor, tuple);
-	}
+	return K2PgExecuteInsert(resultRelationDesc, slot->tts_tupleDescriptor, tuple);
 }
 
 void K2PgExecuteInsertIndex(Relation index,

@@ -639,13 +639,10 @@ typedef struct EState {
  	/*
 	 * K2PG-specific fields
 	 */
-
-	bool es_k2pg_is_single_row_modify_txn; /* Is this query a single-row modify
-																				* and the only stmt in this txn. */
+    // TODO: add conflict handling logic for conflict tuples
 	TupleTableSlot *k2pg_conflict_slot; /* If a conflict is to be resolved when inserting data,
 																		 * we cache the conflict tuple here when processing and
 																		 * then free the slot after the conflict is resolved. */
-//	K2PgExecParameters k2pg_exec_params;
 } EState;
 
 /*
@@ -1399,7 +1396,7 @@ typedef struct ModifyTableState {
     UpsertState* mt_upsert;                /*  DUPLICATE KEY UPDATE evaluation state */
     instr_time first_tuple_modified; /* record the end time for the first tuple inserted, deleted, or updated */
     ExprContext* limitExprContext; /* for limit expresssion */
-    
+
  	/* K2PG specific attributes. */
 	bool k2pg_mt_is_single_row_update_or_delete;
 } ModifyTableState;

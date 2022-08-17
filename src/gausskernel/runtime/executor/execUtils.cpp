@@ -182,7 +182,6 @@ EState* CreateExecutorState(void)
 	/*
 	 * K2PG-specific fields
 	 */
-	estate->es_k2pg_is_single_row_modify_txn = false;
 	estate->k2pg_conflict_slot = NULL;
 
     /*
