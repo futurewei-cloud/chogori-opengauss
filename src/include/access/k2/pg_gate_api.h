@@ -74,36 +74,6 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version);
 // Connect database. Switch the connected database to the given "database_name".
 K2PgStatus PgGate_ConnectDatabase(const char *database_name);
 
-K2PgStatus PgGate_InsertSequenceTuple(int64_t db_oid,
-                                 int64_t seq_oid,
-                                 uint64_t psql_catalog_version,
-                                 int64_t last_val,
-                                 bool is_called);
-
-K2PgStatus PgGate_UpdateSequenceTupleConditionally(int64_t db_oid,
-                                              int64_t seq_oid,
-                                              uint64_t psql_catalog_version,
-                                              int64_t last_val,
-                                              bool is_called,
-                                              int64_t expected_last_val,
-                                              bool expected_is_called,
-                                              bool *skipped);
-
-K2PgStatus PgGate_UpdateSequenceTuple(int64_t db_oid,
-                                 int64_t seq_oid,
-                                 uint64_t psql_catalog_version,
-                                 int64_t last_val,
-                                 bool is_called,
-                                 bool* skipped);
-
-K2PgStatus PgGate_ReadSequenceTuple(int64_t db_oid,
-                               int64_t seq_oid,
-                               uint64_t psql_catalog_version,
-                               int64_t *last_val,
-                               bool *is_called);
-
-K2PgStatus PgGate_DeleteSequenceTuple(int64_t db_oid, int64_t seq_oid);
-
 // K2 InitPrimaryCluster
 K2PgStatus PgGate_InitPrimaryCluster();
 
