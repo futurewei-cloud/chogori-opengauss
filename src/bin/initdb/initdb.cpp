@@ -244,14 +244,15 @@ static const char* backend_options = "--single "
                                      "--localxid "
 #endif
                                      "-F -O -c search_path=pg_catalog -c exit_on_error=true";
-
-#define FREE_AND_RESET(ptr)  \
+#ifndef FREE_AND_RESET_STR
+#define FREE_AND_RESET_STR(ptr)  \
     do {                     \
         if (NULL != (ptr) && reinterpret_cast<char*>(ptr) != static_cast<char*>("")) { \
             free(ptr);       \
             (ptr) = NULL;    \
         }                    \
     } while (0)
+#endif
 
 /* path to 'initdb' binary directory */
 static char bin_path[MAXPGPATH];
@@ -525,7 +526,7 @@ static char** replace_token(char** lines, const char* token, const char* replace
         securec_check_c(rc, newline, "\0");
 
         result[i] = newline;
-        FREE_AND_RESET(lines[i]);
+        FREE_AND_RESET_STR(lines[i]);
     }
     free(lines);
     return result;
@@ -611,7 +612,7 @@ static char** readfile(const char* path)
         result[n++] = xstrdup(buffer);
 
     fclose(infile);
-    FREE_AND_RESET(buffer);
+    FREE_AND_RESET_STR(buffer);
     result[n] = NULL;
 
     return result;
@@ -647,7 +648,7 @@ static void writefile(char* path, char** lines)
             fclose(out_file);
             exit_nicely();
         }
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
     /* fsync the configuration file immediately, in case of an unfortunate system crash */
@@ -883,12 +884,12 @@ static const char* find_matching_ts_config(const char* lc_type)
 
     for (i = 0; tsearch_config_languages[i].tsconfname != NULL; i++) {
         if (pg_strcasecmp(tsearch_config_languages[i].langname, langname) == 0) {
-            FREE_AND_RESET(langname);
+            FREE_AND_RESET_STR(langname);
             return tsearch_config_languages[i].tsconfname;
         }
     }
 
-    FREE_AND_RESET(langname);
+    FREE_AND_RESET_STR(langname);
     return NULL;
 }
 
@@ -962,7 +963,7 @@ static void write_version_file(const char* extrapath)
             progname,
             path,
             pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         exit_nicely();
     }
     if (fprintf(version_file, "%s\n", PG_MAJORVERSION) < 0) {
@@ -970,7 +971,7 @@ static void write_version_file(const char* extrapath)
         write_stderr(
             _("%s: could not write file \"%s\": %s\n"), progname, path, pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
         fclose(version_file);
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         exit_nicely();
     }
 
@@ -980,7 +981,7 @@ static void write_version_file(const char* extrapath)
         write_stderr(
             _("%s: could not fsync file \"%s\": %s\n"), progname, path, pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
         fclose(version_file);
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         exit_nicely();
     }
 
@@ -988,10 +989,10 @@ static void write_version_file(const char* extrapath)
         char errBuffer[ERROR_LIMIT_LEN];
         write_stderr(
             _("%s: could not write file \"%s\": %s\n"), progname, path, pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         exit_nicely();
     }
-    FREE_AND_RESET(path);
+    FREE_AND_RESET_STR(path);
 }
 
 static void CreatePGDefaultTempDir()
@@ -1011,10 +1012,10 @@ static void CreatePGDefaultTempDir()
         char errBuffer[ERROR_LIMIT_LEN];
         write_stderr(
             _("%s: could not mkdir \"%s\": %s\n"), progname, path, pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         exit_nicely();
     }
-    FREE_AND_RESET(path);
+    FREE_AND_RESET_STR(path);
 }
 
 /*
@@ -1037,17 +1038,17 @@ static void set_null_conf(void)
             progname,
             path,
             pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         exit_nicely();
     }
     if (fclose(confile)) {
         char errBuffer[ERROR_LIMIT_LEN];
         write_stderr(
             _("%s: could not write file \"%s\": %s\n"), progname, path, pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         exit_nicely();
     }
-    FREE_AND_RESET(path);
+    FREE_AND_RESET_STR(path);
 }
 
 /*
@@ -1264,7 +1265,7 @@ static void setup_config(void)
     writefile(path, conflines);
     (void)chmod(path, S_IRUSR | S_IWUSR);
 
-    FREE_AND_RESET(conflines);
+    FREE_AND_RESET_STR(conflines);
 
 #ifdef ENABLE_MOT
     /* mot.conf */
@@ -1276,7 +1277,7 @@ static void setup_config(void)
     writefile(path, conflines);
     (void)chmod(path, S_IRUSR | S_IWUSR);
 
-    FREE_AND_RESET(conflines);
+    FREE_AND_RESET_STR(conflines);
 #endif
 
     /* gs_gazelle.conf */
@@ -1289,7 +1290,7 @@ static void setup_config(void)
     writefile(path, conflines);
     (void)chmod(path, S_IRUSR | S_IWUSR);
 
-    FREE_AND_RESET(conflines);
+    FREE_AND_RESET_STR(conflines);
 
     /* pg_hba.conf */
     // don't create pg_hba.conf in k2_mode
@@ -1363,7 +1364,7 @@ static void setup_config(void)
         writefile(path, conflines);
         (void)chmod(path, S_IRUSR | S_IWUSR);
 
-        FREE_AND_RESET(conflines);
+        FREE_AND_RESET_STR(conflines);
     }
 
     /* pg_ident.conf */
@@ -1376,14 +1377,14 @@ static void setup_config(void)
     writefile(path, conflines);
     (void)chmod(path, S_IRUSR | S_IWUSR);
 
-    FREE_AND_RESET(conflines);
-    FREE_AND_RESET(buf_messages);
-    FREE_AND_RESET(buf_monetary);
-    FREE_AND_RESET(buf_numeric);
-    FREE_AND_RESET(buf_time);
-    FREE_AND_RESET(buf_default_text_search_config);
-    FREE_AND_RESET(buf_nodename);
-    FREE_AND_RESET(buf_default_timezone);
+    FREE_AND_RESET_STR(conflines);
+    FREE_AND_RESET_STR(buf_messages);
+    FREE_AND_RESET_STR(buf_monetary);
+    FREE_AND_RESET_STR(buf_numeric);
+    FREE_AND_RESET_STR(buf_time);
+    FREE_AND_RESET_STR(buf_default_text_search_config);
+    FREE_AND_RESET_STR(buf_nodename);
+    FREE_AND_RESET_STR(buf_default_timezone);
 
     check_ok();
 }
@@ -1449,11 +1450,11 @@ static void bootstrap_template1(void)
 
     buf_collate = escape_quotes(lc_collate);
     bki_lines = replace_token(bki_lines, "LC_COLLATE", buf_collate);
-    FREE_AND_RESET(buf_collate);
+    FREE_AND_RESET_STR(buf_collate);
 
     buf_ctype = escape_quotes(lc_ctype);
     bki_lines = replace_token(bki_lines, "LC_CTYPE", buf_ctype);
-    FREE_AND_RESET(buf_ctype);
+    FREE_AND_RESET_STR(buf_ctype);
 
     /*
      * "--dbcompatibility" is a required argument to set installed database compatibility.
@@ -1505,12 +1506,12 @@ static void bootstrap_template1(void)
 
     for (line = bki_lines; *line != NULL; line++) {
         PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
     PG_CMD_CLOSE;
 
-    FREE_AND_RESET(bki_lines);
+    FREE_AND_RESET_STR(bki_lines);
 
     check_ok();
 }
@@ -1613,11 +1614,11 @@ static void get_set_pwd(void)
 
                 rc = memset_s(pwd1, strlen(pwd1), 0, strlen(pwd1));
                 securec_check_c(rc, "\0", "\0");
-                FREE_AND_RESET(pwd1);
+                FREE_AND_RESET_STR(pwd1);
 
                 rc = memset_s(pwd2, strlen(pwd2), 0, strlen(pwd2));
                 securec_check_c(rc, "\0", "\0");
-                FREE_AND_RESET(pwd2);
+                FREE_AND_RESET_STR(pwd2);
 
                 continue;
             }
@@ -1626,7 +1627,7 @@ static void get_set_pwd(void)
             if (pwd2 != NULL) {
                 rc = memset_s(pwd2, strlen(pwd2), 0, strlen(pwd2));
                 securec_check_c(rc, "\0", "\0");
-                FREE_AND_RESET(pwd2);
+                FREE_AND_RESET_STR(pwd2);
             }
 
             /* if the pwd1 does not match, try it again*/
@@ -1635,7 +1636,7 @@ static void get_set_pwd(void)
             } else if (pwd1 != NULL) {
                 rc = memset_s(pwd1, strlen(pwd1), 0, strlen(pwd1));
                 securec_check_c(rc, "\0", "\0");
-                FREE_AND_RESET(pwd1);
+                FREE_AND_RESET_STR(pwd1);
             }
         }
 
@@ -1666,11 +1667,11 @@ static void get_set_pwd(void)
         PG_CMD_PRINTF2("ALTER USER \"%s\" WITH PASSWORD E'%s';\n", username, buf_pwd1);
         rc = memset_s(buf_pwd1, strlen(buf_pwd1), 0, strlen(buf_pwd1));
         securec_check_c(rc, "\0", "\0");
-        FREE_AND_RESET(buf_pwd1);
+        FREE_AND_RESET_STR(buf_pwd1);
         /* Clear password related memory to avoid leaks when core. */
         rc = memset_s(pwd1, strlen(pwd1), 0, strlen(pwd1));
         securec_check_c(rc, "\0", "\0");
-        FREE_AND_RESET(pwd1);
+        FREE_AND_RESET_STR(pwd1);
     }
     PG_CMD_CLOSE;
 
@@ -1800,12 +1801,12 @@ static void setup_sysviews(void)
 
     for (line = sysviews_setup; *line != NULL; line++) {
         PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
     PG_CMD_CLOSE;
 
-    FREE_AND_RESET(sysviews_setup);
+    FREE_AND_RESET_STR(sysviews_setup);
 
     check_ok();
 }
@@ -1836,12 +1837,12 @@ static void setup_perfviews(void)
 
     for (line = perfviews_setup; *line != NULL; line++) {
         PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
     PG_CMD_CLOSE;
 
-    FREE_AND_RESET(perfviews_setup);
+    FREE_AND_RESET_STR(perfviews_setup);
 
     check_ok();
 }
@@ -1873,12 +1874,12 @@ static void setup_privsysviews(void)
 
     for (line = privsysviews_setup; *line != NULL; line++) {
         PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
     PG_CMD_CLOSE;
 
-    FREE_AND_RESET(privsysviews_setup);
+    FREE_AND_RESET_STR(privsysviews_setup);
 
     check_ok();
 }
@@ -1911,12 +1912,12 @@ static void setup_snapshots(void)
 
         for (line = current_setup; *line != NULL; line++) {
             PG_CMD_PUTS(*line);
-            FREE_AND_RESET(*line);
+            FREE_AND_RESET_STR(*line);
         }
 
         PG_CMD_CLOSE;
 
-        FREE_AND_RESET(current_setup);
+        FREE_AND_RESET_STR(current_setup);
     }
 
     check_ok();
@@ -2049,7 +2050,7 @@ static void setup_description(void)
 
     buf_file = escape_quotes(desc_file);
     PG_CMD_PRINTF1("COPY tmp_pg_description FROM E'%s';\n", buf_file);
-    FREE_AND_RESET(buf_file);
+    FREE_AND_RESET_STR(buf_file);
 
     PG_CMD_PUTS("INSERT INTO pg_description "
                 " SELECT t.objoid, c.oid, t.objsubid, t.description "
@@ -2063,7 +2064,7 @@ static void setup_description(void)
 
     buf_file = escape_quotes(shdesc_file);
     PG_CMD_PRINTF1("COPY tmp_pg_shdescription FROM E'%s';\n", buf_file);
-    FREE_AND_RESET(buf_file);
+    FREE_AND_RESET_STR(buf_file);
 
     PG_CMD_PUTS("INSERT INTO pg_shdescription "
                 " SELECT t.objoid, c.oid, t.description "
@@ -2214,10 +2215,10 @@ static void setup_collation(void)
 
             buf_alias = escape_quotes(alias);
             PG_CMD_PRINTF3("INSERT INTO tmp_pg_collation VALUES (E'%s', E'%s', %d);\n", buf_alias, quoted_locale, enc);
-            FREE_AND_RESET(buf_alias);
+            FREE_AND_RESET_STR(buf_alias);
         }
 
-        FREE_AND_RESET(quoted_locale);
+        FREE_AND_RESET_STR(quoted_locale);
     }
 
     /* Add an SQL-standard name */
@@ -2281,10 +2282,10 @@ static void setup_conversion(void)
     for (line = conv_lines; *line != NULL; line++) {
         if (strstr(*line, "DROP CONVERSION") != *line)
             PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
-    FREE_AND_RESET(conv_lines);
+    FREE_AND_RESET_STR(conv_lines);
 
     PG_CMD_CLOSE;
 
@@ -2316,10 +2317,10 @@ static void setup_dictionary(void)
     conv_lines = readfile(dictionary_file);
     for (line = conv_lines; *line != NULL; line++) {
         PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
-    FREE_AND_RESET(conv_lines);
+    FREE_AND_RESET_STR(conv_lines);
 
     PG_CMD_CLOSE;
 
@@ -2385,12 +2386,12 @@ static void setup_privileges(void)
     priv_lines = replace_token(privileges_setup, "$POSTGRES_SUPERUSERNAME", username);
     for (line = priv_lines; *line != NULL; line++) {
         PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
     PG_CMD_CLOSE;
 
-    FREE_AND_RESET(priv_lines);
+    FREE_AND_RESET_STR(priv_lines);
 
     check_ok();
 }
@@ -2427,7 +2428,7 @@ static void set_info_version(void)
         letterversion);
     securec_check_ss_c(nRet, "\0", "\0");
 
-    FREE_AND_RESET(vstr);
+    FREE_AND_RESET_STR(vstr);
 }
 
 /*
@@ -2457,10 +2458,10 @@ static void setup_schema(void)
 
     for (line = lines; *line != NULL; line++) {
         PG_CMD_PUTS(*line);
-        FREE_AND_RESET(*line);
+        FREE_AND_RESET_STR(*line);
     }
 
-    FREE_AND_RESET(lines);
+    FREE_AND_RESET_STR(lines);
 
     PG_CMD_CLOSE;
 
@@ -2481,7 +2482,7 @@ static void setup_schema(void)
                    "  sub_feature_name, is_supported, comments) "
                    " FROM E'%s';\n",
         buf_features);
-    FREE_AND_RESET(buf_features);
+    FREE_AND_RESET_STR(buf_features);
 
     PG_CMD_CLOSE;
 
@@ -3172,7 +3173,7 @@ static int locale_date_order(const char* locale_time)
     res = my_strftime(buf, sizeof(buf), "%x", &testtime);
 
     (void)setlocale(LC_TIME, save);
-    FREE_AND_RESET(save);
+    FREE_AND_RESET_STR(save);
 
     if (res == 0)
         return result;
@@ -3235,7 +3236,7 @@ static void check_locale_name(int category, const char* locale_name, char** cano
         write_stderr(_("%s: failed to restore old locale \"%s\"\n"), progname, save);
         exit(1);
     }
-    FREE_AND_RESET(save);
+    FREE_AND_RESET_STR(save);
 
     /* should we exit here? */
     if (res == NULL) {
@@ -3773,7 +3774,7 @@ int main(int argc, char* argv[])
                 if ((pwpasswd != NULL) && pwpasswd != (char*)"") {
                     rc = memset_s(pwpasswd, strlen(pwpasswd), 0, strlen(pwpasswd));
                     securec_check_c(rc, "\0", "\0");
-                    FREE_AND_RESET(pwpasswd);
+                    FREE_AND_RESET_STR(pwpasswd);
                 }
                 pwpasswd = xstrdup(optarg);
                 rc = memset_s(optarg, strlen(optarg), 0, strlen(optarg));
@@ -3946,7 +3947,7 @@ int main(int argc, char* argv[])
         if ((pgdenv != NULL) && strlen(pgdenv)) {
             /* PGDATA found */
             check_env_value(pgdenv);
-            FREE_AND_RESET(pg_data);
+            FREE_AND_RESET_STR(pg_data);
             pg_data = xstrdup(pgdenv);
         } else {
             write_stderr(_("%s: no data directory specified\n"
@@ -3981,7 +3982,7 @@ int main(int argc, char* argv[])
         if (!CreateRestrictedProcess(cmdline, &pi)) {
             write_stderr(
                 _("%s: could not re-execute with restricted token: error code %lu\n"), progname, GetLastError());
-            FREE_AND_RESET(cmdline);
+            FREE_AND_RESET_STR(cmdline);
         } else {
             /*
              * Successfully re-execed. Now wait for child process to capture
@@ -3995,10 +3996,10 @@ int main(int argc, char* argv[])
             if (!GetExitCodeProcess(pi.hProcess, &x)) {
                 write_stderr(
                     _("%s: could not get exit code from subprocess: error code %lu\n"), progname, GetLastError());
-                FREE_AND_RESET(cmdline);
+                FREE_AND_RESET_STR(cmdline);
                 exit(1);
             }
-            FREE_AND_RESET(cmdline);
+            FREE_AND_RESET_STR(cmdline);
             exit(x);
         }
     }
@@ -4058,7 +4059,7 @@ int main(int argc, char* argv[])
     effective_user = get_id();
     if (strlen(username) == 0) {
         if (username != (char*)"") {
-            FREE_AND_RESET(username);
+            FREE_AND_RESET_STR(username);
         }
         username = effective_user;
     }
@@ -4487,10 +4488,10 @@ int main(int argc, char* argv[])
                 path,
                 pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
 
-            FREE_AND_RESET(path);
+            FREE_AND_RESET_STR(path);
             exit_nicely();
         }
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
     }
     /* create or check pg_location path */
     mkdirForPgLocationDir();
@@ -4645,13 +4646,13 @@ int main(int argc, char* argv[])
 #endif
 
     /* free memory*/
-    FREE_AND_RESET(effective_user);
-    FREE_AND_RESET(lc_messages);
-    FREE_AND_RESET(lc_ctype);
-    FREE_AND_RESET(lc_collate);
-    FREE_AND_RESET(lc_numeric);
-    FREE_AND_RESET(lc_monetary);
-    FREE_AND_RESET(lc_time);
+    FREE_AND_RESET_STR(effective_user);
+    FREE_AND_RESET_STR(lc_messages);
+    FREE_AND_RESET_STR(lc_ctype);
+    FREE_AND_RESET_STR(lc_collate);
+    FREE_AND_RESET_STR(lc_numeric);
+    FREE_AND_RESET_STR(lc_monetary);
+    FREE_AND_RESET_STR(lc_time);
 
     return 0;
 }
@@ -4670,10 +4671,10 @@ static bool isDirectory(const char* basepath, const char* name)
     securec_check_ss_c(nRet, "\0", "\0");
 
     if (stat(path, &buf) == -1 && errno == ENOENT) {
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         return false;
     }
-    FREE_AND_RESET(path);
+    FREE_AND_RESET_STR(path);
 
     if (S_ISREG(buf.st_mode)) {
         return false;
@@ -4707,18 +4708,18 @@ static bool isMountDirCorrect(const char* basepath, const char* name)
                 } else if (isDirectory(path, de_mount->d_name) && isMountDirCorrect(path, de_mount->d_name)) {
                     continue;
                 } else {
-                    FREE_AND_RESET(path);
+                    FREE_AND_RESET_STR(path);
                     (void)closedir(chk_mount_dir);
                     return false;
                 }
             }
         }
 
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         (void)closedir(chk_mount_dir);
         return true;
     } else {
-        FREE_AND_RESET(path);
+        FREE_AND_RESET_STR(path);
         return false;
     }
 }
@@ -4744,10 +4745,10 @@ static void mkdirForPgLocationDir()
                     progname,
                     path,
                     pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-                FREE_AND_RESET(path);
+                FREE_AND_RESET_STR(path);
                 exit_nicely();
             }
-            FREE_AND_RESET(path);
+            FREE_AND_RESET_STR(path);
             break;
 
         case 1:
@@ -4758,10 +4759,10 @@ static void mkdirForPgLocationDir()
                     progname,
                     path,
                     pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-                FREE_AND_RESET(path);
+                FREE_AND_RESET_STR(path);
                 exit_nicely();
             }
-            FREE_AND_RESET(path);
+            FREE_AND_RESET_STR(path);
             break;
 
         case 2:
@@ -4787,7 +4788,7 @@ static void mkdirForPgLocationDir()
                     (void)closedir(chk_pg_location_dir);
                 }
 
-                FREE_AND_RESET(path);
+                FREE_AND_RESET_STR(path);
                 break;
             }
 
@@ -4796,7 +4797,7 @@ static void mkdirForPgLocationDir()
             write_stderr(_("If you want to store the transaction log there, either\n"
                            "remove or empty the directory \"%s\".\n"),
                 path);
-            FREE_AND_RESET(path);
+            FREE_AND_RESET_STR(path);
             exit_nicely();
             break;
 
@@ -4807,7 +4808,7 @@ static void mkdirForPgLocationDir()
                 progname,
                 path,
                 pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-            FREE_AND_RESET(path);
+            FREE_AND_RESET_STR(path);
             exit_nicely();
         } break;
     }
@@ -4884,11 +4885,11 @@ static bool CheckInitialPasswd(const char* dbuser, const char* pass_wd)
         return false;
     }
     if (0 == pg_strcasecmp(pass_wd, reverse_str)) {
-        FREE_AND_RESET(reverse_str);
+        FREE_AND_RESET_STR(reverse_str);
         (void)write_stderr(_("Password should not equal to the reverse of rolname.\n"));
         return false;
     }
-    FREE_AND_RESET(reverse_str);
+    FREE_AND_RESET_STR(reverse_str);
     /* passwd must contain at least three kinds of characters*/
     ptr = pass_wd;
     while (*ptr != '\0') {
@@ -4961,7 +4962,7 @@ static void create_pg_lockfiles(void)
                 progname,
                 filelockpath,
                 pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-            FREE_AND_RESET(filelockpath);
+            FREE_AND_RESET_STR(filelockpath);
             exit_nicely();
         }
 
@@ -4972,11 +4973,11 @@ static void create_pg_lockfiles(void)
                 progname,
                 filelockpath,
                 pqStrerror(errno, errBuffer, ERROR_LIMIT_LEN));
-            FREE_AND_RESET(filelockpath);
+            FREE_AND_RESET_STR(filelockpath);
             exit_nicely();
         }
     }
-    FREE_AND_RESET(filelockpath);
+    FREE_AND_RESET_STR(filelockpath);
 }
 
 static bool InitUndoZoneMeta(int fd)
@@ -5154,7 +5155,6 @@ static int
 k2pg_pclose_check(FILE *stream)
 {
 	int			exitstatus;
-	char	   *reason;
 
 	exitstatus = pclose(stream);
 

@@ -189,7 +189,7 @@ HandleK2PgStatus(const K2PgStatus& status)
     }
 
 	if (K2PgShouldReportErrorStatus()) {
-		elog(ERROR, "HandleK2PgStatus: %s", status.msg);
+		elog(ERROR, "HandleK2PgStatus: %s", status.msg.c_str());
 	}
 
     ereport(ERROR, (errcode(status.pg_code), errmsg("%s: %s", status.msg.c_str(), status.detail.c_str())));

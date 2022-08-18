@@ -2904,7 +2904,7 @@ BuildPgTupleId(Relation pk_rel, Relation fk_rel, Relation idx_rel,
 		K2PgAttributeDef k2attr{};
 		k2attr.attr_num = K2PgUniqueIdxKeySuffixAttributeNumber;
 		k2attr.value.type_id = BYTEAOID;
-		k2attr.value.datum = NULL;
+		k2attr.value.datum = 0;
 		k2attr.value.is_null = true;
 		elog(DEBUG1, "K2PgUniqueIdxKey: attr_num = %d, type_id = %d, is_null = %d", k2attr.attr_num, BYTEAOID, k2attr.value.is_null);
 	}
