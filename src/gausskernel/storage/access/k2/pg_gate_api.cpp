@@ -69,7 +69,7 @@ K2PgStatus PgGate_InitSession(const char *database_name) {
 
   k2pg::TXMgr.Init();
   k2pg::TXMgr.EndTxn(skv::http::dto::EndAction::Abort);
-  
+
   K2PgStatus status {
       .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
       .k2_code = 501,
@@ -745,7 +745,7 @@ K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_co
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %d", attrs.size());
+  elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
   K2PgStatus status {
       .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
       .k2_code = 501,
@@ -839,7 +839,7 @@ K2PgStatus PgGate_SetForwardScan(K2PgStatement handle, bool is_forward_scan){
 
   return status;
 }
-    
+
 K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
                              bool whole_table_scan, bool forward_scan, const K2PgExecParameters *exec_params) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecSelect");

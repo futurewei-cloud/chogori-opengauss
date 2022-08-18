@@ -246,7 +246,6 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
                                           bool *need_retry);
 static List* k2pg_parse_query_silently(const char *query_string);
 static const char* k2pg_parse_command_tag(const char *query_string);
-static bool k2pg_is_begin_transaction(const char *command_tag);
 static bool k2pg_check_retry_allowed(const char *query_string);
 static void K2PgCheckSharedCatalogCacheVersion();
 
@@ -11603,8 +11602,8 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 	if ((table_to_refresh = strstr(edata->message,
 								   table_cache_refresh_search_str)) != NULL)
 	{
-		int size_of_uuid = 16; /* boost::uuids::uuid::static_size() */
-		int size_of_hex_uuid = size_of_uuid * 2;
+		size_t size_of_uuid = 16; /* boost::uuids::uuid::static_size() */
+		size_t size_of_hex_uuid = size_of_uuid * 2;
 
 		/* Skip to the table id part of the error message. */
 		table_to_refresh += strlen(table_cache_refresh_search_str);
@@ -11753,15 +11752,6 @@ static const char* k2pg_parse_command_tag(const char *query_string)
 	} else {
 		return NULL;
 	}
-}
-
-static bool k2pg_is_begin_transaction(const char *command_tag)
-{
-	if (!command_tag)
-		return false;
-
-	return (strncmp(command_tag, "BEGIN", 5) == 0 ||
-	        strncmp(command_tag, "START TRANSACTION", 17) == 0);
 }
 
 /*

@@ -1046,14 +1046,15 @@ static void CatalogCacheInitializeCache(CatCache* cache)
  */
 void InitCatCachePhase2(CatCache* cache, bool touch_index)
 {
-    if (cache->cc_tupdesc == NULL)
+    if (cache->cc_tupdesc == NULL) {
         CatalogCacheInitializeCache(cache);
+    }
 
 	/*
 	 * TODO: This could be enabled if we handle
 	 * "primary key as index" so that PG can open the primary indexes by id.
 	 */
-	if (IsK2PgEnabled())
+    if (IsK2PgEnabled())
 	{
 		return;
 	}

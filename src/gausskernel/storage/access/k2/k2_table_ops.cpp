@@ -207,7 +207,6 @@ Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 	Oid relid = RelationGetRelid(rel);
 	Bitmapset *pkey = GetFullK2PgTablePrimaryKey(rel);
 	AttrNumber minattr = K2PgSystemFirstLowInvalidAttributeNumber + 1;
-	const int nattrs = bms_num_members(pkey);
 	std::vector<K2PgAttributeDef> attrs;
 	uint64_t tuple_id = 0;
 	int col = -1;

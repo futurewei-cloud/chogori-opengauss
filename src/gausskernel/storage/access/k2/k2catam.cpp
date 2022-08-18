@@ -837,7 +837,6 @@ static void camBindScanKeys(Relation relation,
 			if (is_column_bound[idx])
 				continue;
 
-			bool is_hash_key = bms_is_member(idx, scan_plan->hash_key);
 			bool is_primary_key = bms_is_member(idx, scan_plan->primary_key); // Includes hash key
 
 			switch (camScan->key[i].sk_strategy)
