@@ -531,7 +531,24 @@ K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_co
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
-  return K2PgStatus::NotSupported;
+  K2PgStatus status {
+      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
+      .k2_code = 501,
+      .msg = "Not implemented",
+      .detail = ""
+  };
+
+  // This comes from cstring_to_text_with_len which is used to create a proper datum
+  // that is prepended with the data length. Doing it by hand here to avoid the extra copy
+  /*
+	text	   *result = (text *) palloc(len + VARHDRSZ);
+
+	SET_VARSIZE(result, len + VARHDRSZ);
+	memcpy(VARDATA(result), s, len);
+
+	return PointerToDatum(result);
+  */
+  return status;
 }
 
 // DB Operations: WHERE(partially supported by K2-SKV)
