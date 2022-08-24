@@ -34,6 +34,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "k2pg-internal.h"
 #include "session.h"
+#include "storage.h"
 #include "access/k2/k2pg_util.h"
 
 #include "utils/elog.h"
@@ -531,23 +532,58 @@ K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_co
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
+
+  std::unordered_map<int, K2PgConstant> attr_map;
+  for (size_t i=0; i < attrs.size(); ++i) {
+      attr_map[attrs[i].attr_num] = attrs[i].value;
+  }
+
+  // TODO get schema and collection from catalog
+  skv::http::dto::Schema schema;
+  skv::http::dto::SKVRecordBuilder builder("", std::make_shared<skv::http::dto::Schema>(schema));;
+  builder.serializeNext<int32_t>(table_id);
+  builder.serializeNext<int32_t>(0);
+
+  for (int i=2; i < schema.partitionKeyFields.size(); ++i) {
+      int target_attr = i + K2_FIELD_IDX_TO_ATTR_OFFSET;
+      auto it = attr_map.find(target_attr);
+      if (it == attr_map.end()) {
+          builder.serializeNull();
+      } else {
+          serializePGConstToK2SKV(builder, it->second);
+      }
+  }
+
+  // TODO can we remove some of the copies being done?
+  skv::http::dto::SKVRecord record = builder.build();
+  skv::http::MPackWriter _writer;
+  skv::http::Binary serializedStorage;
+  _writer.write(record.getStorage());
+  bool flushResult = _writer.flush(serializedStorage);
+  if (!flushResult) {
+    K2PgStatus err {
+        .pg_code = ERRCODE_FDW_ERROR,
+        .k2_code = 0,
+        .msg = "Serialization error in _writer flush",
+        .detail = ""
+    };
+    return err;
+  }
+  
+  // This comes from cstring_to_text_with_len which is used to create a proper datum
+  // that is prepended with the data length. Doing it by hand here to avoid the extra copy
+  char *datum = (char*)palloc(serializedStorage.size() + VARHDRSZ);
+  SET_VARSIZE(datum, serializedStorage.size() + VARHDRSZ);
+  memcpy(VARDATA(datum), serializedStorage.data(), serializedStorage.size());
+  *k2pgctid = PointerGetDatum(datum);
+    
   K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
+      .pg_code = ERRCODE_SUCCESSFUL_COMPLETION,
+      .k2_code = 200,
+      .msg = "BuildPGTupleID success",
       .detail = ""
   };
 
-  // This comes from cstring_to_text_with_len which is used to create a proper datum
-  // that is prepended with the data length. Doing it by hand here to avoid the extra copy
-  /*
-	text	   *result = (text *) palloc(len + VARHDRSZ);
-
-	SET_VARSIZE(result, len + VARHDRSZ);
-	memcpy(VARDATA(result), s, len);
-
-	return PointerToDatum(result);
-  */
   return status;
 }
 
