@@ -131,4 +131,43 @@ sh::Response<> TxnManager::EndTxn(sh::dto::EndAction endAction) {
     return sh::Response<>(std::move(status));
 }
 
+sh::Response<std::shared_ptr<sh::dto::Schema>> TxnManager::GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
+    return _client->getSchema(collectionName, schemaName, schemaVersion).get();
+}
+
+sh::Response<> TxnManager::CreateCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds) {
+    return _client->createCollection(metadata, rangeEnds).get();
+}
+
+sh::Response<> TxnManager::CreateSchema(const sh::String& collectionName, const sh::dto::Schema& schema) {
+    return _client->createSchema(collectionName, schema).get();
+}
+
+sh::Response<>  TxnManager::CreateCollection(const std::string& collection_name, const std::string& DBName) {
+    K2LOG_I(log::k2pg, "Create collection: name={} for Database: {}", collection_name, DBName);
+
+    // Working around json conversion to/from sh::String
+    std::vector<std::string> stdRangeEnds = _config()["create_collections"][DBName]["range_ends"];
+    std::vector<sh::String> rangeEnds;
+    for (const std::string& end : stdRangeEnds) {
+        rangeEnds.emplace_back(end);
+    }
+
+    sh::dto::HashScheme scheme = rangeEnds.size() ? sh::dto::HashScheme::Range : sh::dto::HashScheme::HashCRC32C;                                                                                                  
+    sh::dto::CollectionMetadata metadata{
+        .name = collection_name,
+        .hashScheme = scheme,
+        .storageDriver = sh::dto::StorageDriver::K23SI,
+        .capacity{
+            // TODO: get capacity from config or pass in from param
+            //.dataCapacityMegaBytes = 1000,
+            //.readIOPs = 100000,
+            //.writeIOPs = 100000
+         },
+        .retentionPeriod = sh::Duration(1h) * 90 * 24  //TODO: get this from config or from param in
+    };
+    
+    return CreateCollection(metadata, rangeEnds);
+}
+
 } // ns
