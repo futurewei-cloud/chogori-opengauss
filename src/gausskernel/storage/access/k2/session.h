@@ -41,6 +41,11 @@ public:
     // Helper used to initialize the skv client and register txn callbacks
     void Init();
 
+    sh::Response<> CreateSchema(const sh::String& collectionName, const sh::dto::Schema& schema);
+    sh::Response<std::shared_ptr<sh::dto::Schema>> GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion=sh::dto::ANY_SCHEMA_VERSION);
+    sh::Response<> CreateCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds);
+    sh::Response<> CreateCollection(const std::string& collection_name, const std::string& DBName);
+
 private:
     // this txn is managed by this manager.
     std::shared_ptr<sh::TxnHandle> _txn;

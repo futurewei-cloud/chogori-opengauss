@@ -21,6 +21,7 @@ objfiles.txt
 /src/Makefile.global
 install/
 src/gausskernel/storage/k2/obj/
+src/gausskernel/storage/access/k2/**/obj/
 src/gausskernel/storage/mot/core/obj/
 src/gausskernel/storage/mot/fdw_adapter/obj/
 src/gausskernel/storage/mot/jit_exec/obj/
