@@ -84,8 +84,8 @@ and task state checking APIs later by using thread pools.
 #include "database_info_handler.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
+
 struct CreateDatabaseRequest {
     std::string databaseName;
     std::string databaseId;
@@ -179,5 +179,4 @@ private:
 };
 
 } // namespace catalog
-} // namespace sql
 } // namespace k2pg

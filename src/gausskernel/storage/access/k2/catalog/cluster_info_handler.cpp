@@ -24,7 +24,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "cluster_info_handler.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
 
 using namespace sh;
@@ -84,6 +83,5 @@ sh::Response<ClusterInfo> ClusterInfoHandler::GetClusterInfo(const std::string& 
     info.initdb_done = record.deserializeNext<bool>().value();
     return std::make_tuple(status, info);
 }
-} // namespace sql
 } // namespace sql
 } // namespace k2pg

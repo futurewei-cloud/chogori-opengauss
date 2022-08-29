@@ -24,7 +24,6 @@ Copyright(c) 2020 Futurewei Cloud
 #include "sql_catalog_manager.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
 
 SqlCatalogManager::SqlCatalogManager() {
@@ -105,19 +104,19 @@ void SqlCatalogManager::Shutdown() {
 
     bool expected = true;
     if (initted_.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
-            // // shut down steps
-            // if (catalog_version_task_ != nullptr) {
-            //     catalog_version_task_.reset(nullptr);
-            // }
+        // TODO: Uncomment if use background task
+        // // shut down steps
+        // if (catalog_version_task_ != nullptr) {
+        //     catalog_version_task_.reset(nullptr);
+        // }
     }
 
     K2LOG_I(log::catalog, "SQL CatalogManager shut down complete. Bye!");
 }
 
-    // Called only once during PG initDB
-    // TODO: handle partial failure(maybe simply fully cleanup) to allow retry later
-sh::Status SqlCatalogManager::InitPrimaryCluster()
-{
+// Called only once during PG initDB
+// TODO: handle partial failure(maybe simply fully cleanup) to allow retry later
+sh::Status SqlCatalogManager::InitPrimaryCluster() {
     K2LOG_D(log::catalog, "SQL CatalogManager initialize primary Cluster!");
 
     K2ASSERT(log::catalog, !initted_.load(std::memory_order_acquire), "Already started");
@@ -513,5 +512,4 @@ std::shared_ptr<DatabaseInfo> SqlCatalogManager::CheckAndLoadDatabaseById(const 
 }
 
 } // namespace catalog
-}  // namespace sql
 }  // namespace k2pg

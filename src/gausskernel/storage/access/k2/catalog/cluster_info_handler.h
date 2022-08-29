@@ -26,7 +26,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "sql_catalog_entity.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
 
 class ClusterInfoHandler {
@@ -57,5 +56,4 @@ private:
 };
 
 } // namespace catalog
-} // namespace sql
 } // namespace k2pg

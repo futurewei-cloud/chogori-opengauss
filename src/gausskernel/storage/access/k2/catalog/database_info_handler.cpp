@@ -24,7 +24,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "database_info_handler.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
 
 using namespace sh;
@@ -84,17 +83,14 @@ sh::dto::SKVRecord DatabaseInfoHandler::getRecord(const DatabaseInfo& info) {
 }
 
 sh::Status DatabaseInfoHandler::UpsertDatabase(const DatabaseInfo& database_info) {
-    auto [status, txn] = TXMgr.BeginTxn({});
-    if (!status.is2xxOK()) return status;
+    auto txn = TXMgr.GetTxn();
 
     dto::SKVRecord record = getRecord(database_info);
     auto [write_status] = txn->write(record, false).get();
     if (!write_status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to upsert databaseinfo record {} due to {}", database_info.database_id, write_status);
-        TXMgr.EndTxn(dto::EndAction::Abort);
         return write_status;
     }
-    TXMgr.EndTxn(dto::EndAction::Commit);
     return write_status;
 }
 
@@ -164,5 +160,4 @@ sh::Status DatabaseInfoHandler::DeleteDatabase(DatabaseInfo& info) {
 }
 
 } // namespace catalog
-} // namespace sql
 } // namespace k2pg

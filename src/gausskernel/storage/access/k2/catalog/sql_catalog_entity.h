@@ -27,7 +27,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "../session.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
 
 namespace log {
@@ -79,5 +78,4 @@ public:
 };
 
 } // namespace catalog
-} // namespace sql
 } // namespace k2pg

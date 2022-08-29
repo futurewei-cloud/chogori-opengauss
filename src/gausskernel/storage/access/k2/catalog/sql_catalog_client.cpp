@@ -24,7 +24,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "sql_catalog_client.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
 
 sh::Status SqlCatalogClient::IsInitDbDone(bool* isDone) {
@@ -92,5 +91,4 @@ sh::Status SqlCatalogClient::IncrementCatalogVersion() {
   return std::get<0>(result);
 }
 } // namespace catalog
-}  // namespace sql
 }  // namespace k2pg

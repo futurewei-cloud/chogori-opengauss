@@ -27,7 +27,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "sql_catalog_manager.h"
 
 namespace k2pg {
-namespace sql {
 namespace catalog {
 
 // TODO: This catalog client layer so far doesn't provide value, consider eliminate it later
@@ -67,5 +66,4 @@ private:
 };
 
 } // namespace catalog
-}  // namespace sql
 }  // namespace k2pg
