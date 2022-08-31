@@ -38,8 +38,13 @@ Copyright(c) 2022 Futurewei Cloud
 #include "utils/uuid.h"
 
 #include "access/k2/k2_type.h"
+#include "access/k2/pg_ids.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
+
+using k2pg::kMaxPostgresTextSizeBytes;
+using k2pg::K2PgDatumToData;
+using k2pg::K2PgDatumFromData;
 
 Datum K2SqlToDatum(const uint8 *data, int64 bytes, const K2PgTypeAttrs *type_attrs);
 void DatumToK2Sql(Datum datum, uint8 **data, int64 *bytes);

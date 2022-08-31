@@ -22,32 +22,22 @@ Copyright(c) 2022 Futurewei Cloud
 */
 #pragma once
 
-#include "status.h"
-
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef __cplusplus
-extern "C" {
+#include "pg_gate_typedefs.h"
 
 struct varlena;
 
-#endif
-
 void K2PgResolveHostname();
-
-#define CHECKED_K2PGSTATUS __attribute__ ((warn_unused_result)) K2PgStatus
 
 typedef void* (*K2PgPAllocFn)(size_t size);
 
 typedef struct varlena* (*K2PgCStringToTextWithLenFn)(const char* c, int size);
 
 // Global initialization of the K2PG subsystem.
-CHECKED_K2PGSTATUS K2PgInit(
+
+K2PgStatus K2PgInit(
     const char* argv0,
     K2PgPAllocFn palloc_fn,
     K2PgCStringToTextWithLenFn cstring_to_text_with_len_fn);
-
-#ifdef __cplusplus
-} // extern "C"
-#endif

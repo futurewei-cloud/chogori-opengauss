@@ -32,11 +32,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/pg_gate_typedefs.h"
 #include "status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
 // This must be called exactly once to initialize the YPostgreSQL/SKV gateway API before any other
 // functions in this API are called.
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, K2PgCallbacks pg_callbacks);
@@ -397,7 +392,3 @@ const void* PgGate_GetThreadLocalErrMsg();
 void PgGate_ShutdownPgGateBackend();
 
 K2PgStatus PgGate_InitPgGateBackend();
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif

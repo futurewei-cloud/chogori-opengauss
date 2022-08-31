@@ -23,6 +23,14 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+#include <ostream>
+#include <assert.h>
+
+#include "access/k2/pg_ids.h"
+
 namespace k2pg {
 
 struct Data {
@@ -70,19 +78,13 @@ public:
       null_value_ = false;
   }
 
-  SqlValue(k2pg::Slice s) {
-      type_ = ValueType::SLICE;
-      data_.slice_val_ = std::string(s.cdata(), s.size());
-      null_value_ = false;
-  }
-
   SqlValue(std::string s) {
       type_ = ValueType::SLICE;
       data_.slice_val_ = std::move(s);
       null_value_ = false;
   }
 
-  SqlValue(const K2PgTypeEntity* type_entity, uint64_t datum, bool is_null);
+  SqlValue(const PgTypeEntity* type_entity, uint64_t datum, bool is_null);
 
   SqlValue(const SqlValue& val) = default;
 
@@ -107,17 +109,8 @@ public:
   // get a value that is higher than the current one
   SqlValue UpperBound() {
     // null values are not handled here since SQL has its own way to handle nulls
-    assert(!IsNull());
-    switch (type_) {
-        case ValueType::INT: {
-            return SqlValue(data_.int_val_ + 1);
-        } break;
-        default: {
-            throw std::invalid_argument("Unsupported data type: " + type_);
-        } break;
-    }
-
-    throw std::invalid_argument("Unsupported data type: " + type_);
+    assert(!IsNull() && type_ == ValueType::INT);
+    return SqlValue(data_.int_val_ + 1);
   }
 
   int Compare(const SqlValue& val) {
@@ -167,41 +160,11 @@ public:
             return data_.slice_val_.compare(val.data_.slice_val_);
         } break;
         default:
-            throw std::invalid_argument("Unknown data type");
+            return -1;
         break;
     }
 
-    throw std::invalid_argument("Unknown data type");
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const SqlValue& sql_value) {
-    os << "{type: " << sql_value.type_ << ", isNull: " << sql_value.null_value_ << ", value: ";
-    if (sql_value.null_value_) {
-        os << "NULL";
-    } else {
-        switch (sql_value.type_) {
-            case ValueType::BOOL: {
-                os << sql_value.data_.bool_val_;
-            } break;
-            case ValueType::INT: {
-                os << sql_value.data_.int_val_;
-            } break;
-            case ValueType::FLOAT: {
-                os << sql_value.data_.float_val_;
-            } break;
-            case ValueType::DOUBLE: {
-                os << sql_value.data_.double_val_;
-            } break;
-            case ValueType::SLICE: {
-                os << k2::HexCodec::encode(sql_value.data_.slice_val_);
-            } break;
-            default: {
-                os << "Unknown";
-            } break;
-        }
-    }
-    os << "}";
-    return os;
+    return -1;
   }
 
   bool IsNull() const {
@@ -266,39 +229,13 @@ class PgExpr {
         PG_EXPR_EVAL_EXPR_CALL,
     };
 
-    friend std::ostream& operator<<(std::ostream& os, const Opcode& opcode) {
-        switch(opcode) {
-            case Opcode::PG_EXPR_CONSTANT: return os << "PG_EXPR_CONSTANT";
-            case Opcode::PG_EXPR_COLREF: return os << "PG_EXPR_COLREF";
-            case Opcode::PG_EXPR_NOT: return os << "PG_EXPR_NOT";
-            case Opcode::PG_EXPR_EQ: return os << "PG_EXPR_EQ";
-            case Opcode::PG_EXPR_NE: return os << "PG_EXPR_NE";
-            case Opcode::PG_EXPR_GE: return os << "PG_EXPR_GE";
-            case Opcode::PG_EXPR_GT: return os << "PG_EXPR_GT";
-            case Opcode::PG_EXPR_LE: return os << "PG_EXPR_LE";
-            case Opcode::PG_EXPR_LT: return os << "PG_EXPR_LT";
-            case Opcode::PG_EXPR_EXISTS: return os << "PG_EXPR_EXISTS";
-            case Opcode::PG_EXPR_AND: return os << "PG_EXPR_AND";
-            case Opcode::PG_EXPR_OR: return os << "PG_EXPR_OR";
-            case Opcode::PG_EXPR_IN: return os << "PG_EXPR_IN";
-            case Opcode::PG_EXPR_BETWEEN: return os << "PG_EXPR_BETWEEN";
-            case Opcode::PG_EXPR_AVG: return os << "PG_EXPR_AVG";
-            case Opcode::PG_EXPR_SUM: return os << "PG_EXPR_SUM";
-            case Opcode::PG_EXPR_COUNT: return os << "PG_EXPR_COUNT";
-            case Opcode::PG_EXPR_MAX: return os << "PG_EXPR_MAX";
-            case Opcode::PG_EXPR_MIN: return os << "PG_EXPR_MIN";
-            case Opcode::PG_EXPR_EVAL_EXPR_CALL: return os << "PG_EXPR_EVAL_EXPR_CALL";
-            default: return os << "UNKNOWN";
-        }
-    }
-
     typedef std::shared_ptr<PgExpr> SharedPtr;
 
-    explicit PgExpr(Opcode opcode, const K2PgTypeEntity *type_entity);
+    explicit PgExpr(Opcode opcode, const PgTypeEntity *type_entity);
 
-    explicit PgExpr(Opcode opcode, const K2PgTypeEntity *type_entity, const PgTypeAttrs *type_attrs);
+    explicit PgExpr(Opcode opcode, const PgTypeEntity *type_entity, const PgTypeAttrs *type_attrs);
 
-    explicit PgExpr(const char *opname, const K2PgTypeEntity *type_entity);
+    explicit PgExpr(const char *opname, const PgTypeEntity *type_entity);
 
     virtual ~PgExpr();
 
@@ -345,13 +282,8 @@ class PgExpr {
     }
 
     // Find opcode.
-    static CHECKED_STATUS CheckOperatorName(const char *name);
+    static Status CheckOperatorName(const char *name);
     static Opcode NameToOpcode(const char *name);
-
-    friend std::ostream& operator<<(std::ostream& os, const PgExpr& expr) {
-      os << "(PgExpr: Opcode: " << expr.opcode_ << ", type: " << expr.type_entity_->k2pg_type << ")";
-      return os;
-    }
 
     protected:
     Opcode opcode_;
@@ -364,10 +296,10 @@ class PgConstant : public PgExpr {
   // Public types.
   typedef std::shared_ptr<PgConstant> SharedPtr;
   // Constructor.
-  explicit PgConstant(const K2PgTypeEntity *type_entity, uint64_t datum, bool is_null,
+  explicit PgConstant(const PgTypeEntity *type_entity, uint64_t datum, bool is_null,
       PgExpr::Opcode opcode = PgExpr::Opcode::PG_EXPR_CONSTANT);
 
-  explicit PgConstant(const K2PgTypeEntity *type_entity, SqlValue value);
+  explicit PgConstant(const PgTypeEntity *type_entity, SqlValue value);
 
   // Destructor.
   virtual ~PgConstant();
@@ -386,11 +318,6 @@ class PgConstant : public PgExpr {
 
   SqlValue* getValue() {
       return &value_;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const PgConstant& expr) {
-      os << "(PgConst: " << expr.value_ << ")";
-      return os;
   }
 
   private:
@@ -420,11 +347,6 @@ class PgColumnRef : public PgExpr {
 
   bool is_k2pgbasetid() const override;
 
-  friend std::ostream& operator<<(std::ostream& os, const PgColumnRef& expr) {
-      os << "(PgColumnRef: attr_name: " << expr.attr_name_ << ", attr_num: " << expr.attr_num_ << ")";
-      return os;
-  }
-
  private:
   int attr_num_;
   std::string attr_name_;
@@ -436,7 +358,7 @@ class PgOperator : public PgExpr {
   typedef std::shared_ptr<PgOperator> SharedPtr;
 
   // Constructor.
-  explicit PgOperator(const char *name, const K2PgTypeEntity *type_entity);
+  explicit PgOperator(const char *name, const PgTypeEntity *type_entity);
   virtual ~PgOperator();
 
   // Append arguments.
@@ -444,15 +366,6 @@ class PgOperator : public PgExpr {
 
   const std::vector<PgExpr*> & getArgs() const {
       return args_;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const PgOperator& expr) {
-      os << "(PgOperator: opcode: " << expr.opcode_ << ", opname: " << expr.opname_ << ", args_num: " << expr.args_.size() << ", args:[";
-      for (PgExpr* arg : expr.args_) {
-        os << (*arg) << ",";
-      }
-      os << "])";
-      return os;
   }
 
   private:

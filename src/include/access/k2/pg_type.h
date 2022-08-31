@@ -29,6 +29,8 @@ namespace k2pg {
 
     class SQLType {
         public:
+        typedef std::shared_ptr<SQLType> SharedPtr;
+
         // Constructor for elementary types
         explicit SQLType(DataType sql_typeid) : id_(sql_typeid), params_(0) {
         }
@@ -103,7 +105,7 @@ namespace k2pg {
 
         bool operator ==(const SQLType& other) const {
             if (id_ == other.id_ && params_.size() == other.params_.size()) {
-                for (int i = 0; i < params_.size(); i++) {
+                for (size_t i = 0; i < params_.size(); i++) {
                     if (*params_[i] == *other.params_[i]) {
                         continue;
                     }

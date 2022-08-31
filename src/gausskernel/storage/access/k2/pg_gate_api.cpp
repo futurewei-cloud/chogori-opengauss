@@ -47,7 +47,7 @@ std::atomic<bool> api_impl_shutdown_done;
 
 } // anonymous namespace
 
-extern "C" {
+//extern "C" {
 
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
     elog(INFO, "K2 PgGate open");
@@ -1294,7 +1294,7 @@ K2PgStatus PgGate_InitPgGateBackend() {
 void PgGate_ShutdownPgGateBackend() {
 }
 
-} // extern "C"
+//} // extern "C"
 
 }  // namespace gate
 }  // namespace k2pg

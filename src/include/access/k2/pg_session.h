@@ -23,11 +23,15 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
+#include <memory>
+#include <string>
+#include <atomic>
+
 namespace k2pg {
 class PgSession {
  public:
    // Constructors.
-   PgSession(const string& database_name);
+   PgSession(const std::string& database_name);
    virtual ~PgSession();
 
   private:
@@ -36,9 +40,7 @@ class PgSession {
 
   std::string client_id_;
 
-  std::atomic<int64_t> stmt_id_ = 1;
-
-  k2::Duration timeout_;
+  std::atomic<int64_t> stmt_id_;
 };
 
 }  // namespace k2pg

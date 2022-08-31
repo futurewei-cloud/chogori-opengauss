@@ -26,8 +26,9 @@ Copyright(c) 2022 Futurewei Cloud
 #include "utils/elog.h" // PG error codes
 
 #include <string>
+namespace k2pg {
 
-struct K2PgStatus {
+struct Status {
     int pg_code;
     int k2_code;
     // These strings will be passed to and owned by PG code, so if they are not assigned from literals then they
@@ -35,3 +36,5 @@ struct K2PgStatus {
     std::string msg;
     std::string detail;
 };
+
+}  // namespace k2pg

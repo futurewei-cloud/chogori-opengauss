@@ -23,12 +23,33 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+#include <unordered_map>
+
+#include "access/k2/pg_ids.h"
 #include "access/k2/pg_type.h"
 #include "access/k2/k2pg_comdefs.h"
 
 namespace k2pg {
     typedef int32_t ColumnId;
     constexpr ColumnId kFirstColumnId = 0;
+
+    enum IndexPermissions {
+        INDEX_PERM_DELETE_ONLY = 0,
+        INDEX_PERM_WRITE_AND_DELETE = 2,
+        INDEX_PERM_DO_BACKFILL = 4,
+        // This is the "success" state, where the index is completely usable.
+        INDEX_PERM_READ_WRITE_AND_DELETE = 6,
+        // Used while removing an index -- either due to backfill failure, or
+        // due to a client requested "drop index".
+        INDEX_PERM_WRITE_AND_DELETE_WHILE_REMOVING = 8,
+        INDEX_PERM_DELETE_ONLY_WHILE_REMOVING = 10,
+        INDEX_PERM_INDEX_UNUSED = 12,
+        // Used as a sentinel value.
+        INDEX_PERM_NOT_USED = 14
+    };
 
     class ColumnSchema {
         public:
@@ -40,22 +61,7 @@ namespace k2pg {
             kDescendingNullsLast // DESC, NULLS LAST
         };
 
-        enum IndexPermissions {
-            INDEX_PERM_DELETE_ONLY = 0,
-            INDEX_PERM_WRITE_AND_DELETE = 2,
-            INDEX_PERM_DO_BACKFILL = 4,
-            // This is the "success" state, where the index is completely usable.
-            INDEX_PERM_READ_WRITE_AND_DELETE = 6,
-            // Used while removing an index -- either due to backfill failure, or
-            // due to a client requested "drop index".
-            INDEX_PERM_WRITE_AND_DELETE_WHILE_REMOVING = 8,
-            INDEX_PERM_DELETE_ONLY_WHILE_REMOVING = 10,
-            INDEX_PERM_INDEX_UNUSED = 12,
-            // Used as a sentinel value.
-            INDEX_PERM_NOT_USED = 14
-        };
-
-        ColumnSchema(string name,
+        ColumnSchema(std::string name,
                 const std::shared_ptr<SQLType>& type,
                 bool is_nullable,
                 bool is_primary,
@@ -72,7 +78,7 @@ namespace k2pg {
         }
 
         // convenience constructor for creating columns with simple (non-parametric) data types
-        ColumnSchema(string name,
+        ColumnSchema(std::string name,
                 DataType type,
                 bool is_nullable,
                 bool is_primary,
@@ -118,22 +124,6 @@ namespace k2pg {
             sorting_type_ = sorting_type;
         }
 
-        const std::string sorting_type_string() const {
-            switch (sorting_type_) {
-                case kNotSpecified:
-                    return "none";
-                case kAscending:
-                    return "asc";
-                case kDescending:
-                    return "desc";
-                case kAscendingNullsLast:
-                    return "asc nulls last";
-                case kDescendingNullsLast:
-                    return "desc nulls last";
-            }
-            elog(FATAL, "Invalid sorting type: %s", sorting_type_);
-        }
-
         const std::string &name() const {
             return name_;
         }
@@ -151,15 +141,11 @@ namespace k2pg {
                    is_primary_ == other.is_primary_ &&
                    is_hash_ == other.is_hash_ &&
                    sorting_type_ == other.sorting_type_ &&
-                   type_info()->type() == other.type_info()->type();
+                   type_ == other.type();
         }
 
         bool Equals(const ColumnSchema &other) const {
             return EqualsType(other) && this->name_ == other.name_;
-        }
-
-        int Compare(const void *lhs, const void *rhs) const {
-            return type_info()->Compare(lhs, rhs);
         }
 
         private:
@@ -237,7 +223,7 @@ namespace k2pg {
         }
 
         const std::vector<std::string> column_names() const {
-            std::vector<string> column_names;
+            std::vector<std::string> column_names;
             for (const auto& col : cols_) {
                 column_names.push_back(col.name());
             }
@@ -374,19 +360,19 @@ namespace k2pg {
         uint32_t version_ = 0;
     };
 
-        struct IndexColumn {
-            ColumnId column_id;             // Column id in the index table.
-            std::string column_name;        // Column name in the index table - colexpr.MangledName().
-            DataType type;                  // data type
-            bool is_nullable;               // can be null or not
-            bool is_hash;                   // is hash key
-            bool is_range;                  // is range key
-            int32_t order;                  // attr_num
-            ColumnSchema::SortingType sorting_type;       // sort type
-            ColumnId base_column_id;      // Corresponding column id in base table.
-            std::shared_ptr<PgExpr> colexpr = nullptr;    // Index expression.
+    struct IndexColumn {
+        ColumnId column_id;             // Column id in the index table.
+        std::string column_name;        // Column name in the index table - colexpr.MangledName().
+        DataType type;                  // data type
+        bool is_nullable;               // can be null or not
+        bool is_hash;                   // is hash key
+        bool is_range;                  // is range key
+        int32_t order;                  // attr_num
+        ColumnSchema::SortingType sorting_type;       // sort type
+        ColumnId base_column_id;      // Corresponding column id in base table.
+        std::shared_ptr<PgExpr> colexpr = nullptr;    // Index expression.
 
-            explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
+        explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
                 DataType in_type, bool in_is_nullable, bool in_is_hash, bool in_is_range,
                 int32_t in_order, ColumnSchema::SortingType in_sorting_type,
                 ColumnId in_base_column_id, std::shared_ptr<PgExpr> in_colexpr)
@@ -394,9 +380,9 @@ namespace k2pg {
                     type(in_type), is_nullable(in_is_nullable), is_hash(in_is_hash),
                     is_range(in_is_range), order(in_order), sorting_type(in_sorting_type),
                     base_column_id(in_base_column_id), colexpr(in_colexpr) {
-            }
+        }
 
-            explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
+        explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
                 DataType in_type, bool in_is_nullable, bool in_is_hash, bool in_is_range,
                 int32_t in_order, ColumnSchema::SortingType in_sorting_type,
                 ColumnId in_base_column_id)
@@ -404,10 +390,10 @@ namespace k2pg {
                     type(in_type), is_nullable(in_is_nullable), is_hash(in_is_hash),
                     is_range(in_is_range), order(in_order), sorting_type(in_sorting_type),
                     base_column_id(in_base_column_id) {
-            }
-        };
+        }
+    };
 
-        class IndexInfo {
+    class IndexInfo {
         public:
         explicit IndexInfo(std::string table_name, uint32_t table_oid, std::string table_uuid,
                 std::string base_table_id, uint32_t schema_version, bool is_unique,

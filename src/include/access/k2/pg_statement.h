@@ -23,7 +23,11 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
+#include <memory>
+#include <string>
+
 namespace k2pg {
+
 // Statement types.
 enum StmtOp {
   STMT_NOOP = 0,
@@ -75,7 +79,7 @@ class PgStatement {
   // PgSession that this statement belongs to.
   std::shared_ptr<PgSession> pg_session_;
 
-  string client_id_;
+  std::string client_id_;
 
   int64_t stmt_id_;
 };
