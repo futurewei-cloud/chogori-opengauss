@@ -345,13 +345,7 @@ Status PgExpr::CheckOperatorName(const char *name) {
     return status;
   }
 
-  Status status {
-    .pg_code = ERRCODE_SUCCESSFUL_COMPLETION,
-    .k2_code = 200,
-    .msg = "OK",
-    .detail = ""
-  };
-  return status;
+  return Status::OK;
 }
 
 PgExpr::Opcode PgExpr::NameToOpcode(const char *name) {

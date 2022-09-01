@@ -28,11 +28,16 @@ Copyright(c) 2022 Futurewei Cloud
 #include <atomic>
 
 namespace k2pg {
+
 class PgSession {
  public:
    // Constructors.
    PgSession(const std::string& database_name);
    virtual ~PgSession();
+
+  std::string& current_database() {
+      return connected_database_;
+  };
 
   private:
   // Connected database.

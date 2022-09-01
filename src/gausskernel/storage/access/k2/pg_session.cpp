@@ -21,24 +21,17 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
-#pragma once
-
-#include "utils/elog.h" // PG error codes
-#include "utils/errcodes.h"
-
-#include <string>
+#include "access/k2/pg_session.h"
 
 namespace k2pg {
+PgSession::PgSession(
+    const std::string& database_name)
+    : connected_database_(database_name),
+      client_id_("K2PG"),
+      stmt_id_(1) {
+}
 
-struct Status {
-    int pg_code;
-    int k2_code;
-    // These strings will be passed to and owned by PG code, so if they are not assigned from literals then they
-    // need to be allocated with palloc so they can be freed on session close
-    std::string msg;
-    std::string detail;
-
-    static const Status OK; 
-};
+PgSession::~PgSession() {
+}
 
 }  // namespace k2pg

@@ -21,24 +21,11 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
-#pragma once
-
-#include "utils/elog.h" // PG error codes
-#include "utils/errcodes.h"
-
-#include <string>
+#include "access/k2/pg_ids.h"
+#include "access/k2/status.h"
 
 namespace k2pg {
+using boost::uuids::uuid;
 
-struct Status {
-    int pg_code;
-    int k2_code;
-    // These strings will be passed to and owned by PG code, so if they are not assigned from literals then they
-    // need to be allocated with palloc so they can be freed on session close
-    std::string msg;
-    std::string detail;
-
-    static const Status OK; 
-};
 
 }  // namespace k2pg
