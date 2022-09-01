@@ -31,6 +31,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/pg_ids.h"
 #include "access/k2/pg_param.h"
 #include "access/k2/pg_type.h"
+#include "access/k2/pg_expr.h"
 #include "access/k2/k2pg_comdefs.h"
 
 namespace k2pg {

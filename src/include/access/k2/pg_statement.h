@@ -26,6 +26,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include <memory>
 #include <string>
 
+#include "access/k2/pg_session.h"
+
 namespace k2pg {
 
 // Statement types.
