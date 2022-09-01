@@ -24,6 +24,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include <stddef.h>
 #include "access/k2/data_type.h"
+#include "access/k2/pg_param.h"
 #include "access/k2/status.h"
 #include "access/k2/pg_ids.h"
 #include "access/k2/pg_session.h"
@@ -40,74 +41,24 @@ typedef class  k2pg::PgExpr * K2PgExpr;
 typedef class  k2pg::PgTableDesc * K2PgTableDesc;
 typedef class  k2pg::PgMemctx * K2PgMemctx;
 typedef struct k2pg::Status K2PgStatus;
-typedef struct k2pg::PgSysColumns K2PgSysColumns;
 
 // Postgres object identifier (OID) defined in Postgres' postgres_ext.h
 typedef unsigned int K2PgOid;
 #define kInvalidOid ((K2PgOid) 0)
 
+typedef struct k2pg::PgSysColumns K2PgSysColumns;
 typedef struct k2pg::PgTypeAttrs K2PgTypeAttrs;
-
 typedef struct k2pg::PgTypeEntity K2PgTypeEntity;
+typedef struct k2pg::PgPrepareParameters K2PgPrepareParameters;
+typedef struct k2pg::PgExecParameters K2PgExecParameters;
+typedef struct k2pg::PgTableProperties K2PgTableProperties;
 
 // API to read type information.
 const K2PgTypeEntity *K2PgFindTypeEntity(int type_oid);
 K2PgDataType K2PgGetType(const K2PgTypeEntity *type_entity);
 bool K2PgAllowForPrimaryKey(const K2PgTypeEntity *type_entity);
 
-// Structure to hold parameters for preparing query plan.
-//
-// Index-related parameters are used to describe different types of scan.
-//   - Sequential scan: Index parameter is not used.
-//     { index_oid, index_only_scan, use_secondary_index } = { kInvalidOid, false, false }
-//   - IndexScan:
-//     { index_oid, index_only_scan, use_secondary_index } = { IndexOid, false, true }
-//   - IndexOnlyScan:
-//     { index_oid, index_only_scan, use_secondary_index } = { IndexOid, true, true }
-//   - PrimaryIndexScan: This is a special case as K2 SQL doesn't have a separated
-//     primary-index database object from table object.
-//       index_oid = TableOid
-//       index_only_scan = true if ROWID is wanted. Otherwise, regular rowset is wanted.
-//       use_secondary_index = false
-//
-typedef struct PgPrepareParameters {
-  K2PgOid index_oid;
-  bool index_only_scan;
-  bool use_secondary_index;
-} K2PgPrepareParameters;
-
-// Structure to hold the execution-control parameters.
-typedef struct PgExecParameters {
-  // TODO(neil) Move forward_scan flag here.
-  // Scan parameters.
-  // bool is_forward_scan;
-
-  // LIMIT parameters for executing DML read.
-  // - limit_count is the value of SELECT ... LIMIT
-  // - limit_offset is value of SELECT ... OFFSET
-  // - limit_use_default: Although count and offset are pushed down to K2 platform from Postgres,
-  //   they are not always being used to identify the number of rows to be read from K2 platform.
-  //   Full-scan is needed when further operations on the rows are not done by K2 platform.
-  //
-  //   Examples:
-  //   o All rows must be sent to Postgres code layer
-  //     for filtering before LIMIT is applied.
-  //   o ORDER BY clause is not processed by K2 platform. Similarly all rows must be fetched and sent
-  //     to Postgres code layer.
-  int64_t limit_count;
-  uint64_t limit_offset;
-  bool limit_use_default;
-  // For now we only support one rowmark.
-  int rowmark = -1;
-  uint64_t read_time = 0;
-  char *partition_key = NULL;
-} K2PgExecParameters;
-
 typedef struct PgCallbacks {
   void (*FetchUniqueConstraintName)(K2PgOid, char*, size_t);
   K2PgMemctx (*GetCurrentK2Memctx)();
 } K2PgCallbacks;
-
-typedef struct PgTableProperties {
-  uint32_t num_hash_key_columns;
-} K2PgTableProperties;

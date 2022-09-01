@@ -29,6 +29,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <unordered_map>
 
 #include "access/k2/pg_ids.h"
+#include "access/k2/pg_param.h"
 #include "access/k2/pg_type.h"
 #include "access/k2/k2pg_comdefs.h"
 

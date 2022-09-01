@@ -23,6 +23,10 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "access/k2/data_type.h"
 
 namespace k2pg {

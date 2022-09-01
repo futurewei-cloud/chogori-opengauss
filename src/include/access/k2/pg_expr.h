@@ -29,6 +29,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <ostream>
 #include <assert.h>
 
+#include "access/k2/status.h"
 #include "access/k2/pg_ids.h"
 
 namespace k2pg {
