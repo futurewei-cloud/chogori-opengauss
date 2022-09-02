@@ -25,6 +25,8 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include <string>
 
+#include <k2/logging/Log.h>
+
 namespace k2pg {
 namespace catalog {
 
@@ -51,8 +53,8 @@ struct CatalogConsts {
 
     static const std::string shared_table_skv_colllection_id;
 
-//    static inline const k2::Duration catalog_manager_background_task_initial_wait = 1s;
-//    static inline const k2::Duration catalog_manager_background_task_sleep_interval = 30s;
+    static inline const k2::Duration catalog_manager_background_task_initial_wait = 1s;
+    static inline const k2::Duration catalog_manager_background_task_sleep_interval = 30s;
 
     static inline int catalog_manager_background_task_thread_pool_size = 2;
 
