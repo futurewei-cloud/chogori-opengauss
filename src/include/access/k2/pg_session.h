@@ -39,6 +39,15 @@ class PgSession {
       return connected_database_;
   };
 
+  const std::string& GetClientId() const {
+    return client_id_;
+  };
+
+  int64_t GetNextStmtId() {
+    // TODO: add more complext stmt id generation logic
+    return stmt_id_++;
+  };
+
   private:
   // Connected database.
   std::string connected_database_;

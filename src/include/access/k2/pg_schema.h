@@ -27,12 +27,12 @@ Copyright(c) 2022 Futurewei Cloud
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <assert.h>
 
 #include "access/k2/pg_ids.h"
 #include "access/k2/pg_param.h"
 #include "access/k2/pg_type.h"
 #include "access/k2/pg_expr.h"
-#include "access/k2/k2pg_comdefs.h"
 
 namespace k2pg {
     typedef int32_t ColumnId;
@@ -199,14 +199,14 @@ namespace k2pg {
 
         // Return the ColumnSchema corresponding to the given column index.
         inline const ColumnSchema &column(size_t idx) const {
-            DCHECK_LT(idx, cols_.size());
+            assert(idx <cols_.size());
             return cols_[idx];
         }
 
         // Return the column ID corresponding to the given column index
         ColumnId column_id(size_t idx) const {
-            DCHECK(has_column_ids());
-            DCHECK_LT(idx, cols_.size());
+            assert(has_column_ids());
+            assert(idx < cols_.size());
             return col_ids_[idx];
         }
 
@@ -236,7 +236,7 @@ namespace k2pg {
         // or kColumnNotFound if the column is not in this schema.
         int find_column(const std::string col_name) const {
             auto iter = name_to_index_.find(col_name);
-            if (PREDICT_FALSE(iter == name_to_index_.end())) {
+            if (iter == name_to_index_.end()) {
                 return kColumnNotFound;
             } else {
                 return (*iter).second;
@@ -326,7 +326,7 @@ namespace k2pg {
         // Returns the column index given the column ID.
         // If no such column exists, returns kColumnNotFound.
         int find_column_by_id(ColumnId id) const {
-            DCHECK(cols_.empty() || has_column_ids());
+            assert(cols_.empty() || has_column_ids());
             auto iter = id_to_index_.find(id);
             if (iter == id_to_index_.end()) {
                return kColumnNotFound;

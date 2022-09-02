@@ -21,7 +21,17 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
+#include "access/k2/pg_statement.h"
+
 namespace k2pg {
 
+PgStatement::PgStatement(std::shared_ptr<PgSession> pg_session) :
+  pg_session_(pg_session),
+  client_id_(pg_session_->GetClientId()),
+  stmt_id_(pg_session_->GetNextStmtId()) {
+}
+
+PgStatement::~PgStatement() {
+}
 
 }  // namespace k2pg

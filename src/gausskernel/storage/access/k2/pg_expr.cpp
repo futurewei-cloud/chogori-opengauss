@@ -32,6 +32,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/pg_expr.h"
 
 namespace k2pg {
+
 void SqlValue::Clear() {
     null_value_ = true;
 }

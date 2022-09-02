@@ -24,6 +24,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/pg_session.h"
 
 namespace k2pg {
+
 PgSession::PgSession(
     const std::string& database_name)
     : connected_database_(database_name),
