@@ -38,7 +38,8 @@ struct Status {
     std::string msg;
     std::string detail;
 
-    static const Status OK; 
+    static const Status OK;
+    static const Status NotSupported;
 };
 
 }  // namespace k2pg

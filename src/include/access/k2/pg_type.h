@@ -35,6 +35,18 @@ namespace k2pg {
         public:
         typedef std::shared_ptr<SQLType> SharedPtr;
 
+        template<DataType data_type>
+        static const std::shared_ptr<SQLType>& CreatePrimitiveType() {
+            static std::shared_ptr<SQLType> sql_type = std::make_shared<SQLType>(data_type);
+            return sql_type;
+        }
+
+        template<DataType data_type>
+        static std::shared_ptr<SQLType> CreateCollectionType(
+            const std::vector<std::shared_ptr<SQLType>>& params) {
+            return std::make_shared<SQLType>(data_type, params);
+        }
+
         // Constructor for elementary types
         explicit SQLType(DataType sql_typeid) : id_(sql_typeid), params_(0) {
         }
@@ -131,6 +143,36 @@ namespace k2pg {
 
         // Create primitive types, all builtin types except collection.
         static std::shared_ptr<SQLType> Create(DataType data_type);
+
+        // Create map datatype.
+        static std::shared_ptr<SQLType> CreateTypeMap(std::shared_ptr<SQLType> key_type,
+                std::shared_ptr<SQLType> value_type);
+        static std::shared_ptr<SQLType> CreateTypeMap(DataType key_type, DataType value_type);
+        static std::shared_ptr<SQLType> CreateTypeMap() {
+            // Create default map type: MAP <UNKNOWN -> UNKNOWN>.
+            static const std::shared_ptr<SQLType> default_map =
+            CreateTypeMap(SQLType::Create(DataType::K2SQL_DATA_TYPE_UNKNOWN_DATA),
+                      SQLType::Create(DataType::K2SQL_DATA_TYPE_UNKNOWN_DATA));
+            return default_map;
+        }
+
+        // Create list datatype.
+        static std::shared_ptr<SQLType> CreateTypeList(std::shared_ptr<SQLType> value_type);
+        static std::shared_ptr<SQLType> CreateTypeList(DataType val_type);
+        static std::shared_ptr<SQLType> CreateTypeList() {
+            // Create default list type: LIST <UNKNOWN>.
+            static const std::shared_ptr<SQLType> default_list = CreateTypeList(DataType::K2SQL_DATA_TYPE_UNKNOWN_DATA);
+            return default_list;
+        }
+
+        // Create set datatype.
+        static std::shared_ptr<SQLType> CreateTypeSet(std::shared_ptr<SQLType> value_type);
+        static std::shared_ptr<SQLType> CreateTypeSet(DataType value_type);
+        static std::shared_ptr<SQLType> CreateTypeSet() {
+            // Create default set type: SET <UNKNOWN>.
+            static const std::shared_ptr<SQLType> default_set = CreateTypeSet(DataType::K2SQL_DATA_TYPE_UNKNOWN_DATA);
+            return default_set;
+        }
 
         // Check type methods.
         static bool IsValidPrimaryType(DataType type);

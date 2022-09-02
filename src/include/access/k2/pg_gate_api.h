@@ -30,7 +30,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "access/k2/k2pg_util.h"
 #include "access/k2/pg_gate_typedefs.h"
-#include "status.h"
+#include "access/k2/status.h"
 
 // This must be called exactly once to initialize the YPostgreSQL/SKV gateway API before any other
 // functions in this API are called.

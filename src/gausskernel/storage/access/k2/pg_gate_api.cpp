@@ -37,8 +37,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include <atomic>
 
-namespace k2pg {
-namespace gate {
+using namespace k2pg::gate;
 
 namespace {
 // Using a raw pointer here to fully control object initialization and destruction.
@@ -46,8 +45,6 @@ namespace {
 std::atomic<bool> api_impl_shutdown_done;
 
 } // anonymous namespace
-
-//extern "C" {
 
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
     elog(INFO, "K2 PgGate open");
@@ -70,14 +67,7 @@ K2PgStatus PgGate_InitSession(const char *database_name) {
   k2pg::TXMgr.Init();
   k2pg::TXMgr.EndTxn(skv::http::dto::EndAction::Abort);
 
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Initialize K2PgMemCtx.
@@ -94,66 +84,31 @@ K2PgMemctx PgGate_CreateMemctx() {
 
 K2PgStatus PgGate_DestroyMemctx(K2PgMemctx memctx) {
   elog(DEBUG5, "PgGateAPI: PgGate_DestroyMemctx");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx) {
   elog(DEBUG5, "PgGateAPI: PgGate_ResetMemctx");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Invalidate the sessions table cache.
 K2PgStatus PgGate_InvalidateCache() {
   elog(DEBUG5, "PgGateAPI: PgGate_InvalidateCache");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Check if initdb has been already run.
 K2PgStatus PgGate_IsInitDbDone(bool* initdb_done) {
   elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbDone");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Sets catalog_version to the local tserver's catalog version stored in shared
 // memory, or an error if the shared memory has not been initialized (e.g. in initdb).
 K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetSharedCatalogVersion");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -164,41 +119,20 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
 K2PgStatus PgGate_InitPrimaryCluster()
 {
   elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_FinishInitDB()
 {
   elog(DEBUG5, "PgGateAPI: PgGate_FinishInitDB()");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // DATABASE ----------------------------------------------------------------------------------------
 // Connect database. Switch the connected database to the given "database_name".
 K2PgStatus PgGate_ConnectDatabase(const char *database_name) {
   elog(DEBUG5, "PgGateAPI: PgGate_ConnectDatabase %s", database_name);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Create database.
@@ -208,28 +142,14 @@ K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
                                  K2PgOid next_oid) {
   elog(LOG, "PgGateAPI: PgGate_ExecCreateDatabase %s, %d, %d, %d",
          database_name, database_oid, source_database_oid, next_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Drop database.
 K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
                                    K2PgOid database_oid) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Alter database.
@@ -237,38 +157,17 @@ K2PgStatus PgGate_NewAlterDatabase(const char *database_name,
                                K2PgOid database_oid,
                                K2PgStatement *handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_NewAlterDatabase %s, %d", database_name, database_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterDatabaseRenameDatabase(K2PgStatement handle, const char *new_name) {
   elog(DEBUG5, "PgGateAPI: PgGate_AlterDatabaseRenameDatabase %s", new_name);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecAlterDatabase(K2PgStatement handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecAlterDatabase");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Reserve oids.
@@ -278,26 +177,12 @@ K2PgStatus PgGate_ReserveOids(K2PgOid database_oid,
                            K2PgOid *begin_oid,
                            K2PgOid *end_oid) {
   elog(DEBUG5, "PgGateAPI: PgGate_ReserveOids %d, %d, %d", database_oid, next_oid, count);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_GetCatalogMasterVersion(uint64_t *version) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetCatalogMasterVersion");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 void PgGate_InvalidateTableCache(
@@ -319,14 +204,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
     return status;
   }
 
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // TABLE -------------------------------------------------------------------------------------------
@@ -343,91 +221,42 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
                              K2PgOid table_oid,
                              K2PgStatement *handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewAlterTable %d, %d", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableAddColumn(K2PgStatement handle, const char *name, int order,
                                    const K2PgTypeEntity *attr_type, bool is_not_null){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableAddColumn %s", name);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableRenameColumn(K2PgStatement handle, const char *oldname,
                                       const char *newname){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableRenameColumn %s, %s", oldname, newname);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableDropColumn(K2PgStatement handle, const char *name){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableDropColumn %s", name);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableRenameTable(K2PgStatement handle, const char *db_name,
                                      const char *newname){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableRenameTable %s, %s", db_name, newname);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecAlterTable(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecAlterTable");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
@@ -435,40 +264,19 @@ K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
                             bool if_exist,
                             K2PgStatement *handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_NewDropTable %d, %d", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDropTable");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
@@ -476,51 +284,23 @@ K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              bool *is_primary,
                              bool *is_hash) {
   elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
                                   K2PgTableProperties *properties){
   elog(DEBUG5, "PgGateAPI: PgGate_GetTableProperties");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_cache_version){
   elog(DEBUG5, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // INDEX -------------------------------------------------------------------------------------------
@@ -539,14 +319,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               bool if_not_exist,
                               const std::vector<K2PGColumnDef>& columns){
   elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
@@ -554,26 +327,12 @@ K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
                             bool if_exist,
                             K2PgStatement *handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewDropIndex %d, %d", database_oid, index_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDropIndex");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_WaitUntilIndexPermissionsAtLeast(
@@ -583,28 +342,14 @@ K2PgStatus PgGate_WaitUntilIndexPermissionsAtLeast(
     const uint32_t target_index_permissions,
     uint32_t *actual_index_permissions) {
   elog(DEBUG5, "PgGateAPI: PgGate_WaitUntilIndexPermissionsAtLeast %d, %d, %d", database_oid, table_oid, index_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AsyncUpdateIndexPermissions(
     const K2PgOid database_oid,
     const K2PgOid indexed_table_oid){
   elog(DEBUG5, "PgGateAPI: PgGate_AsyncUpdateIndexPermissions %d, %d", database_oid,  indexed_table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -616,14 +361,7 @@ K2PgStatus PgGate_AsyncUpdateIndexPermissions(
 // - INSERT / UPDATE / DELETE ... RETURNING target_expr1, target_expr2, ...
 K2PgStatus PgGate_DmlAppendTarget(K2PgStatement handle, K2PgExpr target){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlAppendTarget");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Binding Columns: Bind column with a value (expression) in a statement.
@@ -652,51 +390,23 @@ K2PgStatus PgGate_DmlAppendTarget(K2PgStatement handle, K2PgExpr target){
 //   the main-table, and therefore the bind-arguments are not associated with columns in main table.
 K2PgStatus PgGate_DmlBindColumn(K2PgStatement handle, int attr_num, K2PgExpr attr_value){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindColumn %d", attr_num);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_DmlBindRangeConds(K2PgStatement handle, K2PgExpr range_conds) {
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindRangeConds");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_DmlBindWhereConds(K2PgStatement handle, K2PgExpr where_conds) {
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindWhereConds");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Binding Tables: Bind the whole table in a statement.  Do not use with BindColumn.
 K2PgStatus PgGate_DmlBindTable(K2PgStatement handle){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBindTable");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // API for SET clause.
@@ -704,14 +414,7 @@ K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
                                int attr_num,
                                K2PgExpr attr_value){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlAssignColumn %d", attr_num);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // This function is to fetch the targets in PgGate_DmlAppendTarget() from the rows that were defined
@@ -719,41 +422,20 @@ K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
 K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", natts);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Utility method that checks stmt type and calls either exec insert, update, or delete internally.
 K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlExecWriteOp");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // DB Operations: WHERE(partially supported by K2-SKV)
@@ -767,14 +449,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              bool increment_catalog,
                              const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // UPDATE ------------------------------------------------------------------------------------------
@@ -784,14 +459,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
                              int* rows_affected,
                              const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecUpdate %u, %u", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // DELETE ------------------------------------------------------------------------------------------
@@ -801,14 +469,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              int* rows_affected,
                              const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // SELECT ------------------------------------------------------------------------------------------
@@ -817,150 +478,66 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          const K2PgPrepareParameters *prepare_params,
                          K2PgScanHandle **handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Set forward/backward scan direction.
 K2PgStatus PgGate_SetForwardScan(K2PgStatement handle, bool is_forward_scan){
   elog(DEBUG5, "PgGateAPI: PgGate_SetForwardScan %d", is_forward_scan);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
                              bool whole_table_scan, bool forward_scan, const K2PgExecParameters *exec_params) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecSelect");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Transaction control -----------------------------------------------------------------------------
 
 K2PgStatus PgGate_BeginTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_BeginTransaction");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_RestartTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_RestartTransaction");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_CommitTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_CommitTransaction");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AbortTransaction(){
   elog(DEBUG5, "PgGateAPI: PgGate_AbortTransaction");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetTransactionIsolationLevel(int isolation){
   elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionIsolationLevel %d", isolation);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetTransactionReadOnly(bool read_only){
   elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionReadOnly %d", read_only);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetTransactionDeferrable(bool deferrable){
   elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionReadOnly %d", deferrable);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_EnterSeparateDdlTxnMode(){
   elog(DEBUG5, "PgGateAPI: PgGate_EnterSeparateDdlTxnMode");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
   elog(DEBUG5, "PgGateAPI: PgGate_ExitSeparateDdlTxnMode");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -970,127 +547,57 @@ K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
 K2PgStatus PgGate_NewColumnRef(K2PgStatement stmt, int attr_num, const K2PgTypeEntity *type_entity,
                             const K2PgTypeAttrs *type_attrs, K2PgExpr *expr_handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewColumnRef %d", attr_num);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Constant expressions.
 K2PgStatus PgGate_NewConstant(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
                            uint64_t datum, bool is_null, K2PgExpr *expr_handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewConstant %ld, %d", datum, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_NewConstantOp(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
                            uint64_t datum, bool is_null, K2PgExpr *expr_handle, bool is_gt){
   elog(DEBUG5, "PgGateAPI: PgGate_NewConstantOp %lu, %d, %d", datum, is_null, is_gt);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // The following update functions only work for constants.
 // Overwriting the constant expression with new value.
 K2PgStatus PgGate_UpdateConstInt2(K2PgExpr expr, int16_t value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt2 %d, %d", value, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_UpdateConstInt4(K2PgExpr expr, int32_t value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt4 %d, %d", value, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_UpdateConstInt8(K2PgExpr expr, int64_t value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt8 %ld, %d", value, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_UpdateConstFloat4(K2PgExpr expr, float value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstFloat4 %f, %d", value, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_UpdateConstFloat8(K2PgExpr expr, double value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstFloat8 %f, %d", value, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_UpdateConstText(K2PgExpr expr, const char *value, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstText %s, %d", value, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_UpdateConstChar(K2PgExpr expr, const char *value, int64_t bytes, bool is_null){
   elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstChar %s, %ld, %d", value, bytes, is_null);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Expressions with operators "=", "+", "between", "in", ...
@@ -1098,26 +605,12 @@ K2PgStatus PgGate_NewOperator(K2PgStatement stmt, const char *opname,
                            const K2PgTypeEntity *type_entity,
                            K2PgExpr *op_handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewOperator %s", opname);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg){
   elog(DEBUG5, "PgGateAPI: PgGate_OperatorAppendArg");
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Referential Integrity Check Caching.
@@ -1130,27 +623,13 @@ bool PgGate_ForeignKeyReferenceExists(K2PgOid table_oid, const char* k2pgctid, i
 // Add an entry to foreign key reference cache.
 K2PgStatus PgGate_CacheForeignKeyReference(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size){
   elog(DEBUG5, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 // Delete an entry from foreign key reference cache.
 K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DeleteFromForeignKeyReferenceCache %d, %lu", table_oid, k2pgctid);
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = "Not implemented",
-      .detail = ""
-  };
-
-  return status;
+  return K2PgStatus::NotSupported;
 }
 
 void PgGate_ClearForeignKeyReferenceCache() {
@@ -1281,20 +760,8 @@ void K2PgAssignTransactionPriorityUpperBound(double newval, void* extra) {
 // TODO: check if we really need to implement them
 
 K2PgStatus PgGate_InitPgGateBackend() {
-  K2PgStatus status {
-      .pg_code = ERRCODE_SUCCESSFUL_COMPLETION,
-      .k2_code = 200,
-      .msg = "OK",
-      .detail = "InitPgGateBackend OK"
-  };
-
-  return status;
+  return K2PgStatus::OK;
 }
 
 void PgGate_ShutdownPgGateBackend() {
 }
-
-//} // extern "C"
-
-}  // namespace gate
-}  // namespace k2pg

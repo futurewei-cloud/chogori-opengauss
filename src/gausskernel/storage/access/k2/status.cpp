@@ -31,4 +31,12 @@ const struct Status Status::OK = {
       .msg = "OK",
       .detail = "Finished successfully"
     };
+
+const struct Status Status::NotSupported = {
+      .pg_code = ERRCODE_OPERATE_NOT_SUPPORTED,
+      .k2_code = 500,
+      .msg = "Not supported",
+      .detail = "Operation not supported"
+    };
+
 }  // namespace k2pg
