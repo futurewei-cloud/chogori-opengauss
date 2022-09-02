@@ -93,9 +93,17 @@ void TxnManager::Init() {
     }
     
     if (!_client) {
-        // TODO add client config here (e.g. proxy url/port, etc)
-        _client = std::make_shared<sh::Client>();
-        K2LOG_I(log::k2pg, "Initializing SKVClient");
+        auto clientConfig = _config().at("client");
+        if (clientConfig.is_object()) {
+            std::string host = clientConfig.value("host", "localhost");
+            int port = clientConfig.value("port", 30000);
+            K2LOG_I(log::k2pg, "Initializing SKVClient {}:{}", host, port);
+            _client = std::make_shared<sh::Client>(host, port);
+        } else {
+            K2LOG_I(log::k2pg, "Initializing SKVClient");
+            _client = std::make_shared<sh::Client>();
+        }
+
     }
 }
 
@@ -132,14 +140,17 @@ sh::Response<> TxnManager::EndTxn(sh::dto::EndAction endAction) {
 }
 
 sh::Response<std::shared_ptr<sh::dto::Schema>> TxnManager::GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
+    Init();
     return _client->getSchema(collectionName, schemaName, schemaVersion).get();
 }
 
 sh::Response<> TxnManager::CreateCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds) {
+    Init();
     return _client->createCollection(metadata, rangeEnds).get();
 }
 
 sh::Response<> TxnManager::CreateSchema(const sh::String& collectionName, const sh::dto::Schema& schema) {
+    Init();
     return _client->createSchema(collectionName, schema).get();
 }
 
@@ -159,12 +170,14 @@ sh::Response<>  TxnManager::CreateCollection(const std::string& collection_name,
         .hashScheme = scheme,
         .storageDriver = sh::dto::StorageDriver::K23SI,
         .capacity{
-            // TODO: get capacity from config or pass in from param
-            //.dataCapacityMegaBytes = 1000,
-            //.readIOPs = 100000,
-            //.writeIOPs = 100000
-         },
-        .retentionPeriod = sh::Duration(1h) * 90 * 24  //TODO: get this from config or from param in
+            .dataCapacityMegaBytes = 0,
+            .readIOPs = 0,
+            .writeIOPs = 0,
+            .minNodes = 1   // K2 Http proxy hangs if minNodes = 0
+        },
+        .retentionPeriod = sh::Duration(1h) * 90 * 24,  //TODO: get this from config or from param in
+        .heartbeatDeadline = sh::Duration(0),
+        .deleted = false
     };
     
     return CreateCollection(metadata, rangeEnds);
