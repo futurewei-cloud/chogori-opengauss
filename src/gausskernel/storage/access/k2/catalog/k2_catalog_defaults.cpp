@@ -73,5 +73,5 @@ bool CatalogConsts::is_on_physical_collection(const std::string& database_id, bo
     return true;
 }
 
-} // namespace k2pg
+} // namespace catalog
 } // namespace k2pg

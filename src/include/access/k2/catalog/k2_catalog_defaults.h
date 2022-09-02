@@ -61,5 +61,5 @@ struct CatalogConsts {
     static bool is_on_physical_collection(const std::string& database_id, bool is_shared);
 };
 
-} // namespace k2pg
+} // namespace catalog
 } // namespace k2pg
