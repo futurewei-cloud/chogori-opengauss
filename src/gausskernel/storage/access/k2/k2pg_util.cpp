@@ -32,8 +32,6 @@
 
 using k2pg::K2PgErrorCode;
 
-extern "C" {
-
 K2PgStatus K2PgInit(const char* argv0,
                   K2PgPAllocFn palloc_fn,
                   K2PgCStringToTextWithLenFn cstring_to_text_with_len_fn) {
@@ -42,15 +40,13 @@ K2PgStatus K2PgInit(const char* argv0,
     k2pg::K2PgSetCStringToTextWithLenFn(cstring_to_text_with_len_fn);
   }
   // TODO: add more logic here
-  
+
    K2PgStatus status {
       .pg_code = ERRCODE_SUCCESSFUL_COMPLETION,
       .k2_code = 200,
       .msg = "OK",
       .detail = "K2PgInit OK"
   };
-  
+
   return status;
 }
-
-} // extern "C"

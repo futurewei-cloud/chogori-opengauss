@@ -20,24 +20,23 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-#pragma once
 
-#include <stddef.h>
-#include <stdint.h>
+#include "access/k2/status.h"
 
-#include "pg_gate_typedefs.h"
+namespace k2pg {
 
-struct varlena;
+const struct Status Status::OK = {
+      .pg_code = ERRCODE_SUCCESSFUL_COMPLETION,
+      .k2_code = 200,
+      .msg = "OK",
+      .detail = "Finished successfully"
+    };
 
-void K2PgResolveHostname();
+const struct Status Status::NotSupported = {
+      .pg_code = ERRCODE_OPERATE_NOT_SUPPORTED,
+      .k2_code = 500,
+      .msg = "Not supported",
+      .detail = "Operation not supported"
+    };
 
-typedef void* (*K2PgPAllocFn)(size_t size);
-
-typedef struct varlena* (*K2PgCStringToTextWithLenFn)(const char* c, int size);
-
-// Global initialization of the K2PG subsystem.
-
-K2PgStatus K2PgInit(
-    const char* argv0,
-    K2PgPAllocFn palloc_fn,
-    K2PgCStringToTextWithLenFn cstring_to_text_with_len_fn);
+}  // namespace k2pg

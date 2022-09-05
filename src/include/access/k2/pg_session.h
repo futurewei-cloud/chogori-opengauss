@@ -20,24 +20,41 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
+
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
+#include <memory>
+#include <string>
+#include <atomic>
 
-#include "pg_gate_typedefs.h"
+namespace k2pg {
 
-struct varlena;
+class PgSession {
+ public:
+   // Constructors.
+   PgSession(const std::string& database_name);
+   virtual ~PgSession();
 
-void K2PgResolveHostname();
+  std::string& current_database() {
+      return connected_database_;
+  };
 
-typedef void* (*K2PgPAllocFn)(size_t size);
+  const std::string& GetClientId() const {
+    return client_id_;
+  };
 
-typedef struct varlena* (*K2PgCStringToTextWithLenFn)(const char* c, int size);
+  int64_t GetNextStmtId() {
+    // TODO: add more complext stmt id generation logic
+    return stmt_id_++;
+  };
 
-// Global initialization of the K2PG subsystem.
+  private:
+  // Connected database.
+  std::string connected_database_;
 
-K2PgStatus K2PgInit(
-    const char* argv0,
-    K2PgPAllocFn palloc_fn,
-    K2PgCStringToTextWithLenFn cstring_to_text_with_len_fn);
+  std::string client_id_;
+
+  std::atomic<int64_t> stmt_id_;
+};
+
+}  // namespace k2pg
