@@ -73,6 +73,9 @@ Copyright(c) 2022 Futurewei Cloud
 #include "parse.h"
 
 namespace k2fdw {
+namespace log {
+inline thread_local k2::logging::Logger fdw("og::k2::fdw");
+}
 
 class PgStatement;
 
@@ -203,7 +206,7 @@ static bool initialized=false;
 
 std::shared_ptr<skv::http::dto::Schema> getSchema(Oid foid) {
     auto it = schemaCache.find(foid);
-    std::cout << "trying to get schema for foid: " << foid << std::endl;
+    K2LOG_D(log::fdw, "trying to get schema for foid: {}", foid);
     if (it == schemaCache.end()) {
         String schemaName = std::to_string(foid);
 
@@ -333,7 +336,7 @@ static void AppendValueToRecord(skv::http::dto::expression::Value& value, skv::h
     typename std::remove_reference_t<decltype(afr)>::ValueT constant;
     skv::http::MPackReader reader(value.literal);
     if (reader.read(constant)) {
-        std::cout << constant << std::endl;
+        K2LOG_D(log::fdw, "read: {}", constant);
         builder.serializeNext(constant);
     }
     else {
@@ -348,21 +351,19 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
     using namespace skv::http::dto::expression;
     using namespace skv::http;
     if (range_conds.op == Operation::UNKNOWN) {
-        std::cout << "range_conds UNKNOWN" << std::endl;
+        K2LOG_D(log::fdw, "range_conds UNKNOWN");
         return;
     }
 
     if (range_conds.op != Operation::AND) {
-        std::cout << "range_conds not AND" << std::endl;
         std::string msg = "Only AND top-level condition is supported in range expression";
-        //K2LOG_E(log::k2Adapter, "{}", msg);
+        K2LOG_E(log::fdw, "{}", msg);
         //return STATUS(InvalidCommand, msg);
         throw std::invalid_argument(msg);
     }
 
     if (range_conds.expressionChildren.size() == 0) {
-        std::cout << "range_conds 0 children" << std::endl;
-        //K2LOG_D(log::k2Adapter, "Child conditions are empty");
+        K2LOG_D(log::fdw, "Child conditions are empty");
         return;
     }
 
@@ -393,7 +394,7 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
             // there was a branch in the processing of previous condition and we cannot continue.
             // Ideally, this shouldn't happen if the query parser did its job well.
             // This is not an error, and so we can still process the request. PG would down-filter the result set after
-            //K2LOG_D(log::k2Adapter, "Condition branched at previous key field. Use the condition as filter condition");
+            K2LOG_D(log::fdw, "Condition branched at previous key field. Use the condition as filter condition");
             leftover_exprs.push_back(pg_expr);
             continue; // keep going so that we log all skipped expressions;
         }
@@ -406,13 +407,14 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
             case Operation::EQ: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
-                    std::cout << "Appending to start: ";
+
+                    K2LOG_D(log::fdw, "Appending to start");
                     AppendValueToRecord(val, start);
-                    std::cout << "Appending to end: ";
+                    K2LOG_D(log::fdw, "Appending to end");
                     AppendValueToRecord(val, end);
                 } else {
                     didBranch = true;
-                    std::cout << "Appending to leftover EQ else cur: " << cur_idx << " start: " << start_idx << std::endl;
+                    K2LOG_D(log::fdw, "Appending to leftover EQ else cur: {}, start: {}", cur_idx, start_idx);
                     leftover_exprs.emplace_back(pg_expr);
                 }
             } break;
@@ -420,25 +422,25 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
             case Operation::GT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
-                    std::cout << "Appending to start: ";
+                    K2LOG_D(log::fdw, "Appending to start");
                     AppendValueToRecord(val, start);
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
-                std::cout << "Appending to leftover GT" << std::endl;
+                K2LOG_D(log::fdw, "Appending to leftover GT");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
-                    std::cout << "Appending to end: ";
+                    K2LOG_D(log::fdw, "Appending to end");
                     AppendValueToRecord(val, end);
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
-                std::cout << "Appending to leftover LT" << std::endl;
+                K2LOG_D(log::fdw, "Appending to leftover LT");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LTE: {
@@ -454,14 +456,14 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
                     } else { */
                 // Not pushing LTE to range record because end record is exclusive
                 didBranch = true;
-                std::cout << "Appending to leftover LTE" << std::endl;
+                K2LOG_D(log::fdw, "Appending to leftover LTE");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             default: {
                 //const char* msg = "Expression Condition must be one of [BETWEEN, EQ, GE, LE]";
                 //K2LOG_W(log::k2Adapter, "{}", msg);
                 didBranch = true;
-                std::cout << "Appending to leftover default" << std::endl;
+                K2LOG_D(log::fdw, "Appending to leftover default");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
         }
@@ -549,7 +551,7 @@ static void BindScanKeys(Relation relation,
 void
 k2BeginForeignScan(ForeignScanState *node, int eflags)
 {
-    std::cout << "BeginForeignScan" << std::endl;
+    K2LOG_D(log::fdw, "BeginForeignScan");
     Relation    relation     = node->ss.ss_currentRelation;
     ForeignScan *foreignScan = (ForeignScan *) node->ss.ps.plan;
 
@@ -595,7 +597,7 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
     //                                                    k2pg_catalog_cache_version),
     //                                                    k2pg_state->handle,
     //                                                    k2pg_state->stmt_owner);
-    std::cout << "BeginForeignScan done" << std::endl;
+    K2LOG_D(log::fdw, "BeginForeignScan done");
 }
 
 /*
@@ -606,7 +608,7 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
 TupleTableSlot *
 k2IterateForeignScan(ForeignScanState *node)
 {
-    std::cout << "IterateForeignScan" << std::endl;
+    K2LOG_D(log::fdw, "IterateForeignScan");
     TupleTableSlot *slot= nullptr;
     K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
     Relation relation = node->ss.ss_currentRelation;
@@ -622,7 +624,7 @@ k2IterateForeignScan(ForeignScanState *node)
         LoadTableInfo(RelationGetRelid(relation), &scan_plan);
         scan_plan.bind_desc = RelationGetDescr(relation);
         BindScanKeys(relation, k2pg_state, &scan_plan);
-        std::cout << "IterateForeignScan BindScanKeys done" << std::endl;
+        K2LOG_D(log::fdw, "IterateForeignScan BindScanKeys done");
 
         skv::http::dto::SKVRecordBuilder startBuild("postgres", scan_plan.schema);
         startBuild.serializeNext<String>(scan_plan.schema->name);
@@ -634,7 +636,7 @@ k2IterateForeignScan(ForeignScanState *node)
         BuildRangeRecords(scan_plan.range_conds, leftovers, startBuild, endBuild, scan_plan.schema);
         skv::http::dto::SKVRecord startScanRecord = startBuild.build();
         skv::http::dto::SKVRecord endScanRecord = endBuild.build();
-        std::cout << "IterateForeignScan BuildRangeRecords done" << std::endl;
+        K2LOG_D(log::fdw, "IterateForeignScan BuildRangeRecords done");
         for (skv::http::dto::expression::Expression& expr : leftovers) {
             scan_plan.where_conds.expressionChildren.push_back(std::move(expr));
         }
@@ -642,9 +644,9 @@ k2IterateForeignScan(ForeignScanState *node)
             scan_plan.where_conds = skv::http::dto::expression::Expression{};
         }
         auto&&[status, query] = txnHandle.createQuery(startScanRecord, endScanRecord, std::move(scan_plan.where_conds)).get();
-        std::cout << "IterateForeignScan createQuery done" << std::endl;
+        K2LOG_D(log::fdw, "IterateForeignScan createQuery done");
         if (!status.is2xxOK()) {
-            std::cout << "error on createQuery: " << status << std::endl;
+            K2LOG_D(log::fdw, "error on createQuery: {}", status);
             return slot;
             // err
         }
@@ -661,14 +663,14 @@ k2IterateForeignScan(ForeignScanState *node)
     slot = node->ss.ss_ScanTupleSlot;
     ExecClearTuple(slot);
 
-    std::cout << "IterateForeignScan tuple prep done" << std::endl;
+    K2LOG_D(log::fdw, "IterateForeignScan tuple prep done");
 
     auto&& [statusQ, result] = txnHandle.query(k2pg_state->query).get();
     if (!statusQ.is2xxOK()) {
-        std::cout << "query error: " << statusQ.message << std::endl;
+        K2LOG_D(log::fdw, "query error: {}", statusQ.message);
         return slot;
     }
-    std::cout << "query done result size: " << result.records.size() << std::endl;
+    K2LOG_D(log::fdw, "query done result size: {}", result.records.size());
     /* Fetch one row. */
     //bool           has_data   = false;
     //TupleDesc       tupdesc = slot->tts_tupleDescriptor;
@@ -693,10 +695,10 @@ k2IterateForeignScan(ForeignScanState *node)
         skv::http::dto::SKVRecord record("postgres", getSchema(RelationGetRelid(relation)), std::move(result.records[0]), true);
         record.seekField(K2_FIELD_OFFSET);
         std::optional<int32_t> value = record.deserializeNext<int32_t>();
-        std::cout << "K2FDW: scanned a record with val: " << *value << std::endl;
+        K2LOG_D(log::fdw, "K2FDW: scanned a record with val: {}", *value);
         std::optional<int32_t> value2 = record.deserializeNext<int32_t>();
-        std::cout << "K2FDW: scanned a record with val2: " << *value2 << std::endl;
-        std::cout << "IterateForeignScan deserialize done" << std::endl;
+        K2LOG_D(log::fdw, "K2FDW: scanned a record with val2: {}", *value2);
+        K2LOG_D(log::fdw, "IterateForeignScan deserialize done");
 
         //HeapTuple tuple = heap_form_tuple(tupdesc, values, isnull);
         slot->tts_isnull[0] = false;
@@ -758,8 +760,7 @@ k2GetForeignRelSize(PlannerInfo *root,
     fdw_plan->local_conds = NIL;
 
     ListCell   *lc;
-    std::cout << "K2FDW: k2GetForeignRelSizebase restrictinfos: " << list_length(baserel->baserestrictinfo) << std::endl;
-    std::cerr << "K2FDW: k2GetForeignRelSizebase restrictinfos: " << list_length(baserel->baserestrictinfo) << std::endl;
+    K2LOG_E(log::fdw, "K2FDW: k2GetForeignRelSizebase restrictinfos: {}", list_length(baserel->baserestrictinfo));
 
     foreach(lc, baserel->baserestrictinfo) {
         RestrictInfo *ri = lfirst_node(RestrictInfo, lc);
@@ -769,8 +770,7 @@ k2GetForeignRelSize(PlannerInfo *root,
         else
             fdw_plan->local_conds = lappend(fdw_plan->local_conds, ri);
     }
-    std::cout << "K2FDW: classified remote_conds: " << list_length(fdw_plan->remote_conds) << std::endl;
-    std::cerr << "K2FDW: classified remote_conds: " << list_length(fdw_plan->remote_conds) << std::endl;
+    K2LOG_E(log::fdw, "K2FDW: classified remote_conds: {}", list_length(fdw_plan->remote_conds));
 
     /*
     * Test any indexes of rel for applicability also.
@@ -945,7 +945,7 @@ static void createCollection() {
     meta.storageDriver = skv::http::dto::StorageDriver::K23SI;
 
     auto reqFut = client->createCollection(std::move(meta), std::vector<String>{""});
-    std::cout << "getting createCollection resp!" << std::endl;
+    K2LOG_D(log::fdw, "getting createCollection resp!");
     auto&&[status] = reqFut.get();
     if (!status.is2xxOK()) {
         ereport(ERROR,
@@ -956,7 +956,7 @@ static void createCollection() {
 }
 
 void k2CreateTable(CreateForeignTableStmt* stmt) {
-    std::cout << "Start create table" << std::endl;
+    K2LOG_D(log::fdw, "Start create table");
 
     if (!initialized) {
         client = new skv::http::Client("172.17.0.1");
@@ -964,7 +964,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
         initialized = true;
     }
 
-    std::cout << "trying to get db name" << std::endl;
+    K2LOG_D(log::fdw, "trying to get db name");
     char* dbname = NULL;
     bool failure = false;
     dbname = get_database_name(u_sess->proc_cxt.MyDatabaseId);
@@ -975,12 +975,12 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
             errmsg("database with OID %u does not exist", u_sess->proc_cxt.MyDatabaseId)));
         return;
     }
-    std::cout << "got db name" << std::endl;
+    K2LOG_D(log::fdw, "got db name");
     //dbname will be k2 collection name
 
     skv::http::dto::Schema schema;
     schema.name = std::to_string(stmt->base.relation->foreignOid);
-    std::cout << "got schema name" << std::endl;
+    K2LOG_D(log::fdw, "got schema name");
 
     schema.version = 0;
     schema.fields.resize(list_length(stmt->base.tableElts) + 2);
@@ -990,7 +990,7 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
     schema.fields[1].name = "__K2_INDEX_ID__";
     schema.fields[1].type = skv::http::dto::FieldType::INT32T;
 
-    std::cout << "start column iteration" << std::endl;
+    K2LOG_D(log::fdw, "start column iteration");
     ListCell* cell = nullptr;
     int fieldIdx = 2;
     foreach(cell, stmt->base.tableElts) {
@@ -1029,9 +1029,9 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
         ++fieldIdx;
     }
 
-    std::cout << "create table finishing" << std::endl;
+    K2LOG_D(log::fdw, "create table finishing");
     if (!failure) {
-        std::cout << "creating table for foid: " << stmt->base.relation->foreignOid << std::endl;
+        K2LOG_D(log::fdw, "creating table for foid: {}", stmt->base.relation->foreignOid);
 
         schemaCache[stmt->base.relation->foreignOid] = std::make_shared<skv::http::dto::Schema>(std::move(schema));
     }
@@ -1040,10 +1040,10 @@ void k2CreateTable(CreateForeignTableStmt* stmt) {
 }
 
 void k2CreateIndex(IndexStmt* stmt) {
-    std::cout << "create index start" << std::endl;
+    K2LOG_D(log::fdw, "create index start");
     auto it = schemaCache.find(stmt->relation->foreignOid);
     auto& schema = it->second;
-    std::cout << "creating index for foid: " << stmt->relation->foreignOid << std::endl;
+    K2LOG_D(log::fdw, "creating index for foid: {}", stmt->relation->foreignOid);
     if (it == schemaCache.end()) {
         ereport(ERROR,
             (errmodule(MOD_K2),
@@ -1060,7 +1060,7 @@ void k2CreateIndex(IndexStmt* stmt) {
 
     // TODO check for index expression and error
 
-    std::cout << "create index start column iteration" << std::endl;
+    K2LOG_D(log::fdw, "create index start column iteration");
     schema->partitionKeyFields.push_back(0);
     schema->partitionKeyFields.push_back(1);
     ListCell* lc = nullptr;
@@ -1085,7 +1085,7 @@ void k2CreateIndex(IndexStmt* stmt) {
             errcode(ERRCODE_UNDEFINED_DATABASE),
             errmsg("Could not create K2 collection")));
     }
-    std::cout << "Made a K2 Schema for table: " << it->first << "with " << schema->fields.size()-2 << " fields and " << schema->partitionKeyFields.size() - 2 << " key fields" << std::endl;
+    K2LOG_D(log::fdw, "Made a K2 Schema for table: {} with {} fields and {} key fields", it->first, schema->fields.size()-2, schema->partitionKeyFields.size() - 2);
 }
 
 TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo, TupleTableSlot* slot, TupleTableSlot* planSlot) {
@@ -1097,7 +1097,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
         return nullptr;
     }
 
-    std::cout << "Insert row, got schema: " << schema->name << std::endl;
+    K2LOG_D(log::fdw, "Insert row, got schema: {}", schema->name);
     skv::http::dto::SKVRecordBuilder build("postgres", schema);
 
     // HeapTuple srcData = (HeapTuple)slot->tts_tuple;
@@ -1112,7 +1112,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
 
     for (; i < cols; i++, j++) {
         bool isnull = false;
-        std::cout << "trying to get datum for colid: " << j << std::endl;
+        K2LOG_D(log::fdw, "trying to get datum for colid: {}", j);
         Datum value = heap_slot_getattr(slot, j, &isnull);
 
         if (!isnull) {
@@ -1120,10 +1120,10 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
             switch (type) {
                 case INT4OID:
                     if (schema->fields[i+2].type != skv::http::dto::FieldType::INT32T) {
-                        std::cout << "Types do not match" << std::endl;
+                        K2LOG_D(log::fdw, "Types do not match");
                     }
                     int32_t k2val = (int32_t)(value & 0xffffffff);
-                    std::cout << "col: " << j << " val: " << k2val << std::endl;
+                    K2LOG_D(log::fdw, "col: {}, val: {}", j, k2val);
                     build.serializeNext<int32_t>(k2val);
                     break;
             }
@@ -1131,7 +1131,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
     }
 
     skv::http::dto::SKVRecord record = build.build();
-    std::cout << "my record: " << record << std::endl;
+    K2LOG_D(log::fdw, "my record: {}", record);
 
     // TODO txn handling
     auto beginFut = client->beginTxn(skv::http::dto::TxnOptions());
@@ -1158,7 +1158,7 @@ TupleTableSlot* k2ExecForeignInsert(EState* estate, ResultRelInfo* resultRelInfo
         return nullptr;
     }
 
-    std::cout << "write was committed!" << std::endl;
+    K2LOG_D(log::fdw, "write was committed!");
 
     return slot;
 }
