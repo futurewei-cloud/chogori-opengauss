@@ -544,8 +544,8 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
   builder.serializeNext<int32_t>(table_id);
   builder.serializeNext<int32_t>(0);
 
-  for (int i=2; i < schema.partitionKeyFields.size(); ++i) {
-      int target_attr = i + K2_FIELD_IDX_TO_ATTR_OFFSET;
+  for (size_t i=2; i < schema.partitionKeyFields.size(); ++i) {
+      size_t target_attr = i + K2_FIELD_IDX_TO_ATTR_OFFSET;
       auto it = attr_map.find(target_attr);
       if (it == attr_map.end()) {
           builder.serializeNull();
@@ -569,14 +569,14 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
     };
     return err;
   }
-  
+
   // This comes from cstring_to_text_with_len which is used to create a proper datum
   // that is prepended with the data length. Doing it by hand here to avoid the extra copy
   char *datum = (char*)palloc(serializedStorage.size() + VARHDRSZ);
   SET_VARSIZE(datum, serializedStorage.size() + VARHDRSZ);
   memcpy(VARDATA(datum), serializedStorage.data(), serializedStorage.size());
   *k2pgctid = PointerGetDatum(datum);
-    
+
   K2PgStatus status {
       .pg_code = ERRCODE_SUCCESSFUL_COMPLETION,
       .k2_code = 200,
