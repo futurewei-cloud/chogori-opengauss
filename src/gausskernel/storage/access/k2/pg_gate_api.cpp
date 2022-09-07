@@ -48,9 +48,9 @@ std::atomic<bool> api_impl_shutdown_done;
 } // anonymous namespace
 
 
-k2pg::catalog::SqlCatalogClient* GetCatalog() {
+std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalog() {
     static auto catalogManager = std::make_shared<k2pg::catalog::SqlCatalogManager>();
-    static auto catalog = new k2pg::catalog::SqlCatalogClient(catalogManager);
+    static auto catalog = std::make_shared<k2pg::catalog::SqlCatalogClient>(catalogManager);
     return catalog;
 }
 
@@ -132,20 +132,10 @@ K2PgStatus PgGate_InitPrimaryCluster()
   auto catalog = GetCatalog();
   auto skvstat = catalog->InitPrimaryCluster();
   if (skvstat.is2xxOK()) {
-      return K2PgStatus {
-          .pg_code = ERRCODE_SUCCESSFUL_COMPLETION,
-          .k2_code = skvstat.code,
-          .msg = "ok",
-          .detail = "ok"
-      };
+      return k2pg::Status::OK;
   }
-  K2PgStatus status {
-      .pg_code = ERRCODE_FDW_OPERATION_NOT_SUPPORTED,
-      .k2_code = 501,
-      .msg = skvstat.message,
-      .detail = ""
-  };
-
+  K2PgStatus status = k2pg::Status::NotSupported;
+  status.msg = skvstat.message;
   return status;
 }
 
