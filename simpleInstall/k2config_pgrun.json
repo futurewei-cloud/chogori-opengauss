@@ -1,0 +1,11 @@
+{
+    "client": {
+        "host": "172.17.0.1",
+        "port": 30000
+    },
+    "create_collections": {
+        "PG_DEFAULT_CLUSTER": {
+            "range_ends": []
+        }
+    }
+}

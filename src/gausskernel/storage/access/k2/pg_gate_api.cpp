@@ -34,6 +34,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "utils/elog.h"
 #include "pg_gate_defaults.h"
 #include "pg_gate_thread_local.h"
+#include "catalog/sql_catalog_client.h"
 
 #include <atomic>
 
@@ -46,9 +47,17 @@ std::atomic<bool> api_impl_shutdown_done;
 
 } // anonymous namespace
 
+
+std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalog() {
+    static auto catalogManager = std::make_shared<k2pg::catalog::SqlCatalogManager>();
+    static auto catalog = std::make_shared<k2pg::catalog::SqlCatalogClient>(catalogManager);
+    return catalog;
+}
+
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
     elog(INFO, "K2 PgGate open");
  //   K2ASSERT(log::pg, api_impl == nullptr, "can only be called once");
+
     api_impl_shutdown_done.exchange(false);
 }
 
@@ -119,7 +128,15 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
 K2PgStatus PgGate_InitPrimaryCluster()
 {
   elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
-  return K2PgStatus::NotSupported;
+
+  auto catalog = GetCatalog();
+  auto skvstat = catalog->InitPrimaryCluster();
+  if (skvstat.is2xxOK()) {
+      return k2pg::Status::OK;
+  }
+  K2PgStatus status = k2pg::Status::NotSupported;
+  status.msg = skvstat.message;
+  return status;
 }
 
 K2PgStatus PgGate_FinishInitDB()
