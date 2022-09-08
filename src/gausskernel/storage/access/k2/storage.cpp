@@ -34,6 +34,50 @@ Copyright(c) 2022 Futurewei Cloud
 
 namespace k2pg {
 namespace gate {
+    int K2CodeToPGCode(int k2code) {
+        switch (k2code) {
+            case 200: // OK Codes
+            case 201:
+            case 202:
+                return ERRCODE_SUCCESSFUL_COMPLETION;
+            case 400: // Bad request
+                return ERRCODE_INTERNAL_ERROR;
+            case 403: // Forbidden, used to indicate AbortRequestTooOld in K23SI
+                return ERRCODE_SNAPSHOT_INVALID;
+            case 404: // Not found
+                return ERRCODE_SUCCESSFUL_COMPLETION;
+            case 405: // Not allowed, indicates a bug in K2 usage or operation
+            case 406: // Not acceptable, used to indicate BadFilterExpression
+            case 408: // Timeout
+                return ERRCODE_INTERNAL_ERROR;
+            case 409: // Conflict, used to indicate K23SI transaction conflicts
+                return ERRCODE_T_R_SERIALIZATION_FAILURE;
+            case 410: // Gone, indicates a partition map error
+                return ERRCODE_INTERNAL_ERROR;
+            case 412: // Precondition failed, indicates a failed K2 insert operation
+                return ERRCODE_UNIQUE_VIOLATION;
+            case 422: // Unprocessable entity, BadParameter in K23SI, indicates a bug in usage or operation
+            case 500: // Internal error, indicates a bug in K2 code
+            case 503: // Service unavailable, indicates a partition is not assigned
+            default:
+                return ERRCODE_INTERNAL_ERROR;
+        }
+
+        return ERRCODE_INTERNAL_ERROR;
+    }
+
+    K2PgStatus K2StatusToK2PgStatus(skv::http::Status&& status) {
+        K2PgStatus out_status{
+            .pg_code = K2CodeToPGCode(status.code),
+            .k2_code = status.code,
+            .msg = std::move(status.message),
+            .detail = ""
+        };
+
+        return out_status;
+    }
+
+
     // These are types that we can push down filter operations to K2, so when we convert them we want to
     // strip out the Datum headers
     bool isStringType(Oid oid) {
@@ -72,7 +116,7 @@ namespace gate {
             }
         }
     };
-    
+
     void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant) {
         // Three different types of constants to handle. 1: String-like types that we can push down
         // operations into K2. 2: Numeric types that fit in a K2 equivalent. 3: Arbitrary binary
@@ -125,7 +169,7 @@ namespace gate {
         }
         catch (...) {
             K2PgStatus status {
-                .pg_code = ERRCODE_FDW_ERROR,
+                .pg_code = ERRCODE_INTERNAL_ERROR,
                 .k2_code = 0,
                 .msg = "Serialization error in serializePGConstToK2SKV",
                 .detail = ""
@@ -133,6 +177,6 @@ namespace gate {
             HandleK2PgStatus(status);
         }
     }
-    
+
 } // k2pg ns
 } // gate ns

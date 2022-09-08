@@ -31,12 +31,14 @@ Copyright(c) 2022 Futurewei Cloud
 #include "fmgr/fmgr_comp.h"
 
 #include <skvhttp/dto/SKVRecord.h>
+#include <skvhttp/common/Status.h>
 
 namespace k2pg {
 namespace gate {
     // Adjust k2 field index for the two added k2 fields (table and index ids) and for the 1-based
     // numbering of pg attr nums
     constexpr int K2_FIELD_IDX_TO_ATTR_OFFSET = -1;
-    void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant);    
+    void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant);
+    K2PgStatus K2StatusToK2PgStatus(skv::http::Status&& status);
 } // k2pg ns
 } // gate ns
