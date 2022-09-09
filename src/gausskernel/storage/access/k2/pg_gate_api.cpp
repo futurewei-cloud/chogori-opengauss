@@ -58,16 +58,10 @@ namespace {
             catalog_manager_ = std::make_shared<k2pg::catalog::SqlCatalogManager>();
             catalog_client_ = std::make_shared<k2pg::catalog::SqlCatalogClient>(catalog_manager_);
             catalog_manager_->Start();
-            initialized_ = true;
         };
 
         ~PgGate() {
               catalog_manager_->Shutdown();
-              initialized_ = false;
-        };
-
-        bool IsInitialized() {
-              return initialized_;
         };
 
         std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalogClient() {
@@ -87,8 +81,6 @@ namespace {
         };
 
         private:
-        std::atomic<bool> initialized_;
-
         K2PgCallbacks pg_callbacks_;
 
         // Mapping table of K2PG and PostgreSQL datatypes.
@@ -111,7 +103,7 @@ void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCal
 }
 
 void PgGate_DestroyPgGate() {
-    if (pg_gate == nullptr || !pg_gate->IsInitialized()) {
+    if (pg_gate == nullptr) {
       elog(ERROR, "PgGate is destroyed or not initialized");
     } else {
       pg_gate = nullptr;
@@ -769,7 +761,7 @@ bool PgGate_GetDisableIndexBackfill() {
 }
 
 bool PgGate_IsK2PgEnabled() {
-    return pg_gate != nullptr && pg_gate->IsInitialized();
+    return pg_gate != nullptr;
 }
 
 // Sets the specified timeout in the rpc service.
