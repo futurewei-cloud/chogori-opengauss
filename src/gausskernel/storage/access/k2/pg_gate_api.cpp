@@ -103,13 +103,6 @@ namespace {
     std::shared_ptr<PgGate> pg_gate;
 } // anonymous namespace
 
-
-std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalog() {
-    static auto catalogManager = std::make_shared<k2pg::catalog::SqlCatalogManager>();
-    static auto catalog = std::make_shared<k2pg::catalog::SqlCatalogClient>(catalogManager);
-    return catalog;
-}
-
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
     assert(pg_gate == nullptr && "PgGate should only be initialized once");
     elog(INFO, "K2 PgGate open");
