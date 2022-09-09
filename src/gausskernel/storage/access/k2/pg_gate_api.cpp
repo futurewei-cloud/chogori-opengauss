@@ -30,6 +30,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <memory>
 
 #include "access/k2/pg_gate_api.h"
+#include "access/k2/pg_memctx.h"
 
 #include "k2pg-internal.h"
 #include "session.h"
@@ -136,18 +137,21 @@ K2PgStatus PgGate_InitSession(const char *database_name) {
 //   Postgres operations are done, associated K2PG memory context (K2PgMemCtx) will be
 //   destroyed toghether with Postgres memory context.
 K2PgMemctx PgGate_CreateMemctx() {
-  elog(DEBUG5, "PgGateAPI: PgGate_CreateMemctx");
-  return nullptr;
+    elog(DEBUG5, "PgGateAPI: PgGate_CreateMemctx");
+    // Postgres will create PG Memctx when it first use the Memctx to allocate K2PG object.
+    return k2pg::PgMemctx::Create();
 }
 
 K2PgStatus PgGate_DestroyMemctx(K2PgMemctx memctx) {
-  elog(DEBUG5, "PgGateAPI: PgGate_DestroyMemctx");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_DestroyMemctx");
+    // Postgres will destroy PG Memctx by releasing the pointer.
+    return k2pg::PgMemctx::Destroy(memctx);
 }
 
 K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ResetMemctx");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_ResetMemctx");
+    // Postgres reset PG Memctx when clearing a context content without clearing its nested context.
+    return k2pg::PgMemctx::Reset(memctx);
 }
 
 // Invalidate the sessions table cache.
