@@ -172,6 +172,44 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
     }
 }
 
+K2PgStatus tupleIDDatumToSKVRecord(Datum tuple_id, int32_t db_id, int32_t table_id) {
+
+}
+
+K2PgStatus serializeKeysFromSKVRecord(skv::http::dto::SKVRecord& source, skv::http::dto::SKVRecordBuilder& builder) {
+    try {
+        source.seekField(0);
+        std::optional<int32_t> table_id = source.deserializeNext<int32_t>();
+        builder.serializeNext<int32_t>(*table_id);
+        std::optional<int32_t> index_id = source.deserializeNext<int32_t>();
+        builder.serializeNext<int32_t>(*index_id);
+
+        for (size_t i=K2_FIELD_OFFSET; i < source.schema->partitionKeyFields.size(); ++i) {
+            source.visitNextField([&builder] (const auto& field, auto&& value) mutable {
+                using T = typename std::remove_reference_t<decltype(value)>::value_type;
+                if (!value.has_value()) {
+                    builder.serializeNull();
+                } else {
+                    builder.serializeNext<T>(*value);
+                }
+            });
+        }
+    }
+
+    catch (const std::exception& err) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 0,
+            .msg = "Serialization error in serializeKeysFromSKVRecord",
+            .detail = err.what()
+        };
+
+        return status;
+    }
+
+    return K2PgStatus::OK;
+}
+
 K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, std::shared_ptr<skv::http::dto::Schema> schema, int32_t table_id, int32_t index_id,
                                       const std::vector<K2PgAttributeDef>& attrs, const std::unordered_map<int, uint32_t>& attr_num_to_index) {
     std::unordered_map<int, K2PgConstant> attr_map;

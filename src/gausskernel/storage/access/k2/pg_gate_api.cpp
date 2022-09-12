@@ -533,7 +533,7 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
                                     uint64_t *k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
 
-  auto catalog = GetCatalog();
+  auto catalog = pg_gate->GetCatalogClient();
   std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
   std::shared_ptr<skv::http::dto::Schema> schema;
   skv::http::Status catalog_status = catalog->GetSKVBuilderAndSchema(db_oid, table_id, builder, schema);
@@ -586,7 +586,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              bool increment_catalog,
                              const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
-  auto catalog = GetCatalog();
+  auto catalog = pg_gate->GetCatalogClient();
 
   std::unordered_map<int, uint32_t> attr_to_offset;
   skv::http::Status catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
