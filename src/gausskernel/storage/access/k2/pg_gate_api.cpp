@@ -24,59 +24,101 @@ Copyright(c) 2022 Futurewei Cloud
 // When we mix certain C++ standard lib code and pg code there seems to be a macro conflict that
 // will cause compiler errors in libintl.h. Including as the first thing fixes this.
 #include <libintl.h>
+#include <unordered_map>
+#include <assert.h>
+#include <atomic>
+#include <memory>
 
 #include "access/k2/pg_gate_api.h"
+#include "access/k2/pg_memctx.h"
 
 #include "k2pg-internal.h"
 #include "session.h"
 #include "access/k2/k2pg_util.h"
 
 #include "utils/elog.h"
+#include "utils/errcodes.h"
 #include "pg_gate_defaults.h"
 #include "pg_gate_thread_local.h"
 #include "catalog/sql_catalog_client.h"
 
-#include <atomic>
-
 using namespace k2pg::gate;
 
 namespace {
-// Using a raw pointer here to fully control object initialization and destruction.
-// k2pg::gate::PgGateApiImpl* api_impl;
-std::atomic<bool> api_impl_shutdown_done;
 
+    class PgGate {
+        public:
+        // TODO: remove K2PgTypeEntity to map to use type oid to map to k2 type directly
+        PgGate(const K2PgTypeEntity *k2PgDataTypeArray, int count, K2PgCallbacks callbacks) {
+            // Setup type mapping.
+            for (int idx = 0; idx < count; idx++) {
+                const K2PgTypeEntity *type_entity = &k2PgDataTypeArray[idx];
+                type_map_[type_entity->type_oid] = type_entity;
+            }
+            catalog_manager_ = std::make_shared<k2pg::catalog::SqlCatalogManager>();
+            catalog_client_ = std::make_shared<k2pg::catalog::SqlCatalogClient>(catalog_manager_);
+            catalog_manager_->Start();
+        };
+
+        ~PgGate() {
+              catalog_manager_->Shutdown();
+        };
+
+        std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalogClient() {
+              return catalog_client_;
+        };
+
+        std::shared_ptr<k2pg::catalog::SqlCatalogManager> GetCatalogManager() {
+              return catalog_manager_;
+        };
+
+        const K2PgTypeEntity *FindTypeEntity(int type_oid) {
+              const auto iter = type_map_.find(type_oid);
+              if (iter != type_map_.end()) {
+                  return iter->second;
+              }
+              return nullptr;
+        };
+
+        private:
+        K2PgCallbacks pg_callbacks_;
+
+        // Mapping table of K2PG and PostgreSQL datatypes.
+        std::unordered_map<int, const K2PgTypeEntity *> type_map_;
+
+        std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client_;
+
+        std::shared_ptr<k2pg::catalog::SqlCatalogManager> catalog_manager_;
+
+    };
+
+    // use anonymous namespace to define a static variable that is not exposed outside of this file
+    std::shared_ptr<PgGate> pg_gate;
 } // anonymous namespace
 
-
-std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalog() {
-    static auto catalogManager = std::make_shared<k2pg::catalog::SqlCatalogManager>();
-    static auto catalog = std::make_shared<k2pg::catalog::SqlCatalogClient>(catalogManager);
-    return catalog;
-}
-
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
+    assert(pg_gate == nullptr && "PgGate should only be initialized once");
     elog(INFO, "K2 PgGate open");
- //   K2ASSERT(log::pg, api_impl == nullptr, "can only be called once");
-
-    api_impl_shutdown_done.exchange(false);
+    pg_gate = std::make_shared<PgGate>(k2PgDataTypeTable, count, pg_callbacks);
 }
 
 void PgGate_DestroyPgGate() {
-    if (api_impl_shutdown_done.exchange(true)) {
-      elog(ERROR, "should only be called once");
+    if (pg_gate == nullptr) {
+      elog(ERROR, "PgGate is destroyed or not initialized");
     } else {
+      pg_gate = nullptr;
       elog(INFO, "K2 PgGate destroyed");
     }
 }
 
 // Initialize a session to process statements that come from the same client connection.
 K2PgStatus PgGate_InitSession(const char *database_name) {
-  elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
+    elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
 
-  k2pg::TXMgr.Init();
-  k2pg::TXMgr.EndTxn(skv::http::dto::EndAction::Abort);
+    k2pg::TXMgr.Init();
+    k2pg::TXMgr.EndTxn(skv::http::dto::EndAction::Abort);
 
-  return K2PgStatus::NotSupported;
+    return K2PgStatus::NotSupported;
 }
 
 // Initialize K2PgMemCtx.
@@ -87,18 +129,21 @@ K2PgStatus PgGate_InitSession(const char *database_name) {
 //   Postgres operations are done, associated K2PG memory context (K2PgMemCtx) will be
 //   destroyed toghether with Postgres memory context.
 K2PgMemctx PgGate_CreateMemctx() {
-  elog(DEBUG5, "PgGateAPI: PgGate_CreateMemctx");
-  return nullptr;
+    elog(DEBUG5, "PgGateAPI: PgGate_CreateMemctx");
+    // Postgres will create PG Memctx when it first use the Memctx to allocate K2PG object.
+    return k2pg::PgMemctx::Create();
 }
 
 K2PgStatus PgGate_DestroyMemctx(K2PgMemctx memctx) {
-  elog(DEBUG5, "PgGateAPI: PgGate_DestroyMemctx");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_DestroyMemctx");
+    // Postgres will destroy PG Memctx by releasing the pointer.
+    return k2pg::PgMemctx::Destroy(memctx);
 }
 
 K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ResetMemctx");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_ResetMemctx");
+    // Postgres reset PG Memctx when clearing a context content without clearing its nested context.
+    return k2pg::PgMemctx::Reset(memctx);
 }
 
 // Invalidate the sessions table cache.
@@ -109,15 +154,36 @@ K2PgStatus PgGate_InvalidateCache() {
 
 // Check if initdb has been already run.
 K2PgStatus PgGate_IsInitDbDone(bool* initdb_done) {
-  elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbDone");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbDone");
+
+    auto skvstat = pg_gate->GetCatalogClient()->IsInitDbDone(initdb_done);
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    K2PgStatus status {
+        .pg_code = ERRCODE_INTERNAL_ERROR,
+        .k2_code = skvstat.code,
+        .msg = skvstat.message,
+        .detail = "PgGate_IsInitDbDone failed"
+    };
+    return status;
 }
 
 // Sets catalog_version to the local tserver's catalog version stored in shared
 // memory, or an error if the shared memory has not been initialized (e.g. in initdb).
 K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetSharedCatalogVersion");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_GetSharedCatalogVersion");
+    auto skvstat = pg_gate->GetCatalogClient()->GetCatalogVersion(catalog_version);
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    K2PgStatus status {
+        .pg_code = ERRCODE_INTERNAL_ERROR,
+        .k2_code = skvstat.code,
+        .msg = skvstat.message,
+        .detail = "PgGate_GetSharedCatalogVersion failed"
+    };
+    return status;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -127,22 +193,35 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
 // K2 InitPrimaryCluster
 K2PgStatus PgGate_InitPrimaryCluster()
 {
-  elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
+    elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
 
-  auto catalog = GetCatalog();
-  auto skvstat = catalog->InitPrimaryCluster();
-  if (skvstat.is2xxOK()) {
-      return k2pg::Status::OK;
-  }
-  K2PgStatus status = k2pg::Status::NotSupported;
-  status.msg = skvstat.message;
-  return status;
+    auto skvstat = pg_gate->GetCatalogClient()->InitPrimaryCluster();
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    K2PgStatus status {
+        .pg_code = ERRCODE_INTERNAL_ERROR,
+        .k2_code = skvstat.code,
+        .msg = skvstat.message,
+        .detail = "PgGate_InitPrimaryCluster failed"
+    };
+    return status;
 }
 
 K2PgStatus PgGate_FinishInitDB()
 {
-  elog(DEBUG5, "PgGateAPI: PgGate_FinishInitDB()");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_FinishInitDB()");
+    auto skvstat = pg_gate->GetCatalogClient()->FinishInitDB();
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    K2PgStatus status {
+        .pg_code = ERRCODE_INTERNAL_ERROR,
+        .k2_code = skvstat.code,
+        .msg = skvstat.message,
+        .detail = "PgGate_FinishInitDB() failed"
+    };
+    return status;
 }
 
 // DATABASE ----------------------------------------------------------------------------------------
@@ -682,8 +761,7 @@ bool PgGate_GetDisableIndexBackfill() {
 }
 
 bool PgGate_IsK2PgEnabled() {
-//  return api_impl != nullptr;
-  return true;
+    return pg_gate != nullptr;
 }
 
 // Sets the specified timeout in the rpc service.
@@ -744,9 +822,8 @@ const void* PgGate_GetThreadLocalErrMsg() {
 }
 
 const K2PgTypeEntity *K2PgFindTypeEntity(int type_oid) {
-  elog(DEBUG5, "PgGateAPI: K2PgFindTypeEntity %d", type_oid);
-//  return api_impl->FindTypeEntity(type_oid);
-  return nullptr;
+    elog(DEBUG5, "PgGateAPI: K2PgFindTypeEntity %d", type_oid);
+    return pg_gate->FindTypeEntity(type_oid);
 }
 
 K2PgDataType K2PgGetType(const K2PgTypeEntity *type_entity) {
