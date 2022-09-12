@@ -532,24 +532,35 @@ K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_co
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
   elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
-  // TODO get schema and collection from catalog
-  skv::http::dto::Schema schema;
-  skv::http::dto::SKVRecordBuilder builder("", std::make_shared<skv::http::dto::Schema>(schema));;
 
-  K2PgStatus status = serializePgAttributesToSKV(builder, table_id, 0, attrs);
+  auto catalog = GetCatalog();
+  std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
+  std::shared_ptr<skv::http::dto::Schema> schema;
+  skv::http::Status catalog_status = catalog->GetSKVBuilderAndSchema(db_oid, table_id, builder, schema);
+  if (!catalog_status.is2xxOK()) {
+    return K2StatusToK2PgStatus(std::move(catalog_status));
+  }
+
+  std::unordered_map<int, uint32_t> attr_to_offset;
+  catalog_status = catalog->GetAttrNumToSKVOffset(db_oid, table_id, attr_to_offset);
+  if (!catalog_status.is2xxOK()) {
+    return K2StatusToK2PgStatus(std::move(catalog_status));
+  }
+
+  K2PgStatus status = serializePgAttributesToSKV(*builder, schema, table_id, 0, attrs, attr_to_offset);
   if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
     return status;
   }
 
   // TODO can we remove some of the copies being done?
-  skv::http::dto::SKVRecord record = builder.build();
+  skv::http::dto::SKVRecord record = builder->build();
   skv::http::MPackWriter _writer;
   skv::http::Binary serializedStorage;
   _writer.write(record.getStorage());
   bool flushResult = _writer.flush(serializedStorage);
   if (!flushResult) {
     K2PgStatus err {
-        .pg_code = ERRCODE_FDW_ERROR,
+        .pg_code = ERRCODE_INTERNAL_ERROR,
         .k2_code = 0,
         .msg = "Serialization error in _writer flush",
         .detail = ""
@@ -567,9 +578,6 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
   return K2PgStatus::OK;
 }
 
-// DB Operations: WHERE(partially supported by K2-SKV)
-// TODO: ORDER_BY, GROUP_BY, etc.
-
 // INSERT ------------------------------------------------------------------------------------------
 
 K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
@@ -578,7 +586,50 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              bool increment_catalog,
                              const std::vector<K2PgAttributeDef>& columns) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
-  return K2PgStatus::NotSupported;
+  auto catalog = GetCatalog();
+
+  std::unordered_map<int, uint32_t> attr_to_offset;
+  skv::http::Status catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
+  if (!catalog_status.is2xxOK()) {
+    return K2StatusToK2PgStatus(std::move(catalog_status));
+  }
+
+  uint32_t base_table_oid = 0;
+  catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
+  if (!catalog_status.is2xxOK()) {
+    return K2StatusToK2PgStatus(std::move(catalog_status));
+  }
+  uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
+
+  std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
+  std::shared_ptr<skv::http::dto::Schema> schema;
+  catalog_status = catalog->GetSKVBuilderAndSchema(database_oid, table_oid, builder, schema);
+  if (!catalog_status.is2xxOK()) {
+    return K2StatusToK2PgStatus(std::move(catalog_status));
+  }
+
+  K2PgStatus status = serializePgAttributesToSKV(*builder, schema, base_table_oid, index_id, columns, attr_to_offset);
+  if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+    return status;
+  }
+
+  skv::http::dto::SKVRecord record = builder->build();
+
+  auto txn = k2pg::TXMgr.GetTxn();
+  auto [k2status] = txn->write(record, false, upsert ? skv::http::dto::ExistencePrecondition::None : skv::http::dto::ExistencePrecondition::NotExists).get();
+  status = K2StatusToK2PgStatus(std::move(k2status));
+  if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+    return status;
+  }
+
+  if (increment_catalog) {
+    catalog_status = catalog->IncrementCatalogVersion();
+    if (!catalog_status.is2xxOK()) {
+      return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+  }
+
+  return status;
 }
 
 // UPDATE ------------------------------------------------------------------------------------------

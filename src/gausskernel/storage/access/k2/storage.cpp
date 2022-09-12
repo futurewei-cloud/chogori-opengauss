@@ -30,6 +30,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include "catalog/pg_type.h"
 #include "fmgr/fmgr_comp.h"
 
+#include "storage.h"
+
 #include <skvhttp/dto/SKVRecord.h>
 
 namespace k2pg {
@@ -170,23 +172,25 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
     }
 }
 
-K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, int32_t table_id, int32_t index_id, const std::vector<K2PgAttributeDef>& attrs) {
+K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, std::shared_ptr<skv::http::dto::Schema> schema, int32_t table_id, int32_t index_id,
+                                      const std::vector<K2PgAttributeDef>& attrs, const std::unordered_map<int, uint32_t>& attr_num_to_index) {
     std::unordered_map<int, K2PgConstant> attr_map;
     for (size_t i=0; i < attrs.size(); ++i) {
-        attr_map[attrs[i].attr_num] = attrs[i].value;
+        auto it = attr_num_to_index.find(attrs[i].attr_num);
+        attr_map[it->second] = attrs[i].value;
     }
 
     try {
-        builder.serialzeNext<int32_t>(table_id);
-        builder.serialzeNext<int32_t>(index_id);
+        builder.serializeNext<int32_t>(table_id);
+        builder.serializeNext<int32_t>(index_id);
 
-        for (size_t i=K2_FIELD_OFFSET; i < schema.partitionKeyFields.size(); ++i) {
-            size_t target_attr = i + K2_FIELD_IDX_TO_ATTR_OFFSET;
-            auto it = attr_map.find(target_attr);
+        for (size_t i = K2_FIELD_OFFSET; i < schema->fields.size(); ++i) {
+            auto it = attr_map.find(i);
             if (it == attr_map.end()) {
                 builder.serializeNull();
             } else {
                 serializePGConstToK2SKV(builder, it->second);
+            }
         }
     }
     catch (const std::exception& err) {

@@ -21,6 +21,8 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
+#pragma once
+
 // When we mix certain C++ standard lib code and pg code there seems to be a macro conflict that
 // will cause compiler errors in libintl.h. Including as the first thing fixes this.
 #include <libintl.h>
@@ -35,10 +37,10 @@ Copyright(c) 2022 Futurewei Cloud
 
 namespace k2pg {
 namespace gate {
-    // Adjust k2 field index for the two added k2 fields (table and index ids) and for the 1-based
-    // numbering of pg attr nums
-    constexpr int K2_FIELD_IDX_TO_ATTR_OFFSET = -1;
+    constexpr int K2_FIELD_OFFSET = 2;
     void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant);
     K2PgStatus K2StatusToK2PgStatus(skv::http::Status&& status);
+    K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, std::shared_ptr<skv::http::dto::Schema> schema, int32_t table_id, int32_t index_id,
+                                          const std::vector<K2PgAttributeDef>& attrs, const std::unordered_map<int, uint32_t>& attr_num_to_index);
 } // k2pg ns
 } // gate ns

@@ -23,8 +23,11 @@ Copyright(c) 2022 Futurewei Cloud
 #pragma once
 
 #include <string>
+#include <unordered_map>
 
 #include "sql_catalog_manager.h"
+
+#include <skvhttp/dto/SKVRecord.h>
 
 namespace k2pg {
 namespace catalog {
@@ -102,6 +105,14 @@ public:
     CHECKED_STATUS GetCatalogVersion(uint64_t *pg_catalog_version);
 
     CHECKED_STATUS IncrementCatalogVersion();
+
+    CHECKED_STATUS GetAttrNumToSKVOffset(uint32_t database_oid, uint32_t relation_oid, std::unordered_map<int, uint32_t>& attr_to_offset);
+
+    // If relation is a base table, then base_table_oid is set to relation_oid
+    CHECKED_STATUS GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
+
+    CHECKED_STATUS GetSKVBuilderAndSchema(uint32_t database_oid, uint32_t relation_oid,
+                                          std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder, std::shared_ptr<skv::http::dto::Schema>& schema);
 
 private:
     std::shared_ptr<SqlCatalogManager> catalog_manager_;
