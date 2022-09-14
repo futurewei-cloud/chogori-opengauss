@@ -176,6 +176,50 @@ namespace k2pg {
         }
 
         Schema(const Schema& other);
+
+        void swap(Schema& other); // NOLINT(build/include_what_you_use)
+
+        void CopyFrom(const Schema& other);
+        
+        // Construct a schema with the given information.
+        //
+        // NOTE: if the schema is user-provided, it's better to construct an
+        // empty schema and then use Reset(...)  so that errors can be
+        // caught. If an invalid schema is passed to this constructor, an
+        // assertion will be fired!
+        Schema(const std::vector<ColumnSchema>& cols,
+                int key_columns) {
+            Reset(cols, key_columns);
+        }
+
+        // Construct a schema with the given information.
+        //
+        // NOTE: if the schema is user-provided, it's better to construct an
+        // empty schema and then use Reset(...)  so that errors can be
+        // caught. If an invalid schema is passed to this constructor, an
+        // assertion will be fired!
+        Schema(const std::vector<ColumnSchema>& cols,
+                const std::vector<ColumnId>& ids,
+                int key_columns) {
+            Reset(cols, ids, key_columns);
+        }
+
+        // Reset this Schema object to the given schema.
+        // If this fails, the Schema object is left in an inconsistent
+        // state and may not be used.
+        Status Reset(const std::vector<ColumnSchema>& cols, int key_columns) {
+            std::vector <ColumnId> ids;
+            return Reset(cols, ids, key_columns);
+        }
+
+        // Reset this Schema object to the given schema.
+        // If this fails, the Schema object is left in an inconsistent
+        // state and may not be used.
+        Status Reset(const std::vector<ColumnSchema>& cols,
+            const std::vector<ColumnId>& ids,
+            int key_columns);
+
+
         Schema& operator=(const Schema& other);
         // Return the number of columns in this schema
         size_t num_columns() const {
@@ -243,6 +287,8 @@ namespace k2pg {
             }
         }
 
+        ColumnId ColumnIdByName(const std::string& name) const;
+        
         std::pair<bool, ColumnId> FindColumnIdByName(const std::string& col_name) const;
 
         // Returns true if the schema contains nullable columns
@@ -574,7 +620,7 @@ namespace k2pg {
         public:
         IndexMap() {}
 
-        IndexInfo* FindIndex(const std::string& index_id) const;
+        const IndexInfo* FindIndex(const std::string& index_id) const;
     };
 
     class TableInfo {
@@ -663,7 +709,7 @@ namespace k2pg {
             index_map_.erase(index_id);
         }
 
-       IndexInfo* FindIndex(const std::string& index_id) const;
+       const IndexInfo* FindIndex(const std::string& index_id) const;
 
         void set_is_sys_table(bool is_sys_table) {
             is_sys_table_ = is_sys_table;

@@ -3,7 +3,7 @@ top_builddir = ../../../../../..
 include $(top_builddir)/src/Makefile.global
 
 OBJ_DIR = ./obj
-OBJS = $(OBJ_DIR)/k2_catalog_defaults.o $(OBJ_DIR)/database_info_handler.o  $(OBJ_DIR)/cluster_info_handler.o $(OBJ_DIR)/sql_catalog_manager.o $(OBJ_DIR)/sql_catalog_client.o
+OBJS = $(OBJ_DIR)/k2_catalog_defaults.o $(OBJ_DIR)/database_info_handler.o $(OBJ_DIR)/table_info_handler.o  $(OBJ_DIR)/cluster_info_handler.o $(OBJ_DIR)/sql_catalog_manager.o $(OBJ_DIR)/sql_catalog_client.o
 
 DEPS =  $(OBJS:.o=.d)
 

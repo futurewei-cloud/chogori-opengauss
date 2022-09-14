@@ -44,11 +44,11 @@ static void reportXactError(std::string&& msg, sh::Status& status) {
     pg_status.detail = std::move(status.message);
     HandleK2PgStatus(pg_status);
 }
-    
+
 static void K2XactCallback(XactEvent event, void* arg)
 {
     auto currentTxn = TXMgr.GetTxn();
-   
+
     elog(DEBUG2, "xact_callback event %u, txn %s", event, TXNFMT(currentTxn));
 
     if (event == XACT_EVENT_START) {
@@ -91,7 +91,7 @@ void TxnManager::Init() {
         // RegisterSubXactCallback(K2SubxactCallback, NULL);
         _initialized = true;
     }
-    
+
     if (!_client) {
         auto clientConfig = _config().at("client");
         if (clientConfig.is_object()) {
@@ -139,6 +139,30 @@ sh::Response<> TxnManager::EndTxn(sh::dto::EndAction endAction) {
     return sh::Response<>(std::move(status));
 }
 
+sh::Response<std::shared_ptr<sh::TxnHandle>> TxnManager::GetAdditionalTxn(sh::dto::TxnOptions opts) {
+    K2LOG_D(log::k2pg, "Starting additional new transaction");
+    Init();
+    std::shared_ptr<sh::TxnHandle> txnptr;
+    auto [status, handle] = _client->beginTxn(std::move(opts)).get();
+    if (status.is2xxOK()) {
+        K2LOG_D(log::k2pg, "Started additional new txn: {}", handle);
+        txnptr = std::make_shared<sh::TxnHandle>(std::move(handle));
+    }
+    else {
+        K2LOG_E(log::k2pg, "Unable to begin txn due to: {}", status);
+    }
+    return sh::Response<std::shared_ptr<sh::TxnHandle>>(std::move(status), txnptr);
+}
+
+sh::Response<> TxnManager::EndAdditionalTxn(std::shared_ptr<sh::TxnHandle> txnHandle, sh::dto::EndAction endAction) {
+    auto status = sh::Statuses::S410_Gone("transaction not found in end");
+    if (txnHandle) {
+        status = std::get<0>(txnHandle->endTxn(endAction).get());
+    }
+    return sh::Response<>(std::move(status));
+}
+
+
 sh::Response<std::shared_ptr<sh::dto::Schema>> TxnManager::GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
     Init();
     return _client->getSchema(collectionName, schemaName, schemaVersion).get();
@@ -164,7 +188,7 @@ sh::Response<>  TxnManager::CreateCollection(const std::string& collection_name,
         rangeEnds.emplace_back(end);
     }
 
-    sh::dto::HashScheme scheme = rangeEnds.size() ? sh::dto::HashScheme::Range : sh::dto::HashScheme::HashCRC32C;                                                                                                  
+    sh::dto::HashScheme scheme = rangeEnds.size() ? sh::dto::HashScheme::Range : sh::dto::HashScheme::HashCRC32C;
     sh::dto::CollectionMetadata metadata{
         .name = collection_name,
         .hashScheme = scheme,
@@ -179,7 +203,7 @@ sh::Response<>  TxnManager::CreateCollection(const std::string& collection_name,
         .heartbeatDeadline = sh::Duration(0),
         .deleted = false
     };
-    
+
     return CreateCollection(metadata, rangeEnds);
 }
 

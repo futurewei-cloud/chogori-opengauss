@@ -32,20 +32,20 @@ Copyright(c) 2022 Futurewei Cloud
 #include "utils/errcodes.h"
 #include "utils/elog.h"
 
-#include "access/k2/schema.h"
+#include "access/k2/pg_schema.h"
 
 namespace k2pg {
 
-    string ColumnSchema::ToString() const {
+    std::string ColumnSchema::ToString() const {
         std::stringstream ss;
         ss << name_ << "[" << TypeToString() << "]";
         return ss.str();
     }
 
-    string ColumnSchema::TypeToString() const {
+    std::string ColumnSchema::TypeToString() const {
         std::stringstream ss;
-        ss << (*type_) << ", " << is_nullable_ ? "NULLABLE" : "NOT NULL" << ", " << is_primary_ ? "PRIMARY KEY" : "NOT A PRIMARY KEY" << ", "
-            << is_hash_ ? "HASH KEY" : "NOT A HASH KEY" << ", " << order_;
+        ss << (*type_) << ", " << (is_nullable_ ? "NULLABLE" : "NOT NULL") << ", " << (is_primary_ ? "PRIMARY KEY" : "NOT A PRIMARY KEY") << ", "
+           << (is_hash_ ? "HASH KEY" : "NOT A HASH KEY") << ", " << order_;
         return ss.str();
     }
 
@@ -109,13 +109,13 @@ namespace k2pg {
             }
         }
 
-        if (key_columns > cols_.size()) {
+        if (key_columns > (int) cols_.size()) {
             Status status {
                 .pg_code = ERRCODE_INVALID_SCHEMA_DEFINITION,
                 .k2_code = 501,
                 .msg = "Bad schema",
                 .detail = "More key columns than columns"
-            }
+            };
             return status;
         }
 
@@ -125,7 +125,7 @@ namespace k2pg {
                 .k2_code = 501,
                 .msg = "Bad schema",
                 .detail = "Cannot specify a negative number of key columns"
-            }
+            };
             return status;
         }
 
@@ -135,7 +135,7 @@ namespace k2pg {
                 .k2_code = 501,
                 .msg = "Bad schema",
                 .detail = "The number of ids does not match with the number of columns"
-            }
+            };
             return status;
         }
 
@@ -147,7 +147,7 @@ namespace k2pg {
                     .k2_code = 501,
                     .msg = "Bad schema",
                     .detail = "Nullable key columns are not supported: " + cols_[i].name()
-                }
+                };
                 return status;
             }
         }
@@ -165,12 +165,13 @@ namespace k2pg {
                     .k2_code = 501,
                     .msg = "Bad schema",
                     .detail = "Duplicate column name " + col.name()
-                }
+                };
                 return status;
             }
 
             col_offsets_.push_back(off);
-            off += col.type_info()->size();
+            // TODO: Port TypeInfo
+            // off += col.type_info()->size();
         }
 
         // Add an extra element on the end for the total
@@ -181,7 +182,7 @@ namespace k2pg {
         col_ids_ = ids;
         id_to_index_.clear();
         max_col_id_ = 0;
-        for (int i = 0; i < ids.size(); ++i) {
+        for (size_t i = 0; i < ids.size(); ++i) {
             if (ids[i] > max_col_id_) {
                 max_col_id_ = ids[i];
             }
@@ -189,7 +190,7 @@ namespace k2pg {
         }
 
         // Ensure clustering columns have a default sorting type of 'ASC' if not specified.
-        for (int i = num_hash_key_columns_; i < num_key_columns(); i++) {
+        for (size_t i = num_hash_key_columns_; i < num_key_columns(); i++) {
             ColumnSchema& col = cols_[i];
             if (col.sorting_type() == ColumnSchema::SortingType::kNotSpecified) {
                 col.set_sorting_type(ColumnSchema::SortingType::kAscending);
@@ -203,7 +204,7 @@ namespace k2pg {
         std::stringstream ss;
         ss << "Schema [\n\t";
          if (has_column_ids()) {
-            for (int i = 0; i < cols_.size(); ++i) {
+            for (size_t i = 0; i < cols_.size(); ++i) {
                 ss << col_ids_[i] << ":" << cols_[i].ToString() << ",\n\t";
             }
         } else {
@@ -235,7 +236,7 @@ namespace k2pg {
         return kFirstColumnId;
     }
 
-    vector<ColumnId> IndexInfo::index_key_column_ids() const {
+    std::vector<ColumnId> IndexInfo::index_key_column_ids() const {
         std::unordered_map<ColumnId, ColumnId> map;
         for (const auto column : columns_) {
             map[column.base_column_id] = column.column_id;
@@ -280,7 +281,7 @@ namespace k2pg {
         return false;
     }
 
-    int32_t IndexInfo::FindKeyIndex(const string& key_expr_name) const {
+    int32_t IndexInfo::FindKeyIndex(const std::string& key_expr_name) const {
         for (int32_t idx = 0; idx < key_column_count(); idx++) {
             const auto& col = columns_[idx];
             if (!col.column_name.empty() && key_expr_name.find(col.column_name) != key_expr_name.npos) {

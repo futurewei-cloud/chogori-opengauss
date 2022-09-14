@@ -23,6 +23,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include <vector>
 #include <assert.h>
+#include <ostream>
 
 #include "utils/elog.h"
 
@@ -143,6 +144,46 @@ namespace k2pg {
 
     std::shared_ptr<SQLType> SQLType::CreateTypeSet(DataType value_type) {
         return CreateTypeSet(SQLType::Create(value_type));
+    }
+
+    std::ostream& operator<<(std::ostream& os, const DataType& data_type) {
+         switch (data_type) {
+            case DataType::K2SQL_DATA_TYPE_UNKNOWN_DATA: return os << "unknown";
+            case DataType::K2SQL_DATA_TYPE_NULL_VALUE_TYPE: return os << "anytype";
+            case DataType::K2SQL_DATA_TYPE_INT8: return os << "tinyint";
+            case DataType::K2SQL_DATA_TYPE_INT16: return os << "smallint";
+            case DataType::K2SQL_DATA_TYPE_INT32: return os << "int";
+            case DataType::K2SQL_DATA_TYPE_INT64: return os << "bigint";
+            case DataType::K2SQL_DATA_TYPE_UINT32: return os << "uint32";
+            case DataType::K2SQL_DATA_TYPE_STRING: return os << "text";
+            case DataType::K2SQL_DATA_TYPE_BOOL: return os << "boolean";
+            case DataType::K2SQL_DATA_TYPE_FLOAT: return os << "float";
+            case DataType::K2SQL_DATA_TYPE_DOUBLE: return os << "double";
+            case DataType::K2SQL_DATA_TYPE_BINARY: return os << "blob";
+            case DataType::K2SQL_DATA_TYPE_TIMESTAMP: return os << "timestamp";
+            case DataType::K2SQL_DATA_TYPE_DECIMAL: return os << "decimal";
+            case DataType::K2SQL_DATA_TYPE_LIST: return os << "list";
+            case DataType::K2SQL_DATA_TYPE_MAP: return os << "map";
+            case DataType::K2SQL_DATA_TYPE_SET: return os << "set";
+            case DataType::K2SQL_DATA_TYPE_DATE: return os << "date";
+            case DataType::K2SQL_DATA_TYPE_TIME: return os << "time";
+            default: return os << "unknown";
+        }
+    }
+
+    std::ostream& operator<<(std::ostream& os, const SQLType& sql_type) {
+        os << sql_type.id_;
+        if (!sql_type.params_.empty()) {
+            os << "<";
+            for (int i = 0; i < sql_type.params_.size(); i++) {
+                if (i > 0) {
+                    os << ", ";
+                }
+                os << (*sql_type.params_[i].get());
+            }
+            os << ">";
+        }
+        return os;
     }
 
 }  // namespace k2pg

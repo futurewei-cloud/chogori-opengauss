@@ -195,6 +195,9 @@ namespace k2pg {
             return t == DataType::K2SQL_DATA_TYPE_UNKNOWN_DATA;
         }
 
+        friend std::ostream& operator<<(std::ostream& os, const DataType& type);
+        friend std::ostream& operator<<(std::ostream& os, const SQLType& sql_type);
+        
         private:
         // Data members.
         DataType id_;

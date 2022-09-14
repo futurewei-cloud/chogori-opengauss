@@ -76,6 +76,104 @@ sh::Status SqlCatalogClient::UseDatabase(const std::string& database_name) {
   return status;
 }
 
+sh::Status SqlCatalogClient::CreateTable(
+    const std::string& database_name,
+    const std::string& table_name,
+    const PgObjectId& table_object_id,
+    PgSchema& schema,
+    bool is_pg_catalog_table,
+    bool is_shared_table,
+    bool if_not_exist) {
+  CreateTableRequest request {
+    .databaseName = database_name,
+    .databaseOid = table_object_id.GetDatabaseOid(),
+    .tableName = table_name,
+    .tableOid = table_object_id.GetObjectOid(),
+    .schema = schema,
+    .isSysCatalogTable = is_pg_catalog_table,
+    .isSharedTable = is_shared_table,
+    .isNotExist = if_not_exist
+  };
+  auto start = k2::Clock::now();
+  auto response = catalog_manager_->CreateTable(request);
+  K2LOG_D(log::catalog, "CreateTable {} in {} took {}", table_name, database_name, k2::Clock::now() - start);
+  return std::get<0>(response);
+}
+
+sh::Status SqlCatalogClient::CreateIndexTable(
+    const std::string& database_name,
+    const std::string& table_name,
+    const PgObjectId& table_object_id,
+    const PgObjectId& base_table_object_id,
+    PgSchema& schema,
+    bool is_unique_index,
+    bool skip_index_backfill,
+    bool is_pg_catalog_table,
+    bool is_shared_table,
+    bool if_not_exist) {
+  CreateIndexTableRequest request {
+    .databaseName = database_name,
+    .databaseOid = table_object_id.GetDatabaseOid(),
+    .tableName = table_name,
+    .tableOid = table_object_id.GetObjectOid(),
+    // index and the base table should be in the same database, i.e., database
+    .baseTableOid = base_table_object_id.GetObjectOid(),
+    .schema = schema,
+    .isUnique = is_unique_index,
+    .skipIndexBackfill = skip_index_backfill,
+    .isSysCatalogTable = is_pg_catalog_table,
+    .isSharedTable = is_shared_table,
+    .isNotExist = if_not_exist
+  };
+  auto start = k2::Clock::now();
+  auto response = catalog_manager_->CreateIndexTable(request);
+  K2LOG_D(log::catalog, "CreateIndexTable {} in {} took {}", table_name, database_name, k2::Clock::now() - start);
+  return std::get<0>(response);
+}
+
+sh::Status SqlCatalogClient::DeleteTable(const PgOid database_oid, const PgOid table_oid, bool wait) {
+  auto response = catalog_manager_->DeleteTable(database_oid, table_oid);
+  return std::get<0>(response);
+}
+
+sh::Status SqlCatalogClient::DeleteIndexTable(const PgOid database_oid, const PgOid table_oid, PgOid *base_table_oid, bool wait) {
+  auto [status, response] = catalog_manager_->DeleteIndex(database_oid, table_oid);
+  if (!status.is2xxOK()) {
+     return status;
+  }
+  *base_table_oid = response.baseIndexTableOid;
+  // TODO: add wait logic once we refactor the catalog manager APIs to be asynchronous for state/response
+  return status;
+}
+
+sh::Status SqlCatalogClient::OpenTable(const PgOid database_oid, const PgOid table_oid, std::shared_ptr<TableInfo>* table) {
+  auto start = k2::Clock::now();
+  auto [status, tableInfo] = catalog_manager_->GetTableSchema(database_oid, table_oid);
+  K2LOG_D(log::catalog, "GetTableSchema ({} : {}) took {}", database_oid, table_oid, k2::Clock::now() - start);
+  if (!status.is2xxOK()) {
+     return status;
+  }
+
+  table->swap(tableInfo);
+  return status;
+}
+
+sh::Status SqlCatalogClient::ReservePgOids(const PgOid database_oid,
+                                  const uint32_t next_oid,
+                                  const uint32_t count,
+                                  uint32_t* begin_oid,
+                                  uint32_t* end_oid) {
+    auto databaseId = PgObjectId::GetDatabaseUuid(database_oid);
+    auto start = k2::Clock::now();
+    auto [status, response] = catalog_manager_->ReservePgOid(databaseId, next_oid, count);
+    K2LOG_D(log::catalog, "ReservePgOid took {}", k2::Clock::now() - start);
+    if (!status.is2xxOK()) {
+        return status;
+    }
+    *begin_oid = response.beginOid;
+    *end_oid = response.endOid;
+    return status;
+}
 
 sh::Status SqlCatalogClient::GetCatalogVersion(uint64_t *pg_catalog_version) {
   auto start = k2::Clock::now();

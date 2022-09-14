@@ -29,6 +29,8 @@ Copyright(c) 2022 Futurewei Cloud
 namespace k2pg {
 namespace catalog {
 
+typedef class k2pg::Schema PgSchema;
+
 // TODO: This catalog client layer so far doesn't provide value, consider eliminate it later
 class SqlCatalogClient {
 public:
@@ -56,6 +58,46 @@ public:
                                 const std::string& database_id);
 
     CHECKED_STATUS UseDatabase(const std::string& database_name);
+
+    
+    CHECKED_STATUS CreateTable(const std::string& database_name,
+                            const std::string& table_name,
+                            const PgObjectId& table_object_id,
+                            PgSchema& schema,
+                            bool is_pg_catalog_table,
+                            bool is_shared_table,
+                            bool if_not_exist);
+
+    CHECKED_STATUS CreateIndexTable(const std::string& database_name,
+                            const std::string& table_name,
+                            const PgObjectId& table_object_id,
+                            const PgObjectId& base_table_object_id,
+                            PgSchema& schema,
+                            bool is_unique_index,
+                            bool skip_index_backfill,
+                            bool is_pg_catalog_table,
+                            bool is_shared_table,
+                            bool if_not_exist);
+
+    // Delete the specified table.
+    // Set 'wait' to true if the call must wait for the table to be fully deleted before returning.
+    CHECKED_STATUS DeleteTable(const PgOid database_oid, const PgOid table_oid, bool wait = true);
+
+    CHECKED_STATUS DeleteIndexTable(const PgOid database_oid, const PgOid table_oid, PgOid *base_table_oid, bool wait = true);
+
+    CHECKED_STATUS OpenTable(const PgOid database_oid, const PgOid table_oid, std::shared_ptr<TableInfo>* table);
+
+    sh::Response<std::shared_ptr<TableInfo>> OpenTable(const PgOid database_oid, const PgOid table_oid) {
+        std::shared_ptr<TableInfo> result;
+        auto status = OpenTable(database_oid, table_oid, &result);
+        return std::make_tuple(std::move(status), result);
+    }
+
+    // For Postgres: reserve oids for a Postgres database.
+    CHECKED_STATUS ReservePgOids(const PgOid database_oid,
+                                uint32_t next_oid, uint32_t count,
+                                uint32_t* begin_oid, uint32_t* end_oid);
+
 
     CHECKED_STATUS GetCatalogVersion(uint64_t *pg_catalog_version);
 
