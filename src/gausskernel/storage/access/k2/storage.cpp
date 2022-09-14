@@ -27,6 +27,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "postgres.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
+#include "access/sysattr.h"
 #include "catalog/pg_type.h"
 #include "fmgr/fmgr_comp.h"
 
@@ -172,8 +173,109 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
     }
 }
 
-K2PgStatus tupleIDDatumToSKVRecord(Datum tuple_id, int32_t db_id, int32_t table_id) {
+skv::http::dto::SKVRecord tupleIDDatumToSKVRecord(Datum tuple_id, std::string collection, std::shared_ptr<skv::http::dto::Schema> schema) {
+    UntoastedDatum data = UntoastedDatum(tuple_id);
+    size_t size = VARSIZE(data.untoasted) - VARHDRSZ;
+    char* src = VARDATA(data.untoasted);
+    // No-op deleter. Data is owned by PG heap and we will not access it outside of this function
+    skv::http::Binary binary(src, size, [] () {});
+    skv::http::MPackReader reader(binary);
+    skv::http::dto::SKVRecord::Storage storage;
+    reader.read(storage);
+    return skv::http::dto::SKVRecord(collection, schema, std::move(storage), true);
+}
 
+K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_oid,
+                                           std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog, const std::vector<K2PgAttributeDef>& columns,
+                                           std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder) {
+    skv::http::dto::SKVRecord record;
+    bool use_tupleID = false;
+
+    // Check if we have the virtual tupleID column and if so deserialize the datum into a SKVRecord
+    for (auto& attribute : columns) {
+        if (attribute.attr_num == K2PgTupleIdAttributeNumber) {
+            std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
+            skv::http::Status catalog_status = catalog->GetSKVBuilder(database_oid, table_oid, builder);
+            if (!catalog_status.is2xxOK()) {
+                return K2StatusToK2PgStatus(std::move(catalog_status));
+            }
+
+        record = tupleIDDatumToSKVRecord(attribute.value.datum, builder->getCollectionName(), builder->getSchema());
+        use_tupleID = true;
+        }
+    }
+
+    // Get a SKVBuilder
+    skv::http::Status catalog_status = catalog->GetSKVBuilder(database_oid, table_oid, builder);
+    if (!catalog_status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+
+    // If we have a tupleID just need to copy fields from the record to a builder and we are done
+    if (use_tupleID) {
+        K2PgStatus status = serializeKeysFromSKVRecord(record, *builder);
+        if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+            return status;
+        }
+
+        return K2PgStatus::OK;
+    }
+
+
+    // If we get here it is because we did not have a tupleID, so prepare to serialize keys from the provided columns
+
+    // Get attribute to SKV offset mapping
+    std::unordered_map<int, uint32_t> attr_to_offset;
+    catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
+    if (!catalog_status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+
+
+    // Create SKV offset to Pg Constant mappping
+    std::unordered_map<int, K2PgConstant> attr_map;
+    for (size_t i=0; i < columns.size(); ++i) {
+        auto it = attr_to_offset.find(columns[i].attr_num);
+        if (it != attr_to_offset.end()) {
+            attr_map[it->second] = columns[i].value;
+        }
+    }
+
+    // Determine table id and index id to use as first two fields in SKV record.
+    // The passed in table id may or may not be a secondary index
+    uint32_t base_table_oid = 0;
+    catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
+    if (!catalog_status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+    uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
+
+    // Last, serialize key fields into the builder
+    try {
+        builder->serializeNext<int32_t>(base_table_oid);
+        builder->serializeNext<int32_t>(index_id);
+
+        for (size_t i = K2_FIELD_OFFSET; i < builder->getSchema()->partitionKeyFields.size(); ++i) {
+            auto it = attr_map.find(i);
+            if (it == attr_map.end()) {
+                builder->serializeNull();
+            } else {
+                serializePGConstToK2SKV(*builder, it->second);
+            }
+        }
+    }
+    catch (const std::exception& err) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 0,
+            .msg = "Serialization error in serializePgAttributesToSKV",
+            .detail = err.what()
+        };
+
+        return status;
+    }
+
+    return K2PgStatus::OK;
 }
 
 K2PgStatus serializeKeysFromSKVRecord(skv::http::dto::SKVRecord& source, skv::http::dto::SKVRecordBuilder& builder) {
@@ -210,19 +312,21 @@ K2PgStatus serializeKeysFromSKVRecord(skv::http::dto::SKVRecord& source, skv::ht
     return K2PgStatus::OK;
 }
 
-K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, std::shared_ptr<skv::http::dto::Schema> schema, int32_t table_id, int32_t index_id,
+K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, int32_t table_id, int32_t index_id,
                                       const std::vector<K2PgAttributeDef>& attrs, const std::unordered_map<int, uint32_t>& attr_num_to_index) {
     std::unordered_map<int, K2PgConstant> attr_map;
     for (size_t i=0; i < attrs.size(); ++i) {
         auto it = attr_num_to_index.find(attrs[i].attr_num);
-        attr_map[it->second] = attrs[i].value;
+        if (it != attr_num_to_index.end()) {
+            attr_map[it->second] = attrs[i].value;
+        }
     }
 
     try {
         builder.serializeNext<int32_t>(table_id);
         builder.serializeNext<int32_t>(index_id);
 
-        for (size_t i = K2_FIELD_OFFSET; i < schema->fields.size(); ++i) {
+        for (size_t i = K2_FIELD_OFFSET; i < builder.getSchema()->fields.size(); ++i) {
             auto it = attr_map.find(i);
             if (it == attr_map.end()) {
                 builder.serializeNull();
@@ -242,6 +346,37 @@ K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,
         return status;
     }
 
+    return K2PgStatus::OK;
+}
+
+K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_oid,
+                                           std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog, const std::vector<K2PgAttributeDef>& columns,
+                                           skv::http::dto::SKVRecord& record) {
+    std::unordered_map<int, uint32_t> attr_to_offset;
+    skv::http::Status catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
+    if (!catalog_status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+
+    uint32_t base_table_oid = 0;
+    catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
+    if (!catalog_status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+    uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
+
+    std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
+    catalog_status = catalog->GetSKVBuilder(database_oid, table_oid, builder);
+    if (!catalog_status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+
+    K2PgStatus status = serializePgAttributesToSKV(*builder, base_table_oid, index_id, columns, attr_to_offset);
+    if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+        return status;
+    }
+
+    record = builder->build();
     return K2PgStatus::OK;
 }
 

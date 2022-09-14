@@ -111,8 +111,7 @@ public:
     // If relation is a base table, then base_table_oid is set to relation_oid
     CHECKED_STATUS GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
 
-    CHECKED_STATUS GetSKVBuilderAndSchema(uint32_t database_oid, uint32_t relation_oid,
-                                          std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder, std::shared_ptr<skv::http::dto::Schema>& schema);
+    CHECKED_STATUS GetSKVBuilder(uint32_t database_oid, uint32_t relation_oid, std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder);
 
 private:
     std::shared_ptr<SqlCatalogManager> catalog_manager_;

@@ -32,6 +32,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include "catalog/pg_type.h"
 #include "fmgr/fmgr_comp.h"
 
+#include "catalog/sql_catalog_client.h"
+
 #include <skvhttp/dto/SKVRecord.h>
 #include <skvhttp/common/Status.h>
 
@@ -40,7 +42,27 @@ namespace gate {
     constexpr int K2_FIELD_OFFSET = 2;
     void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant);
     K2PgStatus K2StatusToK2PgStatus(skv::http::Status&& status);
-    K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, std::shared_ptr<skv::http::dto::Schema> schema, int32_t table_id, int32_t index_id,
+
+    // Helper function to serialize all attrs into the passed in SKV builder
+    K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,  int32_t table_id, int32_t index_id,
                                           const std::vector<K2PgAttributeDef>& attrs, const std::unordered_map<int, uint32_t>& attr_num_to_index);
+
+    // Serialize a full SKVRecord from the pg columns, the passed in SKVRecord record is an out parameter
+    K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_oid,
+                                               std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog, const std::vector<K2PgAttributeDef>& columns,
+                                               skv::http::dto::SKVRecord& record);
+
+    // builder is an out parameter that is serialized with just the key fields for the record. columns may or may not contain a virtual tupleID attribute,
+    // and columns may or may not contain attributes that are not part of the key fields
+    K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_oid,
+                                               std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog, const std::vector<K2PgAttributeDef>& columns,
+                                               std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder);
+
+    // Helper function to deserialize a tupleID datum back into a SKVRecord
+    skv::http::dto::SKVRecord tupleIDDatumToSKVRecord(Datum tuple_id, std::string collection, std::shared_ptr<skv::http::dto::Schema> schema);
+
+    // Helper function to take a source SKVRecord and serialize its key fields into a SKVRecordBuilder.
+    // Meant for use with SKVRecords materialized from tupleID datums
+    K2PgStatus serializeKeysFromSKVRecord(skv::http::dto::SKVRecord& source, skv::http::dto::SKVRecordBuilder& builder);
 } // k2pg ns
 } // gate ns
