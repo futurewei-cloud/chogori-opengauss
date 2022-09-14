@@ -121,6 +121,25 @@ public:
     }
 };
 
+K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid, std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog,
+                         std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder) {
+    std::string collectionName;
+    std::string schemaName;
+
+    skv::http::Status catalog_status = catalog->GetCollectionNameAndSchemaName(database_oid, table_oid, collectionName, schemaName);
+    if (!catalog_status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(catalog_status));
+    }
+
+    auto [status, schema] = k2pg::TXMgr.GetSchema(collectionName, schemaName);
+    if (!status.is2xxOK()) {
+        return K2StatusToK2PgStatus(std::move(status));
+    }
+
+    builder = std::make_unique<skv::http::dto::SKVRecordBuilder>(collectionName, schema);
+    return K2PgStatus::OK;
+}
+
 // May throw if there is a schema mismatch bug
 void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant) {
     // Three different types of constants to handle:
@@ -195,9 +214,9 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
     for (auto& attribute : columns) {
         if (attribute.attr_num == K2PgTupleIdAttributeNumber) {
             std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
-            skv::http::Status catalog_status = catalog->GetSKVBuilder(database_oid, table_oid, builder);
-            if (!catalog_status.is2xxOK()) {
-                return K2StatusToK2PgStatus(std::move(catalog_status));
+            K2PgStatus status = getSKVBuilder(database_oid, table_oid, catalog, builder);
+            if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+                return status;
             }
 
         record = tupleIDDatumToSKVRecord(attribute.value.datum, builder->getCollectionName(), builder->getSchema());
@@ -206,9 +225,9 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
     }
 
     // Get a SKVBuilder
-    skv::http::Status catalog_status = catalog->GetSKVBuilder(database_oid, table_oid, builder);
-    if (!catalog_status.is2xxOK()) {
-        return K2StatusToK2PgStatus(std::move(catalog_status));
+    K2PgStatus status = getSKVBuilder(database_oid, table_oid, catalog, builder);
+    if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+        return status;
     }
 
     // If we have a tupleID just need to copy fields from the record to a builder and we are done
@@ -226,7 +245,7 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
 
     // Get attribute to SKV offset mapping
     std::unordered_map<int, uint32_t> attr_to_offset;
-    catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
+    skv::http::Status catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
     if (!catalog_status.is2xxOK()) {
         return K2StatusToK2PgStatus(std::move(catalog_status));
     }
@@ -366,12 +385,12 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
     uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
 
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
-    catalog_status = catalog->GetSKVBuilder(database_oid, table_oid, builder);
-    if (!catalog_status.is2xxOK()) {
-        return K2StatusToK2PgStatus(std::move(catalog_status));
+    K2PgStatus status = getSKVBuilder(database_oid, table_oid, catalog, builder);
+    if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+        return status;
     }
 
-    K2PgStatus status = serializePgAttributesToSKV(*builder, base_table_oid, index_id, columns, attr_to_offset);
+    status = serializePgAttributesToSKV(*builder, base_table_oid, index_id, columns, attr_to_offset);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }

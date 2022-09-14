@@ -62,7 +62,7 @@ public:
 
     CHECKED_STATUS UseDatabase(const std::string& database_name);
 
-    
+
     CHECKED_STATUS CreateTable(const std::string& database_name,
                             const std::string& table_name,
                             const PgObjectId& table_object_id,
@@ -111,7 +111,7 @@ public:
     // If relation is a base table, then base_table_oid is set to relation_oid
     CHECKED_STATUS GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
 
-    CHECKED_STATUS GetSKVBuilder(uint32_t database_oid, uint32_t relation_oid, std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder);
+    CHECKED_STATUS GetCollectionNameAndSchemaName(uint32_t database_oid, uint32_t relation_oid, std::string& collectionName, std::string& schemaName);
 
 private:
     std::shared_ptr<SqlCatalogManager> catalog_manager_;
