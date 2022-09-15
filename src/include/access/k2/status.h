@@ -33,8 +33,6 @@ namespace k2pg {
 struct Status {
     int pg_code;
     int k2_code;
-    // These strings will be passed to and owned by PG code, so if they are not assigned from literals then they
-    // need to be allocated with palloc so they can be freed on session close
     std::string msg;
     std::string detail;
 

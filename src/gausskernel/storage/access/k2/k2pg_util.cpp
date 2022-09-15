@@ -28,9 +28,6 @@
 #endif  // defined(__APPLE__)
 
 #include "k2pg-internal.h"
-#include "access/k2/k2pg_errcodes.h"
-
-using k2pg::K2PgErrorCode;
 
 K2PgStatus K2PgInit(const char* argv0,
                   K2PgPAllocFn palloc_fn,

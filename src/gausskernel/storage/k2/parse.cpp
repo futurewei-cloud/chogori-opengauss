@@ -685,8 +685,8 @@ void parse_const(Const *node, FDWExprRefValues *ref_values) {
 void parse_param(Param *node, FDWExprRefValues *ref_values) {
 	elog(DEBUG4, "FDW: parsing Param %s", nodeToString(node));
 	ParamExternData *prm = NULL;
-	ParamExternData prmdata;
-    // TODO
+   // TODO
+	// ParamExternData prmdata;
 	//if (ref_values->paramLI->paramFetch != NULL)
 	//	prm = ref_values->paramLI->paramFetch(ref_values->paramLI, node->paramid,
 	//			true, &prmdata);
