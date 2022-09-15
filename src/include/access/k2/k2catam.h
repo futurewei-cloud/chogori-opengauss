@@ -49,7 +49,7 @@ typedef struct CamScanDescData
     std::vector<K2PgConstraintDef> constraints;
     std::vector<int> targets_attrnum;
     bool whole_table_scan = false;
-    
+
 	ResourceOwner stmt_owner;
 	bool is_exec_done;
 
@@ -65,7 +65,7 @@ typedef struct CamScanDescData
 	Oid tableOid;
 
 	/* Kept query-plan control to pass it to PgGate during preparation */
-	K2PgPrepareParameters prepare_params;
+	K2PgSelectIndexParams prepare_params;
 
 	/*
 	 * Kept execution control to pass it to PgGate.
@@ -75,7 +75,7 @@ typedef struct CamScanDescData
 	 * - K2PG-index-scan in-turn will passes this attribute to PgGate to control the index-scan
 	 *   execution in K2 node.
 	 */
-	K2PgExecParameters *exec_params;
+	K2PgSelectLimitParams exec_params;
 } CamScanDescData;
 
 typedef struct CamScanDescData *CamScanDesc;

@@ -571,20 +571,14 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
 // SELECT ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
-                         const K2PgPrepareParameters *prepare_params,
+                         const K2PgSelectIndexParams& index_params,
                          K2PgScanHandle **handle){
   elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
   return K2PgStatus::NotSupported;
 }
 
-// Set forward/backward scan direction.
-K2PgStatus PgGate_SetForwardScan(K2PgStatement handle, bool is_forward_scan){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetForwardScan %d", is_forward_scan);
-  return K2PgStatus::NotSupported;
-}
-
 K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
-                             bool whole_table_scan, bool forward_scan, const K2PgExecParameters *exec_params) {
+                             bool whole_table_scan, bool forward_scan, const K2PgSelectLimitParams& limit_params) {
   elog(DEBUG5, "PgGateAPI: PgGate_ExecSelect");
   return K2PgStatus::NotSupported;
 }

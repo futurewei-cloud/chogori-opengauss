@@ -650,9 +650,9 @@ static void	camSetupScanKeys(Relation relation,
 
 		if (!ShouldPushdownScanKey(relation, scan_plan, scan_plan->bind_key_attnums[i],
 		                           &camScan->key[i], is_primary_key)) {
-			if (camScan->exec_params != NULL && !camScan->exec_params->limit_use_default) {
+			if (!camScan->exec_params.limit_use_default) {
 				// do not set limit count if we don't pushdown all conditions and we don't use default prefetch limit
-				camScan->exec_params->limit_count = -1;
+				camScan->exec_params.limit_count = -1;
 			}
 			continue;
 		}
@@ -725,7 +725,7 @@ static void camBindScanKeys(Relation relation,
 	Oid		dboid    = K2PgGetDatabaseOid(relation);
 	Oid		relid    = RelationGetRelid(relation);
 
-	HandleK2PgStatus(PgGate_NewSelect(dboid, relid, &camScan->prepare_params, &camScan->handle));
+	HandleK2PgStatus(PgGate_NewSelect(dboid, relid, camScan->prepare_params, &camScan->handle));
 	ResourceOwnerEnlargeK2PgStmts(t_thrd.utils_cxt.CurrentResourceOwner);
 	ResourceOwnerRememberK2PgStmt(t_thrd.utils_cxt.CurrentResourceOwner, camScan->handle);
 	camScan->stmt_owner = t_thrd.utils_cxt.CurrentResourceOwner;
@@ -1067,7 +1067,6 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	CamScanDesc camScan = (CamScanDesc) palloc0(sizeof(CamScanDescData));
 	camScan->key   = key;
 	camScan->nkeys = nkeys;
-	camScan->exec_params = NULL;
 	camScan->tableOid = RelationGetRelid(relation);
 
 	/* Setup the scan plan */
@@ -1590,9 +1589,15 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
 	K2PgScanHandle* k2pg_stmt;
 	TupleDesc      tupdesc = RelationGetDescr(relation);
 
+    K2PgSelectIndexParams index_params {
+        .index_oid = RelationGetRelid(relation),
+        .index_only_scan = false,
+        .use_secondary_index = false
+    };
+
 	HandleK2PgStatus(PgGate_NewSelect(K2PgGetDatabaseOid(relation),
 																RelationGetRelid(relation),
-																NULL /* prepare_params */,
+																index_params,
 																&k2pg_stmt));
 
     std::vector<K2PgConstraintDef> constraints;
@@ -1626,9 +1631,14 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
 
 	/*
 	 * Execute the select statement.
-	 * This select statement fetch the row for a specific K2PGTID, LIMIT setting is not needed.
+	 * This select statement fetch the row for a specific K2PGTID
 	 */
-	HandleK2PgStatus(PgGate_ExecSelect(k2pg_stmt, std::move(constraints), std::move(targets), false /* whole_table */, true /* forward */, NULL /* exec_params */));
+    K2PgSelectLimitParams limit_params {
+        .limit_count = 1,
+        .limit_offset = 0,
+        .limit_use_default = false
+    };
+	HandleK2PgStatus(PgGate_ExecSelect(k2pg_stmt, std::move(constraints), std::move(targets), false /* whole_table */, true /* forward */, limit_params));
 
 	HeapTuple tuple    = NULL;
 	bool      has_data = false;
