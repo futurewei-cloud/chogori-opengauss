@@ -172,6 +172,10 @@ class PgTableDesc {
     return collection_name_;
   }
 
+  const std::string& schema_name() const {
+    return table_id_;
+  }
+
   // if is_index_, this is id of the index, otherwise, it is id of this table.
   const std::string& table_id() {
     return table_id_;

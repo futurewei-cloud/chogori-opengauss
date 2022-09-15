@@ -646,6 +646,8 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::GetTableSchema(const
         );
 
     if (status.is2xxOK() && tableInfo != nullptr) {
+        // update table cache
+        UpdateTableCache(tableInfo);
         return std::make_tuple(sh::Statuses::S200_OK, table_info);
     }
     return std::make_pair(status, tableInfo);
