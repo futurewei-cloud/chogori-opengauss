@@ -280,21 +280,60 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              int* rows_affected,
                              const std::vector<K2PgAttributeDef>& columns);
 
+// Structure to hold parameters for preparing query plan.
+//
+// Index-related parameters are used to describe different types of scan.
+//   - Sequential scan: Index parameter is not used.
+//     { index_oid, index_only_scan, use_secondary_index } = { kInvalidOid, false, false }
+//   - IndexScan:
+//     { index_oid, index_only_scan, use_secondary_index } = { IndexOid, false, true }
+//   - IndexOnlyScan:
+//     { index_oid, index_only_scan, use_secondary_index } = { IndexOid, true, true }
+//   - PrimaryIndexScan: This is a special case as K2 SQL doesn't have a separated
+//     primary-index database object from table object.
+//       index_oid = TableOid
+//       index_only_scan = true if ROWID is wanted. Otherwise, regular rowset is wanted.
+//       use_secondary_index = false
+//
+struct K2PgSelectIndexParams {
+  K2PgOid index_oid;
+  bool index_only_scan;
+  bool use_secondary_index;
+};
+
 // SELECT ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
-                         const K2PgPrepareParameters *prepare_params,
+                         const K2PgSelectIndexParams& index_params,
                          K2PgScanHandle **handle);
 
+struct K2PgSelectLimitParams {
+  // LIMIT parameters for executing DML read.
+  // - limit_count is the value of SELECT ... LIMIT
+  // - limit_offset is value of SELECT ... OFFSET
+  // - limit_use_default: Although count and offset are pushed down to K2 platform from Postgres,
+  //   they are not always being used to identify the number of rows to be read from K2 platform.
+  //   Full-scan is needed when further operations on the rows are not done by K2 platform.
+  //
+  //   Examples:
+  //   o All rows must be sent to Postgres code layer
+  //     for filtering before LIMIT is applied.
+  //   o ORDER BY clause is not processed by K2 platform. Similarly all rows must be fetched and sent
+  //     to Postgres code layer.
+  int64_t limit_count;
+  uint64_t limit_offset;
+  bool limit_use_default;
+};
+
 // NOTE ON KEY CONSTRAINTS
-// Scan type is speficied as part of prepare_params in NewSelect
+// Scan type is speficied as part of index_params in NewSelect
 // - For Sequential Scan, the target columns of the bind are those in the main table.
 // - For Primary Scan, the target columns of the bind are those in the main table.
 // - For Index Scan, the target columns of the bind are those in the index table.
 //   The index-scan will use the bind to find base-k2pgctid which is then use to read data from
 //   the main-table, and therefore the bind-arguments are not associated with columns in main table.
 K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
-                             bool whole_table_scan, bool forward_scan, const K2PgExecParameters *exec_params);
+                             bool whole_table_scan, bool forward_scan, const K2PgSelectLimitParams& limit_params);
 
 // Transaction control -----------------------------------------------------------------------------
 K2PgStatus PgGate_BeginTransaction();

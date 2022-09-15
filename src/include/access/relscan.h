@@ -163,7 +163,7 @@ typedef struct IndexScanDescData {
 	 * - Postgres IndexScan function will call and pass "k2pg_exec_params" to PgGate to control the
 	 *   index-scan execution in K2PG.
 	 */
-	K2PgExecParameters *k2pg_exec_params;
+	K2PgSelectLimitParams k2pg_exec_params;
 
     /* put decompressed heap tuple data into xs_ctbuf_hdr be careful! when malloc memory  should give extra mem for
      *xs_ctbuf_hdr. t_bits which is varlength arr

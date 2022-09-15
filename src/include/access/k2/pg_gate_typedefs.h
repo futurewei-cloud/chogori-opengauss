@@ -49,8 +49,6 @@ typedef unsigned int K2PgOid;
 typedef struct k2pg::PgSysColumns K2PgSysColumns;
 typedef struct k2pg::PgTypeAttrs K2PgTypeAttrs;
 typedef struct k2pg::PgTypeEntity K2PgTypeEntity;
-typedef struct k2pg::PgPrepareParameters K2PgPrepareParameters;
-typedef struct k2pg::PgExecParameters K2PgExecParameters;
 typedef struct k2pg::PgTableProperties K2PgTableProperties;
 
 // API to read type information.
