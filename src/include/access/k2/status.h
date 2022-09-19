@@ -36,6 +36,7 @@ struct Status {
     std::string msg;
     std::string detail;
 
+    bool ok() const { return pg_code ==  ERRCODE_SUCCESSFUL_COMPLETION;}
     static const Status OK;
     static const Status NotSupported;
 

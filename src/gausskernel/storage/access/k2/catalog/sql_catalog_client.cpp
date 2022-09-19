@@ -23,6 +23,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2_util.h"
 #include "sql_catalog_client.h"
 #include "sql_catalog_manager.h"
+#include "access/k2/pg_tabledesc.h"
+
 namespace k2pg {
 namespace catalog {
 
@@ -177,5 +179,40 @@ Status SqlCatalogClient::GetCatalogVersion(uint64_t *pg_catalog_version) {
 Status SqlCatalogClient::IncrementCatalogVersion() {
     return k2pg::K2StatusToK2PgStatus(std::get<0>(catalog_manager_->IncrementCatalogVersion()));
 }
+
+sh::Status SqlCatalogClient::GetAttrNumToSKVOffset(uint32_t database_oid, uint32_t relation_oid, std::unordered_map<int, uint32_t>& attr_to_offset) {
+    auto [status, tableInfo] = catalog_manager_->GetTableSchema(database_oid, relation_oid);
+    if (!status.is2xxOK()) {
+        return status;
+    }
+    PgTableDesc desc(tableInfo);
+    auto colmap = desc.GetAttrNumToColMap();
+    for (const auto& [attr_num, col] : colmap) {
+        attr_to_offset[attr_num] = col->index();
+    }
+    return sh::Statuses::S200_OK;
+}
+
+sh::Status SqlCatalogClient::GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid) {
+    auto [status, tableInfo] = catalog_manager_->GetTableSchema(database_oid, relation_oid);
+    if (!status.is2xxOK()) {
+        return status;
+    }
+    PgTableDesc desc(tableInfo);
+    base_table_oid = desc.base_table_oid();
+    return sh::Statuses::S200_OK;
+}
+
+sh::Status SqlCatalogClient::GetCollectionNameAndSchemaName(uint32_t database_oid, uint32_t relation_oid, std::string& collectionName, std::string& schemaName) {
+    auto [status, tableInfo] = catalog_manager_->GetTableSchema(database_oid, relation_oid);
+    if (!status.is2xxOK()) {
+        return status;
+    }
+    PgTableDesc desc(tableInfo);
+    collectionName = desc.collection_name();
+    schemaName = desc.schema_name();
+    return  sh::Statuses::S200_OK;
+}
+
 } // namespace catalog
 }  // namespace k2pg

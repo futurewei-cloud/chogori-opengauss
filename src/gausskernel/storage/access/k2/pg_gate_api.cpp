@@ -31,6 +31,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/pg_memctx.h"
+#include "access/k2/pg_ids.h"
 
 #include "k2pg-internal.h"
 #include "session.h"
@@ -100,6 +101,7 @@ namespace {
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
     assert(pg_gate == nullptr && "PgGate should only be initialized once");
     elog(INFO, "K2 PgGate open");
+    K2LOG_I(::k2pg::log::k2pg, "Initializing Pggate");
     pg_gate = std::make_shared<PgGate>(k2PgDataTypeTable, count, pg_callbacks);
 }
 
@@ -173,14 +175,12 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
 //--------------------------------------------------------------------------------------------------
 
 // K2 InitPrimaryCluster
-K2PgStatus PgGate_InitPrimaryCluster()
-{
+K2PgStatus PgGate_InitPrimaryCluster() {
     elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
     return pg_gate->GetCatalogClient()->InitPrimaryCluster();
 }
 
-K2PgStatus PgGate_FinishInitDB()
-{
+K2PgStatus PgGate_FinishInitDB() {
     elog(DEBUG5, "PgGateAPI: PgGate_FinishInitDB()");
     return pg_gate->GetCatalogClient()->FinishInitDB();
 }
@@ -199,14 +199,39 @@ K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
                                  K2PgOid next_oid) {
   elog(LOG, "PgGateAPI: PgGate_ExecCreateDatabase %s, %d, %d, %d",
          database_name, database_oid, source_database_oid, next_oid);
-  return K2PgStatus::NotSupported;
+  auto skvstat = pg_gate->GetCatalogClient()->CreateDatabase(database_name,
+      k2pg::PgObjectId::GetDatabaseUuid(database_oid),
+      database_oid,
+      source_database_oid != k2pg::kPgInvalidOid ? k2pg::PgObjectId::GetDatabaseUuid(source_database_oid) : "",
+      "" /* creator_role_name */, next_oid);
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    K2PgStatus status {
+        .pg_code = ERRCODE_INTERNAL_ERROR,
+        .k2_code = skvstat.code,
+        .msg = skvstat.message,
+        .detail = "PgGate_ExecCreateDatabase() failed"
+    };
+    return status;
 }
 
 // Drop database.
 K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
                                    K2PgOid database_oid) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
+    auto skvstat = pg_gate->GetCatalogClient()->DeleteDatabase(database_name,
+        k2pg::PgObjectId::GetDatabaseUuid(database_oid));
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    K2PgStatus status {
+      .pg_code = ERRCODE_INTERNAL_ERROR,
+      .k2_code = skvstat.code,
+      .msg = skvstat.message,
+      .detail = "PgGate_ExecDropDatabase() failed"
+    };
+    return status;
 }
 
 // Alter database.
@@ -268,6 +293,22 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
     return K2PgStatus::OK;
 }
 
+// Get ColumnSchema from column information
+k2pg::ColumnSchema getColumn(const std::string&& col_name, int order, K2SqlDataType k2pg_type, bool is_key, bool is_hash,  bool is_desc = false, bool is_nulls_first = false) {
+    using SortingType = k2pg::ColumnSchema::SortingType;
+    SortingType sorting_type = SortingType::kNotSpecified;
+    if (is_key) {
+        if (is_desc) {
+            sorting_type = is_nulls_first ? SortingType::kDescending : SortingType::kDescendingNullsLast;
+        } else {
+            sorting_type = is_nulls_first ? SortingType::kAscending : SortingType::kAscendingNullsLast;
+        }
+    }
+    std::shared_ptr<k2pg::SQLType> data_type = k2pg::SQLType::Create(static_cast<DataType>( k2pg_type));
+    bool is_nullable = !is_key;
+    return k2pg::ColumnSchema(col_name, data_type, is_nullable, is_key, order, order, sorting_type);
+}
+
 // TABLE -------------------------------------------------------------------------------------------
 
 // Create and drop table "database_name.schema_name.table_name()".
@@ -281,8 +322,59 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               bool if_not_exist,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
-  elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
+    std::vector<k2pg::ColumnSchema> k2pgcols;
+    std::vector<k2pg::ColumnId> colIds;
+    int num_key_columns = 0;
+    const std::string sname = schema_name; // get std::string to make comparison easier
+    const bool is_pg_catalog_table = (sname == "pg_catalog") || (sname == "information_schema");
+    const bool is_shared_table = false; // TODO: Should be passed in by parameter?
+
+    // Add internal primary key column to a Postgres table without a user-specified primary key.
+    if (add_primary_key) {
+        // For regular user table, k2pgrowid should be a hash key because k2pgrowid is a random uuid.
+        bool is_hash = !is_pg_catalog_table;
+        k2pgcols.push_back(getColumn("k2pgrowid",
+                static_cast<int32_t>(k2pg::PgSystemAttrNum::kPgRowId),
+                static_cast<DataType>( K2SQL_DATA_TYPE_BINARY),
+                true /* is_key */, is_hash));
+    }
+    // Add key columns at the beginning
+    for (auto& col : columns) {
+        if (!col.is_key) {
+            continue;
+        }
+        num_key_columns++;
+        k2pgcols.push_back(getColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
+    }
+    // Add data columns
+    for (auto& col : columns) {
+        if (col.is_key) {
+            continue;
+        }
+
+        k2pgcols.push_back(getColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
+    }
+    // Get column ids
+    for (size_t i=0; i < k2pgcols.size(); i++) {
+        colIds.push_back(k2pg::ColumnId(i));
+    }
+    k2pg::Schema schema;
+    auto status = schema.Reset(k2pgcols, colIds, num_key_columns);
+    if (!status.ok()) {
+        return status;
+    }
+    const k2pg::PgObjectId table_object_id(database_oid, table_oid);
+    auto skvstat = pg_gate->GetCatalogClient()->CreateTable(database_name, table_name, table_object_id, schema, is_pg_catalog_table, is_shared_table, if_not_exist);
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    return K2PgStatus {
+        .pg_code = ERRCODE_INTERNAL_ERROR,
+        .k2_code = skvstat.code,
+        .msg = skvstat.message,
+        .detail = "PgGate_ExecCreateTable() failed"
+    };
 }
 
 K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
