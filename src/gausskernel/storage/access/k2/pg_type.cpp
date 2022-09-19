@@ -175,7 +175,7 @@ namespace k2pg {
         os << sql_type.id_;
         if (!sql_type.params_.empty()) {
             os << "<";
-            for (int i = 0; i < sql_type.params_.size(); i++) {
+            for (size_t i = 0; i < sql_type.params_.size(); i++) {
                 if (i > 0) {
                     os << ", ";
                 }

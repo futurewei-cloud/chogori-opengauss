@@ -217,7 +217,7 @@ namespace k2pg {
     }
 
     ColumnId Schema::ColumnIdByName(const std::string& column_name) const {
-        size_t column_index = find_column(column_name);
+        int column_index = find_column(column_name);
         if (column_index != Schema::kColumnNotFound) {
             return ColumnId(column_id(column_index));
         }
@@ -225,7 +225,7 @@ namespace k2pg {
     }
 
     std::pair<bool, ColumnId> Schema::FindColumnIdByName(const std::string& column_name) const {
-        size_t column_index = find_column(column_name);
+        int column_index = find_column(column_name);
         if (column_index == Schema::kColumnNotFound) {
             return std::make_pair<bool, ColumnId>(false, -1);
         }
@@ -282,11 +282,11 @@ namespace k2pg {
     }
 
     int32_t IndexInfo::FindKeyIndex(const std::string& key_expr_name) const {
-        for (int32_t idx = 0; idx < key_column_count(); idx++) {
+        for (size_t idx = 0; idx < key_column_count(); idx++) {
             const auto& col = columns_[idx];
             if (!col.column_name.empty() && key_expr_name.find(col.column_name) != key_expr_name.npos) {
                 // Return the found key column that is referenced by the expression.
-                return idx;
+                return (int32_t)idx;
             }
         }
 
@@ -296,7 +296,7 @@ namespace k2pg {
     const IndexInfo* IndexMap::FindIndex(const std::string& index_id) const {
         const auto itr = find(index_id);
         if (itr == end()) {
-            elog(ERROR, "Index id %d not found", index_id);
+            elog(ERROR, "Index id %s not found", index_id.c_str());
             return NULL;
         }
         return &itr->second;

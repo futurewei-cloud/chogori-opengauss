@@ -206,11 +206,11 @@ k2ingettuple(IndexScanDesc scan, ScanDirection dir)
 
 	CamScanDesc k2can = (CamScanDesc) scan->opaque;
 	k2can->exec_params = scan->k2pg_exec_params;
-	if (!is_forward_scan && k2can->exec_params != NULL && !k2can->exec_params->limit_use_default) {
+	if (!is_forward_scan && !k2can->exec_params.limit_use_default) {
 		// Ignore limit count for reverse scan since K2 PG cannot push down the limit for reverse scan and
 		// rely on PG to process the limit count
 		// this only applies if limit_use_default is not true
-		k2can->exec_params->limit_count = -1;
+		k2can->exec_params.limit_count = -1;
 	}
 	Assert(PointerIsValid(k2can));
 

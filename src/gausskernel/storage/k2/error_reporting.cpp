@@ -30,6 +30,6 @@ void reportRC(const RCode& rc, const std::string& detail) {
     if (rc.err == ERRCODE_SUCCESSFUL_COMPLETION) {
         return; // nothing to report
     }
-    ereport(ERROR,  (errmodule(MOD_K2), errcode(rc.err), errmsg(rc.msg), errdetail("%s: %s", rc.detail, detail.c_str())));
+    ereport(ERROR,  (errmodule(MOD_K2), errcode(rc.err), errmsg("err(%m): %s", rc.msg), errdetail("%s: %s", rc.detail, detail.c_str())));
 }
 } // ns
