@@ -318,11 +318,11 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
     new_ns->next_pg_oid = request.nextPgOid.value();
     // persist the new database record
     K2LOG_D(log::catalog, "Adding database {} on SKV", request.databaseId);
-    auto ns_txnHandler = NewAdditionalTransaction();
-    auto status = database_info_handler_.UpsertDatabase(ns_txnHandler, *new_ns);
+    auto txnHandler = NewTransaction();
+    auto status = database_info_handler_.UpsertDatabase(txnHandler, *new_ns);
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to add database {}, due to {}", request.databaseId, status);
-        AbortAdditionalTransaction(ns_txnHandler);
+        AbortTransaction();
         return std::make_tuple(std::move(status), std::shared_ptr<DatabaseInfo>());
     }
     // cache databases by database id and database name
@@ -330,28 +330,23 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
     database_name_map_[new_ns->database_name] = new_ns;
 
     // step 2.3 Add new system tables for the new database(database)
-    auto target_txnHandler = NewAdditionalTransaction();
     K2LOG_D(log::catalog, "Creating system tables for target database {}", new_ns->database_id);
-    if (auto status = table_info_handler_.CreateMetaTables(target_txnHandler, new_ns->database_id); !status.is2xxOK()) {
+    if (auto status = table_info_handler_.CreateMetaTables(txnHandler, new_ns->database_id); !status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create meta tables for target database {} due to {}",
         new_ns->database_id, status);
-        AbortAdditionalTransaction(target_txnHandler);
-        AbortAdditionalTransaction(ns_txnHandler);
+        AbortTransaction();
         return std::make_tuple(status, std::shared_ptr<DatabaseInfo>());
     }
 
     // step 3/3: If source database(database) is present in the request, copy all the rest of tables from source database(database)
     if (!request.sourceDatabaseId.empty()) {
         K2LOG_D(log::catalog, "Creating database from source database {}", request.sourceDatabaseId);
-        std::shared_ptr<sh::TxnHandle> source_txnHandler = NewAdditionalTransaction();
         // get the source table ids
         K2LOG_D(log::catalog, "Listing table ids from source database {}", request.sourceDatabaseId);
-        auto [status, tableIds] = table_info_handler_.ListTableIds(source_txnHandler, source_database_info->database_id, true);
+        auto [status, tableIds] = table_info_handler_.ListTableIds(txnHandler, source_database_info->database_id, true);
         if (!status.is2xxOK()) {
             K2LOG_E(log::catalog, "Failed to list table ids for database {} due to {}", source_database_info->database_id, status);
-            AbortAdditionalTransaction(source_txnHandler);
-            AbortAdditionalTransaction(target_txnHandler);
-            AbortAdditionalTransaction(ns_txnHandler);
+            AbortTransaction();
             return std::make_tuple(status, std::shared_ptr<DatabaseInfo>());
         }
         K2LOG_D(log::catalog, "Found {} table ids from source database {}", tableIds.size(), request.sourceDatabaseId);
@@ -360,30 +355,24 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
             // copy the source table metadata to the target table
             K2LOG_D(log::catalog, "Copying from source table {}", source_table_id);
             auto [status, result] = table_info_handler_.CopyTable(
-                target_txnHandler,
+                txnHandler,
                 new_ns->database_id,
                 new_ns->database_name,
                 new_ns->database_oid,
-                source_txnHandler,
                 source_database_info->database_id,
                 source_database_info->database_name,
                 source_table_id);
             if (!status.is2xxOK()) {
                 K2LOG_E(log::catalog, "Failed to copy from source table {} due to {}", source_table_id, status);
-                AbortAdditionalTransaction(source_txnHandler);
-                AbortAdditionalTransaction(target_txnHandler);
-                AbortAdditionalTransaction(ns_txnHandler);
+                AbortTransaction();
                 return std::make_tuple(status, std::shared_ptr<DatabaseInfo>());
             }
             num_index += result.num_index;
         }
-        CommitAdditionalTransaction(source_txnHandler);
         K2LOG_D(log::catalog, "Finished copying {} tables and {} indexes from source database {} to {}",
         tableIds.size(), num_index, source_database_info->database_id, new_ns->database_id);
     }
-
-    CommitAdditionalTransaction(target_txnHandler);
-    CommitAdditionalTransaction(ns_txnHandler);
+    CommitTransaction();
     K2LOG_D(log::catalog, "Created database {}", new_ns->database_id);
     return std::make_pair(sh::Statuses::S200_OK, new_ns);
 }
@@ -641,10 +630,8 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::GetTableSchema(const
     auto txnHandler = NewTransaction();
     std::shared_ptr<IndexInfo> index_info = GetCachedIndexInfoById(table_uuid);
     auto [status, tableInfo] = table_info_handler_.GetTableSchema(txnHandler, database_info, table_id, index_info,
-      [this] (const std::string &db_id) { return CheckAndLoadDatabaseById(db_id); },
-      [this] () { return NewAdditionalTransaction(); }
-        );
-
+      [this] (const std::string &db_id) { return CheckAndLoadDatabaseById(db_id); });
+    CommitTransaction();
     if (status.is2xxOK() && tableInfo != nullptr) {
         // update table cache
         UpdateTableCache(tableInfo);
@@ -984,14 +971,6 @@ std::shared_ptr<DatabaseInfo> SqlCatalogManager::GetCachedDatabaseByName(const s
 
 std::shared_ptr<sh::TxnHandle> SqlCatalogManager::NewTransaction() {
     auto [status, txn] = TXMgr.BeginTxn({});
-    if (!status.is2xxOK()) {
-        throw std::runtime_error("Cannot start new transaction.");
-    }
-    return txn;
-}
-
-std::shared_ptr<sh::TxnHandle> SqlCatalogManager::NewAdditionalTransaction() {
-    auto [status, txn] = TXMgr.GetAdditionalTxn({});
     if (!status.is2xxOK()) {
         throw std::runtime_error("Cannot start new transaction.");
     }

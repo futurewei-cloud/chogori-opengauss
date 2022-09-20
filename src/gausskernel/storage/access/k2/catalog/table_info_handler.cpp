@@ -240,17 +240,16 @@ sh::Response<std::vector<std::string>> TableInfoHandler::ListTableIds(std::share
     return std::make_pair(sh::Statuses::S200_OK, ids);
 }
 
-sh::Response<CopyTableResult> TableInfoHandler::CopyTable(std::shared_ptr<sh::TxnHandle> target_txnHandler,
+sh::Response<CopyTableResult> TableInfoHandler::CopyTable(std::shared_ptr<sh::TxnHandle> txnHandler,
             const std::string& target_coll_name,
             const std::string& target_database_name,
             uint32_t target_database_oid,
-            std::shared_ptr<sh::TxnHandle> source_txnHandler,
             const std::string& source_coll_name,
             const std::string& source_database_name,
             const std::string& source_table_id) {
     CopyTableResult response;
     try {
-        auto [status, tableInfo] = GetTable(source_txnHandler, source_coll_name, source_database_name, source_table_id);
+        auto [status, tableInfo] = GetTable(txnHandler, source_coll_name, source_database_name, source_table_id);
         if (!status.is2xxOK()) {
             return std::make_tuple(std::move(status), response);
         }
@@ -262,7 +261,7 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(std::shared_ptr<sh::Tx
         std::shared_ptr<TableInfo> target_table = TableInfo::Clone(tableInfo, target_coll_name,
                 target_database_name, target_table_uuid, tableInfo->table_name());
 
-        status = CreateOrUpdateTable(target_txnHandler, target_coll_name, target_table);
+        status = CreateOrUpdateTable(txnHandler, target_coll_name, target_table);
         if (!status.is2xxOK()) {
             return std::make_tuple(std::move(status), response);
         }
@@ -278,8 +277,8 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(std::shared_ptr<sh::Tx
                 }
             }
         } else {  // copy all base table and index rows(SKV record in K2)
-            auto status = CopySKVTable(target_txnHandler, target_coll_name, target_table->table_id(), target_table->schema().version(),
-                source_txnHandler, source_coll_name, source_table_id, source_table->schema().version(), source_table_oid, 0 /*index_oid*/);
+            auto status = CopySKVTable(txnHandler, target_coll_name, target_table->table_id(), target_table->schema().version(),
+                source_coll_name, source_table_id, source_table->schema().version(), source_table_oid, 0 /*index_oid*/);
             if (!status.is2xxOK()) {
                 return std::make_tuple(std::move(status), response);
             }
@@ -297,8 +296,8 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(std::shared_ptr<sh::Tx
                         return std::make_tuple(sh::Statuses::S404_Not_Found(fmt::format("Cannot find target index {}", secondary_index.second.table_name())), response);
                     }
                     IndexInfo* target_index = found->second;
-                    auto status = CopySKVTable(target_txnHandler, target_coll_name, secondary_index.first, secondary_index.second.version(),
-                        source_txnHandler, source_coll_name, target_index->table_id(), target_index->version(), source_table_oid/*baseTableId*/, target_index->table_oid()/*index_oid, should be source, but same as target index oid*/);
+                    auto status = CopySKVTable(txnHandler, target_coll_name, secondary_index.first, secondary_index.second.version(),
+                        source_coll_name, target_index->table_id(), target_index->version(), source_table_oid/*baseTableId*/, target_index->table_oid()/*index_oid, should be source, but same as target index oid*/);
                     if (!status.is2xxOK()) {
                         return std::make_tuple(std::move(status), response);
                     }
@@ -315,11 +314,10 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(std::shared_ptr<sh::Tx
     return std::make_tuple(sh::Statuses::S200_OK, response);
 }
 
-sh::Status TableInfoHandler::CopySKVTable(std::shared_ptr<sh::TxnHandle> target_txnHandler,
+sh::Status TableInfoHandler::CopySKVTable(std::shared_ptr<sh::TxnHandle> txnHandler,
             const std::string& target_coll_name,
             const std::string& target_schema_name,
             uint32_t target_version,
-            std::shared_ptr<sh::TxnHandle> source_txnHandler,
             const std::string& source_coll_name,
             const std::string& source_schema_name,
             uint32_t source_version,
@@ -343,7 +341,7 @@ sh::Status TableInfoHandler::CopySKVTable(std::shared_ptr<sh::TxnHandle> target_
     auto startScanRecord = buildRangeRecord(source_coll_name, source_schema, source_table_oid, source_index_oid, std::nullopt);
     auto endScanRecord = buildRangeRecord(source_coll_name, source_schema, source_table_oid, source_index_oid, std::nullopt);
     // create scan for source table
-    auto [status, query]  = source_txnHandler->createQuery(startScanRecord, endScanRecord).get();
+    auto [status, query]  = txnHandler->createQuery(startScanRecord, endScanRecord).get();
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create scan read for {} in {} due to {}", source_schema_name, source_coll_name, status.message);
         return status;
@@ -353,7 +351,7 @@ sh::Status TableInfoHandler::CopySKVTable(std::shared_ptr<sh::TxnHandle> target_
     int count = 0;
     bool done = false;
     do {
-        auto [status, query_result] = source_txnHandler->query(query).get();
+        auto [status, query_result] = txnHandler->query(query).get();
         if (!status.is2xxOK()) {
             K2LOG_E(log::catalog, "Failed to run scan read for table {} in {} due to {}",
                 source_schema_name, source_coll_name, status);
@@ -363,7 +361,7 @@ sh::Status TableInfoHandler::CopySKVTable(std::shared_ptr<sh::TxnHandle> target_
         for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
             // clone and persist SKV record to target table
             sh::dto::SKVRecord target_record(target_coll_name, target_schema, std::move(storage), true);
-            auto [upsert_status] = target_txnHandler->write(target_record).get();
+            auto [upsert_status] = txnHandler->write(target_record).get();
             if (!upsert_status.is2xxOK()) {
                 K2LOG_E(log::catalog, "Failed to upsert target_record due to {}", upsert_status);
                 return upsert_status;
@@ -749,14 +747,12 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
 }
 
 
-sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::shared_ptr<sh::TxnHandle> txnHandler, std::shared_ptr<DatabaseInfo> database_info, const std::string& table_id, std::shared_ptr<IndexInfo> index_info, std::function<std::shared_ptr<DatabaseInfo>(const std::string&)> fnc_db, std::function<std::shared_ptr<sh::TxnHandle>()> fnc_tx) {
-    std::shared_ptr<sh::TxnHandle> localTxnHandler = txnHandler;
+sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::shared_ptr<sh::TxnHandle> txnHandler, std::shared_ptr<DatabaseInfo> database_info, const std::string& table_id, std::shared_ptr<IndexInfo> index_info, std::function<std::shared_ptr<DatabaseInfo>(const std::string&)> fnc_db) {
     std::shared_ptr<DatabaseInfo> local_database_info = database_info;
 
     K2LOG_D(log::catalog, "Checking if table {} is an index or not", table_id);
-    auto [status, table_type_info_result] = GetTableTypeInfo(localTxnHandler, local_database_info->database_id, table_id);
+    auto [status, table_type_info_result] = GetTableTypeInfo(txnHandler, local_database_info->database_id, table_id);
     if (!status.is2xxOK()) {
-        localTxnHandler->endTxn(sh::dto::EndAction::Abort);
         K2LOG_E(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, local_database_info->database_id, status);
         return std::make_tuple(status, std::shared_ptr<TableInfo>());
@@ -768,7 +764,6 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         // check if the shared table is stored on a different collection
         if (physical_coll.compare(database_info->database_id) != 0) {
             // shared table is on a different collection, first finish the existing collection
-            localTxnHandler->endTxn(sh::dto::EndAction::Commit);
             K2LOG_I(log::catalog, "Shared table {} is not in {} but in {} instead", table_id, database_info->database_id, physical_coll);
             // load the shared database info
             local_database_info = fnc_db(physical_coll);
@@ -776,24 +771,20 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
                 K2LOG_E(log::catalog, "Cannot find database {} for shared table {}", physical_coll, table_id);
                 return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
             }
-            // start a new transaction for the shared table collection since SKV does not support cross collection transaction yet
-            localTxnHandler = fnc_tx();
         }
     }
 
     if (!table_type_info_result.isIndex) {
         K2LOG_D(log::catalog, "Fetching table schema {} in ns {}", table_id, physical_coll);
         // the table id belongs to a table
-        auto [status, idxInfo] = GetTable(localTxnHandler, physical_coll, local_database_info->database_name,
+        auto [status, idxInfo] = GetTable(txnHandler, physical_coll, local_database_info->database_name,
             table_id);
         if (!status.is2xxOK()) {
-            localTxnHandler->endTxn(sh::dto::EndAction::Abort);
             K2LOG_E(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(status, std::shared_ptr<TableInfo>());
         }
         if (idxInfo == nullptr) {
-            localTxnHandler->endTxn(sh::dto::EndAction::Commit);
             K2LOG_E(log::catalog, "Failed to find table {} in ns {}", table_id, physical_coll);
             return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
         }
@@ -804,9 +795,8 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     std::string base_table_id;
     if (index_info == nullptr) {
         // not founnd in cache, try to check the base table id from SKV
-        auto [status, baseTableId]  = GetBaseTableId(localTxnHandler, physical_coll, table_id);
+        auto [status, baseTableId]  = GetBaseTableId(txnHandler, physical_coll, table_id);
         if (!status.is2xxOK()) {
-            localTxnHandler->endTxn(sh::dto::EndAction::Abort);
             K2LOG_E(log::catalog, "Failed to check base table id for index {} in {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(std::move(status), std::shared_ptr<TableInfo>());
@@ -818,21 +808,18 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
 
     if (base_table_id.empty()) {
         // cannot find the id as either a table id or an index id
-        localTxnHandler->endTxn(sh::dto::EndAction::Abort);
         K2LOG_E(log::catalog, "Failed to find base table id for index {} in {}", table_id, physical_coll);
         return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
     }
 
     K2LOG_D(log::catalog, "Fetching base table schema {} for index {} in {}", base_table_id, table_id, physical_coll);
-    auto [table_status, base_table_result] = GetTable(localTxnHandler, physical_coll, local_database_info->database_name, base_table_id);
+    auto [table_status, base_table_result] = GetTable(txnHandler, physical_coll, local_database_info->database_name, base_table_id);
     if (!table_status.is2xxOK()) {
-        localTxnHandler->endTxn(sh::dto::EndAction::Abort);
         return std::make_tuple(std::move(table_status), std::shared_ptr<TableInfo>());
     }
     // update table cache
     K2LOG_D(log::catalog, "Returned base table schema id: {}, name {}, for index: {}",
         base_table_id, base_table_result->table_name(), table_id);
-    localTxnHandler->endTxn(sh::dto::EndAction::Commit);
     return std::make_tuple(sh::Statuses::S200_OK, base_table_result);
 }
 

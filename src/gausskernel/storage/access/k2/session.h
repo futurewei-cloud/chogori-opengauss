@@ -38,12 +38,6 @@ public:
     // transactions should be ended via this call to ensure the thread-local state is maintained
     sh::Response<> EndTxn(sh::dto::EndAction endAction);
 
-    // Get adiitional unmanged txn for scenrio where different collections needs to be modified
-    sh::Response<std::shared_ptr<sh::TxnHandle>> GetAdditionalTxn(sh::dto::TxnOptions opts);
-
-    // End additional txn
-    sh::Response<> EndAdditionalTxn(std::shared_ptr<sh::TxnHandle>, sh::dto::EndAction endAction);
-
     // Helper used to initialize the skv client and register txn callbacks
     void Init();
 

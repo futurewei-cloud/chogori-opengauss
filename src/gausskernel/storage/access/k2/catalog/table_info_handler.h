@@ -160,19 +160,17 @@ class TableInfoHandler {
     sh::Response<std::shared_ptr<TableInfo>> GetTable(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& database_name, const std::string& table_id);
     sh::Response<std::shared_ptr<TableInfo>> GetTableSchema(std::shared_ptr<sh::TxnHandle> txnHandler, std::shared_ptr<DatabaseInfo> database_info, const std::string& table_id,
         std::shared_ptr<IndexInfo> index_info,
-        std::function<std::shared_ptr<DatabaseInfo>(const std::string&)> fnc_db,
-        std::function<std::shared_ptr<sh::TxnHandle>()> fnc_tx);
+        std::function<std::shared_ptr<DatabaseInfo>(const std::string&)> fnc_db);
 
     sh::Response<std::vector<std::shared_ptr<TableInfo>>> ListTables(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& database_name, bool isSysTableIncluded);
 
     sh::Response<std::vector<std::string>> ListTableIds(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, bool isSysTableIncluded);
 
     // CopyTable (meta and data) fully including secondary indexes, currently only support cross different database.
-    sh::Response<CopyTableResult> CopyTable(std::shared_ptr<sh::TxnHandle> target_txnHandler,
+    sh::Response<CopyTableResult> CopyTable(std::shared_ptr<sh::TxnHandle> txnHandler,
             const std::string& target_coll_name,
             const std::string& target_database_name,
             uint32_t target_database_oid,
-            std::shared_ptr<sh::TxnHandle> source_txnHandler,
             const std::string& source_coll_name,
             const std::string& source_database_name,
             const std::string& source_table_id);
@@ -199,11 +197,10 @@ class TableInfoHandler {
     sh::Response<std::shared_ptr<IndexInfo>> CreateIndexTable(std::shared_ptr<sh::TxnHandle> txnHandler, std::shared_ptr<DatabaseInfo> database_info, std::shared_ptr<TableInfo> base_table_info, CreateIndexTableParams &index_params);
 
     private:
-    sh::Status CopySKVTable(std::shared_ptr<sh::TxnHandle> target_txnHandler,
+    sh::Status CopySKVTable(std::shared_ptr<sh::TxnHandle> txnHandler,
             const std::string& target_coll_name,
             const std::string& target_schema_name,
             uint32_t target_schema_version,
-            std::shared_ptr<sh::TxnHandle> source_txnHandler,
             const std::string& source_coll_name,
             const std::string& source_schema_name,
             uint32_t source_schema_version,

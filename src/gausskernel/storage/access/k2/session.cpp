@@ -139,30 +139,6 @@ sh::Response<> TxnManager::EndTxn(sh::dto::EndAction endAction) {
     return sh::Response<>(std::move(status));
 }
 
-sh::Response<std::shared_ptr<sh::TxnHandle>> TxnManager::GetAdditionalTxn(sh::dto::TxnOptions opts) {
-    K2LOG_D(log::k2pg, "Starting additional new transaction");
-    Init();
-    std::shared_ptr<sh::TxnHandle> txnptr;
-    auto [status, handle] = _client->beginTxn(std::move(opts)).get();
-    if (status.is2xxOK()) {
-        K2LOG_D(log::k2pg, "Started additional new txn: {}", handle);
-        txnptr = std::make_shared<sh::TxnHandle>(std::move(handle));
-    }
-    else {
-        K2LOG_E(log::k2pg, "Unable to begin txn due to: {}", status);
-    }
-    return sh::Response<std::shared_ptr<sh::TxnHandle>>(std::move(status), txnptr);
-}
-
-sh::Response<> TxnManager::EndAdditionalTxn(std::shared_ptr<sh::TxnHandle> txnHandle, sh::dto::EndAction endAction) {
-    auto status = sh::Statuses::S410_Gone("transaction not found in end");
-    if (txnHandle) {
-        status = std::get<0>(txnHandle->endTxn(endAction).get());
-    }
-    return sh::Response<>(std::move(status));
-}
-
-
 sh::Response<std::shared_ptr<sh::dto::Schema>> TxnManager::GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
     Init();
     return _client->getSchema(collectionName, schemaName, schemaVersion).get();
