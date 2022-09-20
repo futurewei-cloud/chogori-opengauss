@@ -20,28 +20,13 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-
-#pragma once
-
-#include "utils/elog.h" // PG error codes
-#include "utils/errcodes.h"
-
-#include <string>
+#include <libintl.h>
+#include "postgres.h"
+#include "access/k2/status.h"
+#include <skvhttp/common/Status.h>
 
 namespace k2pg {
 
-struct Status {
-    int pg_code;
-    int k2_code;
-    std::string msg;
-    std::string detail;
-
-    static const Status OK;
-    static const Status NotSupported;
-
-    bool IsOK() {
-        return pg_code == ERRCODE_SUCCESSFUL_COMPLETION;
-    }
-};
+Status K2StatusToK2PgStatus(skv::http::Status&& status);
 
 }  // namespace k2pg

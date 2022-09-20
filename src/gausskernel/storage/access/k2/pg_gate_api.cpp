@@ -35,6 +35,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "k2pg-internal.h"
 #include "session.h"
 #include "storage.h"
+#include "k2_util.h"
 #include "access/k2/k2pg_util.h"
 
 #include "utils/elog.h"
@@ -585,7 +586,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
 
   auto txn = k2pg::TXMgr.GetTxn();
   auto [k2status] = txn->write(record, false, upsert ? skv::http::dto::ExistencePrecondition::None : skv::http::dto::ExistencePrecondition::NotExists).get();
-  status = K2StatusToK2PgStatus(std::move(k2status));
+  status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
   if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
     return status;
   }
@@ -593,7 +594,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
   if (increment_catalog) {
     skv::http::Status catalog_status = catalog->IncrementCatalogVersion();
     if (!catalog_status.is2xxOK()) {
-      return K2StatusToK2PgStatus(std::move(catalog_status));
+      return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
     }
   }
 
@@ -622,7 +623,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
   std::unordered_map<int, uint32_t> attr_to_offset;
   skv::http::Status catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
   if (!catalog_status.is2xxOK()) {
-    return K2StatusToK2PgStatus(std::move(catalog_status));
+    return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
   }
   std::vector<uint32_t> fieldsForUpdate;
   auto it = attr_to_offset.begin();
@@ -675,7 +676,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
   auto txn = k2pg::TXMgr.GetTxn();
   skv::http::dto::SKVRecord record = builder->build();
   auto [k2status] = txn->partialUpdate(record, std::move(fieldsForUpdate)).get();
-  status = K2StatusToK2PgStatus(std::move(k2status));
+  status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
   if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
     return status;
   } else {
@@ -685,7 +686,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
   if (increment_catalog) {
     catalog_status = catalog->IncrementCatalogVersion();
     if (!catalog_status.is2xxOK()) {
-      return K2StatusToK2PgStatus(std::move(catalog_status));
+      return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
     }
   }
 
@@ -732,7 +733,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
   auto txn = k2pg::TXMgr.GetTxn();
   skv::http::dto::SKVRecord record = builder->build();
   auto [k2status] = txn->write(record, true, skv::http::dto::ExistencePrecondition::Exists).get();
-  status = K2StatusToK2PgStatus(std::move(k2status));
+  status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
   if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
     return status;
   } else {
@@ -742,7 +743,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
   if (increment_catalog) {
     skv::http::Status catalog_status = catalog->IncrementCatalogVersion();
     if (!catalog_status.is2xxOK()) {
-      return K2StatusToK2PgStatus(std::move(catalog_status));
+      return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
     }
   }
 

@@ -41,7 +41,6 @@ namespace k2pg {
 namespace gate {
     constexpr int K2_FIELD_OFFSET = 2;
     void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant);
-    K2PgStatus K2StatusToK2PgStatus(skv::http::Status&& status);
 
     K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid, std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog,
                              std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder);
