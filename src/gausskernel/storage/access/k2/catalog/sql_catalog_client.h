@@ -24,15 +24,15 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include <string>
 #include <unordered_map>
+#include <optional>
 
 #include "sql_catalog_manager.h"
-
-#include <skvhttp/dto/SKVRecord.h>
 
 namespace k2pg {
 namespace catalog {
 
 typedef class k2pg::Schema PgSchema;
+using k2pg::Status;
 
 // TODO: This catalog client layer so far doesn't provide value, consider eliminate it later
 class SqlCatalogClient {
@@ -42,14 +42,14 @@ public:
 
     ~SqlCatalogClient() {};
 
-    CHECKED_STATUS IsInitDbDone(bool* isDone);
+    Status IsInitDbDone(bool* isDone);
 
-    CHECKED_STATUS InitPrimaryCluster();
+    Status InitPrimaryCluster();
 
-    CHECKED_STATUS FinishInitDB();
+    Status FinishInitDB();
 
     // Create a new database with the given name.
-    CHECKED_STATUS CreateDatabase(const std::string& database_name,
+    Status CreateDatabase(const std::string& database_name,
                                 const std::string& database_id,
                                 uint32_t database_oid,
                                 const std::string& source_database_id,
@@ -57,13 +57,13 @@ public:
                                 const std::optional<uint32_t>& next_pg_oid = std::nullopt);
 
     // Delete database with the given name.
-    CHECKED_STATUS DeleteDatabase(const std::string& database_name,
+    Status DeleteDatabase(const std::string& database_name,
                                 const std::string& database_id);
 
-    CHECKED_STATUS UseDatabase(const std::string& database_name);
+    Status UseDatabase(const std::string& database_name);
 
 
-    CHECKED_STATUS CreateTable(const std::string& database_name,
+    Status CreateTable(const std::string& database_name,
                             const std::string& table_name,
                             const PgObjectId& table_object_id,
                             PgSchema& schema,
@@ -71,7 +71,7 @@ public:
                             bool is_shared_table,
                             bool if_not_exist);
 
-    CHECKED_STATUS CreateIndexTable(const std::string& database_name,
+    Status CreateIndexTable(const std::string& database_name,
                             const std::string& table_name,
                             const PgObjectId& table_object_id,
                             const PgObjectId& base_table_object_id,
@@ -84,34 +84,30 @@ public:
 
     // Delete the specified table.
     // Set 'wait' to true if the call must wait for the table to be fully deleted before returning.
-    CHECKED_STATUS DeleteTable(const PgOid database_oid, const PgOid table_oid, bool wait = true);
+    Status DeleteTable(const PgOid database_oid, const PgOid table_oid, bool wait = true);
 
-    CHECKED_STATUS DeleteIndexTable(const PgOid database_oid, const PgOid table_oid, PgOid *base_table_oid, bool wait = true);
+    Status DeleteIndexTable(const PgOid database_oid, const PgOid table_oid, PgOid *base_table_oid, bool wait = true);
 
-    CHECKED_STATUS OpenTable(const PgOid database_oid, const PgOid table_oid, std::shared_ptr<TableInfo>* table);
+    Status OpenTable(const PgOid database_oid, const PgOid table_oid, std::shared_ptr<TableInfo>* table);
 
-    sh::Response<std::shared_ptr<TableInfo>> OpenTable(const PgOid database_oid, const PgOid table_oid) {
-        std::shared_ptr<TableInfo> result;
-        auto status = OpenTable(database_oid, table_oid, &result);
-        return std::make_tuple(std::move(status), result);
-    }
+    std::shared_ptr<TableInfo> OpenTable(const PgOid database_oid, const PgOid table_oid);
 
     // For Postgres: reserve oids for a Postgres database.
-    CHECKED_STATUS ReservePgOids(const PgOid database_oid,
+    Status ReservePgOids(const PgOid database_oid,
                                 uint32_t next_oid, uint32_t count,
                                 uint32_t* begin_oid, uint32_t* end_oid);
 
 
-    CHECKED_STATUS GetCatalogVersion(uint64_t *pg_catalog_version);
+    Status GetCatalogVersion(uint64_t *pg_catalog_version);
 
-    CHECKED_STATUS IncrementCatalogVersion();
+    Status IncrementCatalogVersion();
 
-    CHECKED_STATUS GetAttrNumToSKVOffset(uint32_t database_oid, uint32_t relation_oid, std::unordered_map<int, uint32_t>& attr_to_offset);
+    Status GetAttrNumToSKVOffset(uint32_t database_oid, uint32_t relation_oid, std::unordered_map<int, uint32_t>& attr_to_offset);
 
     // If relation is a base table, then base_table_oid is set to relation_oid
-    CHECKED_STATUS GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
+    Status GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
 
-    CHECKED_STATUS GetCollectionNameAndSchemaName(uint32_t database_oid, uint32_t relation_oid, std::string& collectionName, std::string& schemaName);
+    Status GetCollectionNameAndSchemaName(uint32_t database_oid, uint32_t relation_oid, std::string& collectionName, std::string& schemaName);
 
 private:
     std::shared_ptr<SqlCatalogManager> catalog_manager_;

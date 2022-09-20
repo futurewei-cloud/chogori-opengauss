@@ -34,8 +34,9 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "k2pg-internal.h"
 #include "session.h"
-#include "storage.h"
+#include "access/k2/pg_session.h"
 #include "k2_util.h"
+#include "storage.h"
 #include "access/k2/k2pg_util.h"
 
 #include "utils/elog.h"
@@ -43,6 +44,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "pg_gate_defaults.h"
 #include "pg_gate_thread_local.h"
 #include "catalog/sql_catalog_client.h"
+#include "catalog/sql_catalog_manager.h"
 
 using namespace k2pg::gate;
 
@@ -58,7 +60,6 @@ namespace {
                 type_map_[type_entity->type_oid] = type_entity;
             }
             catalog_manager_ = std::make_shared<k2pg::catalog::SqlCatalogManager>();
-            catalog_client_ = std::make_shared<k2pg::catalog::SqlCatalogClient>(catalog_manager_);
             catalog_manager_->Start();
         };
 
@@ -67,7 +68,7 @@ namespace {
         };
 
         std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalogClient() {
-              return catalog_client_;
+              return k2pg::pg_session->GetCatalogClient();
         };
 
         std::shared_ptr<k2pg::catalog::SqlCatalogManager> GetCatalogManager() {
@@ -87,8 +88,6 @@ namespace {
 
         // Mapping table of K2PG and PostgreSQL datatypes.
         std::unordered_map<int, const K2PgTypeEntity *> type_map_;
-
-        std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client_;
 
         std::shared_ptr<k2pg::catalog::SqlCatalogManager> catalog_manager_;
 
@@ -120,7 +119,8 @@ K2PgStatus PgGate_InitSession(const char *database_name) {
     k2pg::TXMgr.Init();
     k2pg::TXMgr.EndTxn(skv::http::dto::EndAction::Abort);
 
-    return K2PgStatus::NotSupported;
+    k2pg::pg_session = std::make_shared<k2pg::PgSession>(pg_gate->GetCatalogManager(), database_name);
+    return K2PgStatus::OK;
 }
 
 // Initialize K2PgMemCtx.
@@ -157,18 +157,7 @@ K2PgStatus PgGate_InvalidateCache() {
 // Check if initdb has been already run.
 K2PgStatus PgGate_IsInitDbDone(bool* initdb_done) {
     elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbDone");
-
-    auto skvstat = pg_gate->GetCatalogClient()->IsInitDbDone(initdb_done);
-    if (skvstat.is2xxOK()) {
-        return k2pg::Status::OK;
-    }
-    K2PgStatus status {
-        .pg_code = ERRCODE_INTERNAL_ERROR,
-        .k2_code = skvstat.code,
-        .msg = skvstat.message,
-        .detail = "PgGate_IsInitDbDone failed"
-    };
-    return status;
+    return pg_gate->GetCatalogClient()->IsInitDbDone(initdb_done);
 }
 
 // Sets catalog_version to the local tserver's catalog version stored in shared
@@ -196,34 +185,13 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
 K2PgStatus PgGate_InitPrimaryCluster()
 {
     elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
-
-    auto skvstat = pg_gate->GetCatalogClient()->InitPrimaryCluster();
-    if (skvstat.is2xxOK()) {
-        return k2pg::Status::OK;
-    }
-    K2PgStatus status {
-        .pg_code = ERRCODE_INTERNAL_ERROR,
-        .k2_code = skvstat.code,
-        .msg = skvstat.message,
-        .detail = "PgGate_InitPrimaryCluster failed"
-    };
-    return status;
+    return pg_gate->GetCatalogClient()->InitPrimaryCluster();
 }
 
 K2PgStatus PgGate_FinishInitDB()
 {
     elog(DEBUG5, "PgGateAPI: PgGate_FinishInitDB()");
-    auto skvstat = pg_gate->GetCatalogClient()->FinishInitDB();
-    if (skvstat.is2xxOK()) {
-        return k2pg::Status::OK;
-    }
-    K2PgStatus status {
-        .pg_code = ERRCODE_INTERNAL_ERROR,
-        .k2_code = skvstat.code,
-        .msg = skvstat.message,
-        .detail = "PgGate_FinishInitDB() failed"
-    };
-    return status;
+    return pg_gate->GetCatalogClient()->FinishInitDB();
 }
 
 // DATABASE ----------------------------------------------------------------------------------------
@@ -274,13 +242,13 @@ K2PgStatus PgGate_ReserveOids(K2PgOid database_oid,
                            uint32_t count,
                            K2PgOid *begin_oid,
                            K2PgOid *end_oid) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ReserveOids %d, %d, %d", database_oid, next_oid, count);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_ReserveOids %d, %d, %d", database_oid, next_oid, count);
+    return pg_gate->GetCatalogClient()->ReservePgOids(database_oid, next_oid, count, begin_oid, end_oid);
 }
 
 K2PgStatus PgGate_GetCatalogMasterVersion(uint64_t *version) {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetCatalogMasterVersion");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_GetCatalogMasterVersion");
+    return pg_gate->GetCatalogClient()->GetCatalogVersion(version);
 }
 
 void PgGate_InvalidateTableCache(

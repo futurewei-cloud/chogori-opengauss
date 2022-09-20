@@ -80,6 +80,10 @@ and task state checking APIs later by using thread pools.
 */
 #pragma once
 
+#include <string>
+#include <memory>
+#include <optional>
+
 #include "cluster_info_handler.h"
 #include "database_info_handler.h"
 #include "table_info_handler.h"
@@ -200,7 +204,7 @@ protected:
     void ClearIndexCacheForTable(const std::string& base_table_id);
 
     void UpdateIndexCacheForTable(std::shared_ptr<TableInfo> table_info);
-    
+
     void AddIndexCache(std::shared_ptr<IndexInfo> index_info);
 
 
@@ -231,7 +235,7 @@ protected:
         TXMgr.EndAdditionalTxn(handle, sh::dto::EndAction::Abort);
     }
 
-    
+
     void CommitTransaction() {TXMgr.EndTxn(sh::dto::EndAction::Commit);}
     void AbortTransaction() {TXMgr.EndTxn(sh::dto::EndAction::Abort);}
 
@@ -267,7 +271,7 @@ private:
 
     // handler to access table and index information
     TableInfoHandler table_info_handler_;
-    
+
     // database information cache based on database id
     std::unordered_map<std::string, std::shared_ptr<DatabaseInfo>> database_id_map_;
 

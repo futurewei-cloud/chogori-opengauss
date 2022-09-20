@@ -25,7 +25,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <stddef.h>
 #include <stdint.h>
 
-#include "pg_gate_typedefs.h"
+#include "access/k2/pg_gate_typedefs.h"
 
 struct varlena;
 

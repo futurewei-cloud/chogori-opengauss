@@ -22,39 +22,68 @@ Copyright(c) 2022 Futurewei Cloud
 */
 
 #pragma once
-
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <atomic>
 
+#include "access/k2/status.h"
+#include "access/k2/pg_ids.h"
+#include "access/k2/pg_schema.h"
+#include "access/k2/pg_tabledesc.h"
 namespace k2pg {
 
+namespace catalog {
+    // forward definition of SqlCatalogClient to avoid bring in various dependencies
+    class SqlCatalogClient;
+}
+
 class PgSession {
- public:
-   // Constructors.
-   PgSession(const std::string& database_name);
-   virtual ~PgSession();
+public:
+    // Constructors.
+    PgSession(std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client, const std::string& database_name);
 
-  std::string& current_database() {
-      return connected_database_;
-  };
+    virtual ~PgSession();
 
-  const std::string& GetClientId() const {
-    return client_id_;
-  };
+    std::shared_ptr<k2pg::catalog::SqlCatalogClient> GetCatalogClient() {
+        return catalog_client_;
+    }
 
-  int64_t GetNextStmtId() {
-    // TODO: add more complext stmt id generation logic
-    return stmt_id_++;
-  };
+    Status ConnectDatabase(const std::string& database_name);
 
-  private:
-  // Connected database.
-  std::string connected_database_;
+    std::string& current_database() {
+        return connected_database_;
+    };
 
-  std::string client_id_;
+    const std::string& GetClientId() const {
+        return client_id_;
+    };
 
-  std::atomic<int64_t> stmt_id_;
+    int64_t GetNextStmtId() {
+        // TODO: add more complext stmt id generation logic
+        return stmt_id_++;
+    };
+
+    void InvalidateCache() {
+        table_cache_.clear();
+    }
+
+    std::shared_ptr<PgTableDesc> LoadTable(const PgObjectId& table_object_id);
+
+    void InvalidateTableCache(const PgObjectId& table_object_id);
+
+private:
+    std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client_;
+
+    // Connected database.
+    std::string connected_database_;
+
+    // table cache
+    std::unordered_map<std::string, std::shared_ptr<TableInfo>> table_cache_;
+
+    std::string client_id_;
+
+    std::atomic<int64_t> stmt_id_;
 };
 
 }  // namespace k2pg

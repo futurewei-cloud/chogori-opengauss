@@ -30,7 +30,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "nodes/parsenodes.h"
 #include "utils/relcache.h"
 
-#include "pg_gate_api.h"
+#include "access/k2/pg_gate_api.h"
 
 /* K2 Cluster Fuctions -------------------------------------------------------------------------- */
 extern void K2InitPGCluster();
