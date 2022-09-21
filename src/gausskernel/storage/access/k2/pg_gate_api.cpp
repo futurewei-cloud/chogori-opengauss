@@ -309,25 +309,11 @@ k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, K2SqlDataT
     return k2pg::ColumnSchema(col_name, data_type, is_nullable, is_key, order, order, sorting_type);
 }
 
-// TABLE -------------------------------------------------------------------------------------------
-
-// Create and drop table "database_name.schema_name.table_name()".
-// - When "schema_name" is NULL, the table "database_name.table_name" is created.
-// - When "database_name" is NULL, the table "connected_database_name.table_name" is created.
-K2PgStatus PgGate_ExecCreateTable(const char *database_name,
-                              const char *schema_name,
-                              const char *table_name,
-                              K2PgOid database_oid,
-                              K2PgOid table_oid,
-                              bool if_not_exist,
-                              bool add_primary_key,
-                              const std::vector<K2PGColumnDef>& columns) {
-    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
+std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key = false) {
     std::vector<k2pg::ColumnSchema> k2pgcols;
     std::vector<k2pg::ColumnId> colIds;
     int num_key_columns = 0;
-    const std::string sname = schema_name; // get std::string to make comparison easier
-    const bool is_pg_catalog_table = (sname == "pg_catalog") || (sname == "information_schema");
+    const bool is_pg_catalog_table = (schema_name == "pg_catalog") || (schema_name == "information_schema");
 
     // Add internal primary key column to a Postgres table without a user-specified primary key.
     if (add_primary_key) {
@@ -359,6 +345,24 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
     }
     k2pg::Schema schema;
     auto status = schema.Reset(k2pgcols, colIds, num_key_columns);
+    return std::make_tuple(std::move(status), is_pg_catalog_table, std::move(schema));
+}
+
+// TABLE -------------------------------------------------------------------------------------------
+
+// Create and drop table "database_name.schema_name.table_name()".
+// - When "schema_name" is NULL, the table "database_name.table_name" is created.
+// - When "database_name" is NULL, the table "connected_database_name.table_name" is created.
+K2PgStatus PgGate_ExecCreateTable(const char *database_name,
+                              const char *schema_name,
+                              const char *table_name,
+                              K2PgOid database_oid,
+                              K2PgOid table_oid,
+                              bool if_not_exist,
+                              bool add_primary_key,
+                              const std::vector<K2PGColumnDef>& columns) {
+    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
+    auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
     if (!status.ok()) {
         return status;
     }
@@ -469,8 +473,23 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               const bool skip_index_backfill,
                               bool if_not_exist,
                               const std::vector<K2PGColumnDef>& columns){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
+    auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
+    if (!status.ok()) {
+        return status;
+    }
+    const k2pg::PgObjectId index_object_id(database_oid, index_oid);
+    const k2pg::PgObjectId base_table_object_id(database_oid, table_oid);
+    auto skvstat = pg_gate->GetCatalogClient()->CreateIndexTable(database_name, index_name, index_object_id, base_table_object_id, schema, is_unique_index, skip_index_backfill, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
+    if (skvstat.is2xxOK()) {
+        return k2pg::Status::OK;
+    }
+    return K2PgStatus {
+        .pg_code = ERRCODE_INTERNAL_ERROR,
+        .k2_code = skvstat.code,
+        .msg = skvstat.message,
+        .detail = " PgGate_ExecCreateIndex() failed"
+    };
 }
 
 K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
