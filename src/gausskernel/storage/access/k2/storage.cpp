@@ -79,7 +79,7 @@ public:
     }
 };
 
-K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid, std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog,
+K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid,
                          std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder) {
     std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
     std::string collectionName = pg_table->collection_name();
@@ -159,7 +159,7 @@ skv::http::dto::SKVRecord tupleIDDatumToSKVRecord(Datum tuple_id, std::string co
 }
 
 K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_oid,
-                                           std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog, const std::vector<K2PgAttributeDef>& columns,
+                                           const std::vector<K2PgAttributeDef>& columns,
                                            std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder) {
     skv::http::dto::SKVRecord record;
     bool use_tupleID = false;
@@ -168,7 +168,7 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
     for (auto& attribute : columns) {
         if (attribute.attr_num == K2PgTupleIdAttributeNumber) {
             std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
-            K2PgStatus status = getSKVBuilder(database_oid, table_oid, catalog, builder);
+            K2PgStatus status = getSKVBuilder(database_oid, table_oid, builder);
             if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
                 return status;
             }
@@ -179,7 +179,7 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
     }
 
     // Get a SKVBuilder
-    K2PgStatus status = getSKVBuilder(database_oid, table_oid, catalog, builder);
+    K2PgStatus status = getSKVBuilder(database_oid, table_oid, builder);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
@@ -319,7 +319,7 @@ K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,
 }
 
 K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_oid,
-                                           std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog, const std::vector<K2PgAttributeDef>& columns,
+                                           const std::vector<K2PgAttributeDef>& columns,
                                            skv::http::dto::SKVRecord& record) {
     std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
     std::unordered_map<int, uint32_t> attr_to_offset;
@@ -341,7 +341,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
     uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
 
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
-    K2PgStatus status = getSKVBuilder(database_oid, table_oid, catalog, builder);
+    K2PgStatus status = getSKVBuilder(database_oid, table_oid, builder);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }

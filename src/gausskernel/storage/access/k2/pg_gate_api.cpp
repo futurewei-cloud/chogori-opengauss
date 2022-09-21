@@ -493,9 +493,8 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
                                     uint64_t *k2pgctid){
     elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
 
-    auto catalog = pg_gate->GetCatalogClient();
     skv::http::dto::SKVRecord record;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, catalog, attrs, record);
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, record);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
@@ -537,7 +536,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
     auto catalog = pg_gate->GetCatalogClient();
 
     skv::http::dto::SKVRecord record;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(database_oid, table_oid, catalog, columns, record);
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(database_oid, table_oid, columns, record);
 
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
@@ -570,7 +569,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
 
     // Get a builder with the keys serialzed. called function handles tupleId attribute if needed
-    K2PgStatus status = makeSKVBuilderWithKeysSerialized(database_oid, table_oid, catalog, columns, builder);
+    K2PgStatus status = makeSKVBuilderWithKeysSerialized(database_oid, table_oid, columns, builder);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
@@ -651,7 +650,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
 
     // Get a builder with the keys serialzed. called function handles tupleId attribute if needed
-    K2PgStatus status = makeSKVBuilderWithKeysSerialized(database_oid, table_oid, catalog, columns, builder);
+    K2PgStatus status = makeSKVBuilderWithKeysSerialized(database_oid, table_oid, columns, builder);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
