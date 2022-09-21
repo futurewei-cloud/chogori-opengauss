@@ -576,33 +576,22 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     }
 
     // Iterate through the passed attributes to determine which fields should be marked for update
-    std::unordered_map<int, uint32_t> attr_to_offset;
-    K2PgStatus catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
-    if (!catalog_status.IsOK()) {
-        return catalog_status;
-    }
-    std::vector<uint32_t> fieldsForUpdate;
-    auto it = attr_to_offset.begin();
-    for (; it != attr_to_offset.end(); ++it) {
-        bool found = false;
-        for (const auto& column : columns) {
-            if (column.attr_num == it->first) {
-                found = true;
-                break;
-            }
-          }
-        if (found) {
-            fieldsForUpdate.push_back(it->second);
-        }
-    }
-
-    // Create SKV offset to PG constant mapping for next step of serialization
     std::unordered_map<int, K2PgConstant> attr_map;
-    for (size_t i=0; i < columns.size(); ++i) {
-        auto it = attr_to_offset.find(columns[i].attr_num);
-        if (it != attr_to_offset.end()) {
-            attr_map[it->second] = columns[i].value;
+    std::vector<uint32_t> fieldsForUpdate;
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+    for (const auto& column : columns) {
+        k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
+        if (pg_column == NULL) {
+            K2PgStatus status {
+                .pg_code = ERRCODE_INTERNAL_ERROR,
+                .k2_code = 404,
+                .msg = "Cannot find column with attr_num",
+                .detail = "Load table failed"
+            };
+            return status;
         }
+        fieldsForUpdate.push_back(pg_column->index());
+        attr_map[pg_column->index()] = column.value;
     }
 
     // Serialize remaining non-key fields
@@ -640,7 +629,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     }
 
     if (increment_catalog) {
-        catalog_status = catalog->IncrementCatalogVersion();
+        K2PgStatus catalog_status = catalog->IncrementCatalogVersion();
         if (!catalog_status.IsOK()) {
             return catalog_status;
         }

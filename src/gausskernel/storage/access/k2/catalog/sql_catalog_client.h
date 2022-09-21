@@ -102,8 +102,6 @@ public:
 
     Status IncrementCatalogVersion();
 
-    Status GetAttrNumToSKVOffset(uint32_t database_oid, uint32_t relation_oid, std::unordered_map<int, uint32_t>& attr_to_offset);
-
     // If relation is a base table, then base_table_oid is set to relation_oid
     Status GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
 

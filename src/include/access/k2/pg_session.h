@@ -70,6 +70,8 @@ public:
 
     std::shared_ptr<PgTableDesc> LoadTable(const PgObjectId& table_object_id);
 
+    std::shared_ptr<PgTableDesc> LoadTable(const PgOid database_oid, const PgOid object_oid);
+
     void InvalidateTableCache(const PgObjectId& table_object_id);
 
 private:

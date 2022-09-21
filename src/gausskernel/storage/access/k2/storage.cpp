@@ -33,6 +33,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "k2_util.h"
 #include "storage.h"
+#include "session.h"
 
 #include <skvhttp/dto/SKVRecord.h>
 
@@ -83,9 +84,9 @@ K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid, std::shared_pt
     std::string collectionName;
     std::string schemaName;
 
-    skv::http::Status catalog_status = catalog->GetCollectionNameAndSchemaName(database_oid, table_oid, collectionName, schemaName);
-    if (!catalog_status.is2xxOK()) {
-        return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
+    K2PgStatus catalog_status = catalog->GetCollectionNameAndSchemaName(database_oid, table_oid, collectionName, schemaName);
+    if (!catalog_status.IsOK()) {
+        return catalog_status;
     }
 
     auto [status, schema] = k2pg::TXMgr.GetSchema(collectionName, schemaName);
@@ -201,28 +202,28 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
     // If we get here it is because we did not have a tupleID, so prepare to serialize keys from the provided columns
 
     // Get attribute to SKV offset mapping
-    std::unordered_map<int, uint32_t> attr_to_offset;
-    skv::http::Status catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
-    if (!catalog_status.is2xxOK()) {
-        return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
-    }
-
-
-    // Create SKV offset to Pg Constant mappping
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
     std::unordered_map<int, K2PgConstant> attr_map;
-    for (size_t i=0; i < columns.size(); ++i) {
-        auto it = attr_to_offset.find(columns[i].attr_num);
-        if (it != attr_to_offset.end()) {
-            attr_map[it->second] = columns[i].value;
+    for (const auto& column : columns) {
+        k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
+        if (pg_column == NULL) {
+            K2PgStatus status {
+                .pg_code = ERRCODE_INTERNAL_ERROR,
+                .k2_code = 404,
+                .msg = "Cannot find column with attr_num",
+                .detail = "Load table failed"
+            };
+            return status;
         }
+        attr_map[pg_column->index()] = column.value;
     }
 
     // Determine table id and index id to use as first two fields in SKV record.
     // The passed in table id may or may not be a secondary index
     uint32_t base_table_oid = 0;
-    catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
-    if (!catalog_status.is2xxOK()) {
-        return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
+    K2PgStatus catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
+    if (!catalog_status.IsOK()) {
+        return catalog_status;
     }
     uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
 
@@ -328,16 +329,26 @@ K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,
 K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_oid,
                                            std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog, const std::vector<K2PgAttributeDef>& columns,
                                            skv::http::dto::SKVRecord& record) {
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
     std::unordered_map<int, uint32_t> attr_to_offset;
-    skv::http::Status catalog_status = catalog->GetAttrNumToSKVOffset(database_oid, table_oid, attr_to_offset);
-    if (!catalog_status.is2xxOK()) {
-        return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
+    for (const auto& column : columns) {
+        k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
+        if (pg_column == NULL) {
+            K2PgStatus status {
+                .pg_code = ERRCODE_INTERNAL_ERROR,
+                .k2_code = 404,
+                .msg = "Cannot find column with attr_num",
+                .detail = "Load table failed"
+            };
+            return status;
+        }
+        attr_to_offset[column.attr_num] = pg_column->index();
     }
 
     uint32_t base_table_oid = 0;
-    catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
-    if (!catalog_status.is2xxOK()) {
-        return k2pg::K2StatusToK2PgStatus(std::move(catalog_status));
+    K2PgStatus catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
+    if (!catalog_status.IsOK()) {
+        return catalog_status;
     }
     uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
 

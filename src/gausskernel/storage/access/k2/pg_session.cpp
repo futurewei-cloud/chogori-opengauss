@@ -52,6 +52,11 @@ void PgSession::InvalidateTableCache(const PgObjectId& table_obj_id) {
     table_cache_.erase(pg_table_uuid);
 }
 
+std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgOid database_oid, const PgOid object_oid) {
+    PgObjectId pg_object(database_oid, object_oid);
+    return LoadTable(pg_object);
+}
+
 std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgObjectId& table_object_id) {
     std::string t_table_uuid = table_object_id.GetTableUuid();
     std::shared_ptr<TableInfo> table;
