@@ -246,23 +246,27 @@ K2PgStatus PgGate_GetCatalogMasterVersion(uint64_t *version) {
 void PgGate_InvalidateTableCache(
     const K2PgOid database_oid,
     const K2PgOid table_oid) {
-  elog(DEBUG5, "PgGateAPI: PgGate_InvalidateTableCache %d, %d", database_oid, table_oid);
+    elog(DEBUG5, "PgGateAPI: PgGate_InvalidateTableCache %d, %d", database_oid, table_oid);
+    const k2pg::PgObjectId table_object_id(database_oid, table_oid);
+    k2pg::pg_session->InvalidateTableCache(table_object_id);
 }
 
 K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
-  elog(DEBUG5, "PgGateAPI: PgGate_InvalidateTableCacheByTableId %s", table_uuid);
-  if (table_uuid == NULL) {
-    K2PgStatus status {
-        .pg_code = ERRCODE_FDW_ERROR,
-        .k2_code = 400,
-        .msg = "Invalid argument",
-        .detail = "table_uuid is null"
-    };
+    elog(DEBUG5, "PgGateAPI: PgGate_InvalidateTableCacheByTableId %s", table_uuid);
+    if (table_uuid == NULL) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_FDW_ERROR,
+            .k2_code = 400,
+            .msg = "Invalid argument",
+            .detail = "table_uuid is null"
+        };
 
-    return status;
-  }
-
-  return K2PgStatus::NotSupported;
+        return status;
+    }
+    std::string table_uuid_str = table_uuid;
+    const k2pg::PgObjectId table_object_id(table_uuid_str);
+    k2pg::pg_session->InvalidateTableCache(table_object_id);
+    return K2PgStatus::OK;
 }
 
 // TABLE -------------------------------------------------------------------------------------------
