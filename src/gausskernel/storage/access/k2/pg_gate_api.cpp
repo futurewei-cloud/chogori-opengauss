@@ -35,7 +35,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "k2pg-internal.h"
 #include "session.h"
 #include "access/k2/pg_session.h"
-#include "k2_util.h"
+#include "access/k2/k2_util.h"
 #include "storage.h"
 #include "access/k2/k2pg_util.h"
 

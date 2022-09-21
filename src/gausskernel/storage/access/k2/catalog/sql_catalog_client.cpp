@@ -20,7 +20,7 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-#include "../k2_util.h"
+#include "access/k2/k2_util.h"
 #include "sql_catalog_client.h"
 #include "sql_catalog_manager.h"
 namespace k2pg {

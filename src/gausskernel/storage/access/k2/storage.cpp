@@ -31,7 +31,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "catalog/pg_type.h"
 #include "fmgr/fmgr_comp.h"
 
-#include "k2_util.h"
+#include "access/k2/k2_util.h"
 #include "storage.h"
 #include "session.h"
 
