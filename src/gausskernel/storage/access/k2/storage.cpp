@@ -81,13 +81,9 @@ public:
 
 K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid, std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog,
                          std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder) {
-    std::string collectionName;
-    std::string schemaName;
-
-    K2PgStatus catalog_status = catalog->GetCollectionNameAndSchemaName(database_oid, table_oid, collectionName, schemaName);
-    if (!catalog_status.IsOK()) {
-        return catalog_status;
-    }
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+    std::string collectionName = pg_table->collection_name();
+    std::string schemaName = pg_table->schema_name();
 
     auto [status, schema] = k2pg::TXMgr.GetSchema(collectionName, schemaName);
     if (!status.is2xxOK()) {

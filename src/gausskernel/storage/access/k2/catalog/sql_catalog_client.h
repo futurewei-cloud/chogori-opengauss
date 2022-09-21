@@ -105,8 +105,6 @@ public:
     // If relation is a base table, then base_table_oid is set to relation_oid
     Status GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
 
-    Status GetCollectionNameAndSchemaName(uint32_t database_oid, uint32_t relation_oid, std::string& collectionName, std::string& schemaName);
-
 private:
     std::shared_ptr<SqlCatalogManager> catalog_manager_;
 };
