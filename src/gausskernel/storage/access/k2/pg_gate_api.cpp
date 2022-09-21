@@ -189,8 +189,8 @@ K2PgStatus PgGate_FinishInitDB()
 // DATABASE ----------------------------------------------------------------------------------------
 // Connect database. Switch the connected database to the given "database_name".
 K2PgStatus PgGate_ConnectDatabase(const char *database_name) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ConnectDatabase %s", database_name);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_ConnectDatabase %s", database_name);
+    return k2pg::pg_session->ConnectDatabase(database_name);
 }
 
 // Create database.
