@@ -151,8 +151,9 @@ K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx) {
 
 // Invalidate the sessions table cache.
 K2PgStatus PgGate_InvalidateCache() {
-  elog(DEBUG5, "PgGateAPI: PgGate_InvalidateCache");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_InvalidateCache");
+    k2pg::pg_session->InvalidateCache();
+    return K2PgStatus::OK;
 }
 
 // Check if initdb has been already run.
