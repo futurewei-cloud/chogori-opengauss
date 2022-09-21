@@ -216,11 +216,7 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
 
     // Determine table id and index id to use as first two fields in SKV record.
     // The passed in table id may or may not be a secondary index
-    uint32_t base_table_oid = 0;
-    K2PgStatus catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
-    if (!catalog_status.IsOK()) {
-        return catalog_status;
-    }
+    uint32_t base_table_oid = pg_table->base_table_oid();
     uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
 
     // Last, serialize key fields into the builder
@@ -341,11 +337,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
         attr_to_offset[column.attr_num] = pg_column->index();
     }
 
-    uint32_t base_table_oid = 0;
-    K2PgStatus catalog_status = catalog->GetBaseTableOID(database_oid, table_oid, base_table_oid);
-    if (!catalog_status.IsOK()) {
-        return catalog_status;
-    }
+    uint32_t base_table_oid = pg_table->base_table_oid();
     uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
 
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;

@@ -102,9 +102,6 @@ public:
 
     Status IncrementCatalogVersion();
 
-    // If relation is a base table, then base_table_oid is set to relation_oid
-    Status GetBaseTableOID(uint32_t database_oid, uint32_t relation_oid, uint32_t& base_table_oid);
-
 private:
     std::shared_ptr<SqlCatalogManager> catalog_manager_;
 };
