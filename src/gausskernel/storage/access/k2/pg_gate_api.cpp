@@ -589,8 +589,9 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
             };
             return status;
         }
-        fieldsForUpdate.push_back(pg_column->index());
-        attr_map[pg_column->index()] = column.value;
+        // we have two extra fields, i.e., table_id and index_id, in skv key
+        fieldsForUpdate.push_back(pg_column->index() + 2);
+        attr_map[pg_column->index() + 2] = column.value;
     }
 
     // Serialize remaining non-key fields

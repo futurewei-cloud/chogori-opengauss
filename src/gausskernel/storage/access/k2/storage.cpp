@@ -211,7 +211,8 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
             };
             return status;
         }
-        attr_map[pg_column->index()] = column.value;
+        // we have two extra fields, i.e., table_id and index_id, in skv key
+        attr_map[pg_column->index() + 2] = column.value;
     }
 
     // Determine table id and index id to use as first two fields in SKV record.
@@ -334,7 +335,8 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
             };
             return status;
         }
-        attr_to_offset[column.attr_num] = pg_column->index();
+        // we have two extra fields, i.e., table_id and index_id, in skv key
+        attr_to_offset[column.attr_num] = pg_column->index() + 2;
     }
 
     uint32_t base_table_oid = pg_table->base_table_oid();
