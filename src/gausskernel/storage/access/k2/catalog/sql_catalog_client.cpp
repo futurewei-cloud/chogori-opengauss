@@ -38,11 +38,11 @@ Status SqlCatalogClient::IsInitDbDone(bool* isDone) {
 }
 
 Status SqlCatalogClient::InitPrimaryCluster() {
-    return k2pg::K2StatusToK2PgStatus(std::move(catalog_manager_->InitPrimaryCluster()));
+    return k2pg::K2StatusToK2PgStatus(catalog_manager_->InitPrimaryCluster());
 }
 
 Status SqlCatalogClient::FinishInitDB() {
-    return k2pg::K2StatusToK2PgStatus(std::move(catalog_manager_->FinishInitDB()));
+    return k2pg::K2StatusToK2PgStatus(catalog_manager_->FinishInitDB());
 }
 
 Status SqlCatalogClient::CreateDatabase(const std::string& database_name,
@@ -66,7 +66,7 @@ Status SqlCatalogClient::CreateDatabase(const std::string& database_name,
 }
 
 Status SqlCatalogClient::DeleteDatabase(const std::string& database_name, const std::string& database_id) {
-    return k2pg::K2StatusToK2PgStatus(std::move(catalog_manager_->DeleteDatabase(database_name, database_id)));
+    return k2pg::K2StatusToK2PgStatus(catalog_manager_->DeleteDatabase(database_name, database_id));
 }
 
 Status SqlCatalogClient::UseDatabase(const std::string& database_name) {

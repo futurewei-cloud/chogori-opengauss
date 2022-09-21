@@ -48,8 +48,7 @@ Status PgSession::ConnectDatabase(const std::string& database_name) {
 }
 
 void PgSession::InvalidateTableCache(const PgObjectId& table_obj_id) {
-    std::string pg_table_uuid = table_obj_id.GetTableUuid();
-    table_cache_.erase(pg_table_uuid);
+    table_cache_.erase(table_obj_id.GetTableUuid());
 }
 
 std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgOid database_oid, const PgOid object_oid) {
@@ -58,7 +57,7 @@ std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgOid database_oid, cons
 }
 
 std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgObjectId& table_object_id) {
-    std::string t_table_uuid = table_object_id.GetTableUuid();
+    std::string t_table_uuid = std::move(table_object_id.GetTableUuid());
     std::shared_ptr<TableInfo> table;
 
     auto cached_table = table_cache_.find(t_table_uuid);
@@ -73,7 +72,7 @@ std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgObjectId& table_object
         table = cached_table->second;
     }
 
-    std::string t_table_id = table_object_id.GetTableId();
+    std::string t_table_id = std::move(table_object_id.GetTableId());
     // check if the t_table_id is for a table or an index
     if (table->table_id().compare(t_table_id) == 0) {
         // a table
