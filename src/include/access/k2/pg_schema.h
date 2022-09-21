@@ -37,6 +37,8 @@ Copyright(c) 2022 Futurewei Cloud
 namespace k2pg {
     typedef int32_t ColumnId;
     constexpr ColumnId kFirstColumnId = 0;
+    // Additional partition keys TableId and ColumnId added to each table
+    constexpr int numDefaultPartitionKeys = 2;
 
     enum IndexPermissions {
         INDEX_PERM_DELETE_ONLY = 0,
@@ -180,7 +182,7 @@ namespace k2pg {
         void swap(Schema& other); // NOLINT(build/include_what_you_use)
 
         void CopyFrom(const Schema& other);
-        
+
         // Construct a schema with the given information.
         //
         // NOTE: if the schema is user-provided, it's better to construct an
@@ -288,7 +290,7 @@ namespace k2pg {
         }
 
         ColumnId ColumnIdByName(const std::string& name) const;
-        
+
         std::pair<bool, ColumnId> FindColumnIdByName(const std::string& col_name) const;
 
         // Returns true if the schema contains nullable columns

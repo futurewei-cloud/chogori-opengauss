@@ -293,8 +293,8 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
     return K2PgStatus::OK;
 }
 
-// Get ColumnSchema from column information
-k2pg::ColumnSchema getColumn(const std::string&& col_name, int order, K2SqlDataType k2pg_type, bool is_key, bool is_hash,  bool is_desc = false, bool is_nulls_first = false) {
+// Make ColumnSchema from column information
+k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, K2SqlDataType k2pg_type, bool is_key, bool is_desc, bool is_nulls_first) {
     using SortingType = k2pg::ColumnSchema::SortingType;
     SortingType sorting_type = SortingType::kNotSpecified;
     if (is_key) {
@@ -328,16 +328,14 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
     int num_key_columns = 0;
     const std::string sname = schema_name; // get std::string to make comparison easier
     const bool is_pg_catalog_table = (sname == "pg_catalog") || (sname == "information_schema");
-    const bool is_shared_table = false; // TODO: Should be passed in by parameter?
 
     // Add internal primary key column to a Postgres table without a user-specified primary key.
     if (add_primary_key) {
         // For regular user table, k2pgrowid should be a hash key because k2pgrowid is a random uuid.
-        bool is_hash = !is_pg_catalog_table;
-        k2pgcols.push_back(getColumn("k2pgrowid",
+        k2pgcols.push_back(makeColumn("k2pgrowid",
                 static_cast<int32_t>(k2pg::PgSystemAttrNum::kPgRowId),
                 static_cast<DataType>( K2SQL_DATA_TYPE_BINARY),
-                true /* is_key */, is_hash));
+                true /* is_key */, false /* is_desc */, false /* is_nulls_first */));
     }
     // Add key columns at the beginning
     for (auto& col : columns) {
@@ -345,7 +343,7 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
             continue;
         }
         num_key_columns++;
-        k2pgcols.push_back(getColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Add data columns
     for (auto& col : columns) {
@@ -353,7 +351,7 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
             continue;
         }
 
-        k2pgcols.push_back(getColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Get column ids
     for (size_t i=0; i < k2pgcols.size(); i++) {
@@ -365,7 +363,7 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
         return status;
     }
     const k2pg::PgObjectId table_object_id(database_oid, table_oid);
-    auto skvstat = pg_gate->GetCatalogClient()->CreateTable(database_name, table_name, table_object_id, schema, is_pg_catalog_table, is_shared_table, if_not_exist);
+    auto skvstat = pg_gate->GetCatalogClient()->CreateTable(database_name, table_name, table_object_id, schema, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
     if (skvstat.is2xxOK()) {
         return k2pg::Status::OK;
     }

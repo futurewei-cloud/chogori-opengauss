@@ -188,7 +188,7 @@ sh::Status SqlCatalogClient::GetAttrNumToSKVOffset(uint32_t database_oid, uint32
     PgTableDesc desc(tableInfo);
     auto colmap = desc.GetAttrNumToColMap();
     for (const auto& [attr_num, col] : colmap) {
-        attr_to_offset[attr_num] = col->index();
+        attr_to_offset[attr_num] = col->index() + numDefaultPartitionKeys;
     }
     return sh::Statuses::S200_OK;
 }
