@@ -651,7 +651,7 @@ k2IterateForeignScan(ForeignScanState *node)
             // err
         }
 
-        k2pg_state->query = std::move(query);
+        k2pg_state->query = query;
         //k2SetupScanTargets(node);
         //HandleK2PgStatusWithOwner(PgGate_ExecSelect(k2pg_state->handle, k2pg_state->exec_params),
         //                        k2pg_state->handle,
