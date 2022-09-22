@@ -80,6 +80,10 @@ and task state checking APIs later by using thread pools.
 */
 #pragma once
 
+#include <string>
+#include <memory>
+#include <optional>
+
 #include "cluster_info_handler.h"
 #include "database_info_handler.h"
 #include "table_info_handler.h"

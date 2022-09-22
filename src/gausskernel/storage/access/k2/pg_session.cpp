@@ -20,19 +20,75 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
+#include "libintl.h"
+#include "postgres.h"
 
 #include "access/k2/pg_session.h"
+#include "catalog/sql_catalog_client.h"
 
+#include "utils/errcodes.h"
+#include "utils/elog.h"
 namespace k2pg {
 
 PgSession::PgSession(
+    std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client,
     const std::string& database_name)
-    : connected_database_(database_name),
+    : catalog_client_(catalog_client),
+      connected_database_(database_name),
       client_id_("K2PG"),
       stmt_id_(1) {
 }
 
 PgSession::~PgSession() {
+}
+
+Status PgSession::ConnectDatabase(const std::string& database_name) {
+    connected_database_ = database_name;
+    return catalog_client_->UseDatabase(database_name);
+}
+
+void PgSession::InvalidateTableCache(const PgObjectId& table_obj_id) {
+    table_cache_.erase(table_obj_id.GetTableUuid());
+}
+
+std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgOid database_oid, const PgOid object_oid) {
+    PgObjectId pg_object(database_oid, object_oid);
+    return LoadTable(pg_object);
+}
+
+std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgObjectId& table_object_id) {
+    std::string t_table_uuid = table_object_id.GetTableUuid();
+
+    auto cached_table = table_cache_.find(t_table_uuid);
+    if (cached_table == table_cache_.end()) {
+        std::shared_ptr<TableInfo> table;
+        Status status = catalog_client_->OpenTable(table_object_id.GetDatabaseOid(), table_object_id.GetObjectOid(), &table);
+        if (!status.IsOK()) {
+            ereport(ERROR, (errcode(status.pg_code), errmsg("Error loading table with oid %d in database %d",
+                table_object_id.GetObjectOid(), table_object_id.GetDatabaseOid())));
+        }
+
+        std::shared_ptr<PgTableDesc> table_desc;
+        std::string t_table_id = std::move(table_object_id.GetTableId());
+        // check if the t_table_id is for a table or an index
+        if (table->table_id().compare(t_table_id) == 0) {
+            // a table
+            table_desc = std::make_shared<PgTableDesc>(table);
+        } else {
+            // an index
+            const auto itr = table->secondary_indexes().find(t_table_id);
+            if (itr == table->secondary_indexes().end()) {
+                ereport(ERROR, (errcode(ERRCODE_CASE_NOT_FOUND), errmsg("Error loading index with oid %s in database %s",
+                    t_table_id.c_str(), table->database_id().c_str())));
+            }
+            table_desc = std::make_shared<PgTableDesc>(itr->second, table->database_id());
+        }
+        // cache it
+        table_cache_[t_table_uuid] = table_desc;
+        return table_desc;
+    } else {
+        return cached_table->second;
+    }
 }
 
 }  // namespace k2pg

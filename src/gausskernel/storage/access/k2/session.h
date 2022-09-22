@@ -23,7 +23,7 @@ Copyright(c) 2022 Futurewei Cloud
 #pragma once
 #include <skvhttp/client/SKVClient.h>
 #include "config.h"
-
+#include "access/k2/pg_session.h"
 namespace k2pg {
 namespace sh=skv::http;
 
@@ -90,4 +90,7 @@ private:
 // in particular, non-fdw threads of execution.
 // The general execution model is that we can have at most one active transaction per thread.
 inline thread_local TxnManager TXMgr;
+
+// thread local session
+inline thread_local std::shared_ptr<PgSession> pg_session;
 } // ns

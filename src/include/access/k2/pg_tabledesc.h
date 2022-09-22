@@ -210,7 +210,7 @@ class PgTableDesc {
   }
 
   // Find the column given the postgres attr number.
-  PgColumn * FindColumn(int attr_num);
+  PgColumn* FindColumn(int attr_num);
 
   Status GetColumnInfo(int16_t attr_number, bool *is_primary, bool *is_hash) const;
 
