@@ -23,6 +23,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2_util.h"
 #include "sql_catalog_client.h"
 #include "sql_catalog_manager.h"
+
 namespace k2pg {
 namespace catalog {
 
@@ -177,5 +178,6 @@ Status SqlCatalogClient::GetCatalogVersion(uint64_t *pg_catalog_version) {
 Status SqlCatalogClient::IncrementCatalogVersion() {
     return k2pg::K2StatusToK2PgStatus(std::get<0>(catalog_manager_->IncrementCatalogVersion()));
 }
+
 } // namespace catalog
 }  // namespace k2pg

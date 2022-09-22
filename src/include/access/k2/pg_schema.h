@@ -180,7 +180,7 @@ namespace k2pg {
         void swap(Schema& other); // NOLINT(build/include_what_you_use)
 
         void CopyFrom(const Schema& other);
-        
+
         // Construct a schema with the given information.
         //
         // NOTE: if the schema is user-provided, it's better to construct an
@@ -288,7 +288,7 @@ namespace k2pg {
         }
 
         ColumnId ColumnIdByName(const std::string& name) const;
-        
+
         std::pair<bool, ColumnId> FindColumnIdByName(const std::string& col_name) const;
 
         // Returns true if the schema contains nullable columns
