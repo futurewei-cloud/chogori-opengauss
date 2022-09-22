@@ -88,7 +88,7 @@ Status SqlCatalogClient::CreateTable(
       .isSharedTable = is_shared_table,
       .isNotExist = if_not_exist
     };
-    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(catalog_manager_->CreateTable(request))));
+    return k2pg::K2StatusToK2PgStatus(std::get<0>(catalog_manager_->CreateTable(request)));
 }
 
 Status SqlCatalogClient::CreateIndexTable(
@@ -116,7 +116,7 @@ Status SqlCatalogClient::CreateIndexTable(
       .isSharedTable = is_shared_table,
       .isNotExist = if_not_exist
     };
-    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(catalog_manager_->CreateIndexTable(request))));
+    return k2pg::K2StatusToK2PgStatus(std::get<0>(catalog_manager_->CreateIndexTable(request)));
 }
 
 Status SqlCatalogClient::DeleteTable(const PgOid database_oid, const PgOid table_oid, bool wait) {
@@ -175,7 +175,7 @@ Status SqlCatalogClient::GetCatalogVersion(uint64_t *pg_catalog_version) {
 }
 
 Status SqlCatalogClient::IncrementCatalogVersion() {
-    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(catalog_manager_->IncrementCatalogVersion())));
+    return k2pg::K2StatusToK2PgStatus(std::get<0>(catalog_manager_->IncrementCatalogVersion()));
 }
 } // namespace catalog
 }  // namespace k2pg

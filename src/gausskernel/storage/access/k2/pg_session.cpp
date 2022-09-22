@@ -57,7 +57,7 @@ std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgOid database_oid, cons
 }
 
 std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgObjectId& table_object_id) {
-    std::string t_table_uuid = std::move(table_object_id.GetTableUuid());
+    std::string t_table_uuid = table_object_id.GetTableUuid();
 
     auto cached_table = table_cache_.find(t_table_uuid);
     if (cached_table == table_cache_.end()) {
