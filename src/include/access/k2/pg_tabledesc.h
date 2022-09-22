@@ -227,14 +227,6 @@ class PgTableDesc {
     return is_index_;
   }
 
-  std::unordered_map<int, PgColumn*> GetAttrNumToColMap() {
-      std::unordered_map<int, PgColumn*> colmap;
-      for (const auto& [attr_num, idx] : attr_num_map_) {
-          colmap[attr_num] = &columns_[idx];
-      }
-      return colmap;
-  }
-
   private:
   bool is_index_;
   std::string database_id_;
