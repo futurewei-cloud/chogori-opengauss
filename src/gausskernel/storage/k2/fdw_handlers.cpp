@@ -176,7 +176,7 @@ struct K2FdwExecState
 
     PgExecParameters *exec_params; /* execution control parameters for K2 PG */
     bool is_exec_done; /* Each statement should be executed exactly one time */
-    skv::http::dto::QueryRequest query;
+    std::shared_ptr<skv::http::dto::QueryRequest> query;
 };
 
 struct K2FdwScanPlanData

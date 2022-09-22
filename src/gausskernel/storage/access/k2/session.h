@@ -27,39 +27,63 @@ Copyright(c) 2022 Futurewei Cloud
 namespace k2pg {
 namespace sh=skv::http;
 
+// The TxnManager class enforces single-txn per thread model. It manages the lifetime of the transaction by
+// observing callbacks from PG
 class TxnManager {
 public:
-    // this method returns the current active transaction in this manager, creating a new one if needed
-    sh::Response<std::shared_ptr<sh::TxnHandle>> BeginTxn(sh::dto::TxnOptions opts);
+    // For exceptional cases, you can force the end of a txn if needed here.
+    // Note that any further operations (read/write) issued in this thread will open a new txn
+    boost::future<sh::Response<>>
+        endTxn(sh::dto::EndAction endAction);
 
-    // this method returns the current active transaction in this manager, or null ptr if one doesn't exist
-    std::shared_ptr<sh::TxnHandle> GetTxn();
+    // this method creates a new txn in the session if one does not exist already
+    boost::future<sh::Response<>>
+        beginTxn();
 
-    // transactions should be ended via this call to ensure the thread-local state is maintained
-    sh::Response<> EndTxn(sh::dto::EndAction endAction);
+    // Any of the following operations will open a new txn if one does not exist
+    boost::future<sh::Response<sh::dto::SKVRecord>>
+        read(sh::dto::SKVRecord& record);
+    boost::future<sh::Response<>>
+        write(sh::dto::SKVRecord& record, bool erase=false,
+              sh::dto::ExistencePrecondition precondition=sh::dto::ExistencePrecondition::None);
+    boost::future<sh::Response<>>
+        partialUpdate(sh::dto::SKVRecord& record, std::vector<uint32_t> fieldsForPartialUpdate);
+    boost::future<sh::Response<sh::dto::QueryResponse>>
+        query(std::shared_ptr<sh::dto::QueryRequest> query);
+    boost::future<sh::Response<std::shared_ptr<sh::dto::QueryRequest>>>
+        createQuery(sh::dto::SKVRecord& startKey, sh::dto::SKVRecord& endKey,
+                    sh::dto::expression::Expression&& filter=sh::dto::expression::Expression{},
+                    std::vector<std::string>&& projection=std::vector<std::string>{}, int32_t recordLimit=-1,
+                    bool reverseDirection=false, bool includeVersionMismatch=false);
+    // Queries are automatically destroyed on txn end, so this is only needed for long running txns
+    boost::future<sh::Response<>>
+        destroyQuery(std::shared_ptr<sh::dto::QueryRequest> query);
+    boost::future<sh::Response<>>
+        createSchema(const std::string& collectionName, const sh::dto::Schema& schema);
+    boost::future<sh::Response<std::shared_ptr<sh::dto::Schema>>>
+        getSchema(const std::string& collectionName, const std::string& schemaName,
+                  int64_t schemaVersion=sh::dto::ANY_SCHEMA_VERSION);
+    boost::future<sh::Response<>>
+        createCollection(sh::dto::CollectionMetadata metadata, std::vector<std::string> rangeEnds);
+    boost::future<sh::Response<>>
+        createCollection(const std::string& collection_name, const std::string& DBName);
 
-    // Get adiitional unmanged txn for scenrio where different collections needs to be modified
-    sh::Response<std::shared_ptr<sh::TxnHandle>> GetAdditionalTxn(sh::dto::TxnOptions opts);
-
-    // End additional txn
-    sh::Response<> EndAdditionalTxn(std::shared_ptr<sh::TxnHandle>, sh::dto::EndAction endAction);
-
-    // Helper used to initialize the skv client and register txn callbacks
-    void Init();
-
-    sh::Response<> CreateSchema(const sh::String& collectionName, const sh::dto::Schema& schema);
-    sh::Response<std::shared_ptr<sh::dto::Schema>> GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion=sh::dto::ANY_SCHEMA_VERSION);
-    sh::Response<> CreateCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds);
-    sh::Response<> CreateCollection(const std::string& collection_name, const std::string& DBName);
+    // use to set the txn options for all new txns in the thread/session
+    void setSessionTxnOpts(sh::dto::TxnOptions opts);
 
 private:
-    // this txn is managed by this manager.
-    std::shared_ptr<sh::TxnHandle> _txn;
+    // Helper used to initialize the skv client and register txn callbacks
+    void _init();
 
-    // share the client among all threads
+    // this txn is managed by this manager.
+    std::unique_ptr<sh::TxnHandle> _txn;
+
+    // share the client among all threads so that we use the same connection pool
     static inline std::shared_ptr<sh::Client> _client;
-    static inline thread_local Config _config;
-    static inline thread_local bool _initialized{false};
+
+    Config _config;
+    bool _initialized{false};
+    sh::dto::TxnOptions _txnOpts;
 };
 
 // the thread-local TxnManager. It allows access to k2 from any thread in opengauss,

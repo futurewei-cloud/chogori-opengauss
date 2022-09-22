@@ -49,13 +49,13 @@ public:
 
     sh::Status InitDatabaseTable();
 
-    sh::Status UpsertDatabase(std::shared_ptr<sh::TxnHandle> txnHandler, const DatabaseInfo& database_info);
+    sh::Status UpsertDatabase(const DatabaseInfo& database_info);
 
-    sh::Response<DatabaseInfo> GetDatabase(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& database_id);
+    sh::Response<DatabaseInfo> GetDatabase(const std::string& database_id);
 
-    sh::Response< std::vector<DatabaseInfo>> ListDatabases(std::shared_ptr<sh::TxnHandle> txnHandler);
+    sh::Response< std::vector<DatabaseInfo>> ListDatabases();
 
-    sh::Status DeleteDatabase(std::shared_ptr<sh::TxnHandle> txnHandler, DatabaseInfo& database_info);
+    sh::Status DeleteDatabase(DatabaseInfo& database_info);
 
     // TODO(ahsank): add partial update for next_pg_oid once SKV supports partial update
 

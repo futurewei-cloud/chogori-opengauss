@@ -39,7 +39,7 @@ DatabaseInfoHandler::~DatabaseInfoHandler() {
 // Called only once in sql_catalog_manager::InitPrimaryCluster()
 sh::Status DatabaseInfoHandler::InitDatabaseTable() {
     // check to make sure the schema doesn't exists
-    auto result = TXMgr.GetSchema(collection_name_, schema_.name);
+    auto result = TXMgr.getSchema(collection_name_, schema_.name).get();
     auto status = std::get<0>(result);
     if (status.code != 404) {  // expect NotFound
         if (status.is2xxOK()) {
@@ -51,7 +51,7 @@ sh::Status DatabaseInfoHandler::InitDatabaseTable() {
     }
 
     // create the table schema since it does not exist
-    auto createResult = TXMgr.CreateSchema(collection_name_, schema_);
+    auto createResult = TXMgr.createSchema(collection_name_, schema_).get();
     status = std::get<0>(createResult);
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create schema for {} in {}, due to {}", schema_ptr_->name, collection_name_, status);
@@ -82,9 +82,9 @@ sh::dto::SKVRecord DatabaseInfoHandler::getRecord(const DatabaseInfo& info) {
     return builder.build();
 }
 
-sh::Status DatabaseInfoHandler::UpsertDatabase(std::shared_ptr<sh::TxnHandle> txnHandler, const DatabaseInfo& database_info) {
+sh::Status DatabaseInfoHandler::UpsertDatabase(const DatabaseInfo& database_info) {
     dto::SKVRecord record = getRecord(database_info);
-    auto [write_status] = txnHandler->write(record, false).get();
+    auto [write_status] = TXMgr.write(record, false).get();
     if (!write_status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to upsert databaseinfo record {} due to {}", database_info.database_id, write_status);
         return write_status;
@@ -92,11 +92,12 @@ sh::Status DatabaseInfoHandler::UpsertDatabase(std::shared_ptr<sh::TxnHandle> tx
     return write_status;
 }
 
-sh::Response<DatabaseInfo> DatabaseInfoHandler::GetDatabase(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& database_id) {
+sh::Response<DatabaseInfo> DatabaseInfoHandler::GetDatabase(const std::string& database_id) {
     sh::dto::SKVRecordBuilder keyBuilder(collection_name_, schema_ptr_);
     keyBuilder.serializeNext<sh::String>(database_id);
+    auto rec = keyBuilder.build();
 
-    auto [read_status, value] = txnHandler->read(keyBuilder.build()).get();
+    auto [read_status, value] = TXMgr.read(rec).get();
     if (!read_status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to read SKV record due to {}", read_status);
         return sh::Response<DatabaseInfo>(read_status, {});
@@ -105,7 +106,7 @@ sh::Response<DatabaseInfo> DatabaseInfoHandler::GetDatabase(std::shared_ptr<sh::
     return sh::Response<DatabaseInfo>(read_status, info);
 }
 
-sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases(std::shared_ptr<sh::TxnHandle> txnHandler) {
+sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases() {
     std::vector<DatabaseInfo> infos;
 
     // For a forward full schema scan in SKV, we need to explictly set the start record
@@ -115,7 +116,7 @@ sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases(std:
     dto::SKVRecordBuilder endBuilder(collection_name_, schema_ptr_);
     auto endKey = endBuilder.build();
 
-    auto [create_status, query] = txnHandler->createQuery(startKey, endKey).get();
+    auto [create_status, query] = TXMgr.createQuery(startKey, endKey).get();
     if (!create_status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create scan read for ListDatabases due to {} in collection {}.", create_status, collection_name_);
         return std::make_tuple(create_status, infos);
@@ -123,7 +124,7 @@ sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases(std:
 
     bool done = false;
     do {
-        auto [status, result] = txnHandler->query( query).get();
+        auto [status, result] = TXMgr.query( query).get();
 
         if (!status.is2xxOK()) {
             K2LOG_E(log::catalog, "Failed to run scan read due to {}", status);
@@ -141,9 +142,9 @@ sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases(std:
     return std::make_tuple(sh::Statuses::S200_OK, infos);
 }
 
-sh::Status DatabaseInfoHandler::DeleteDatabase(std::shared_ptr<sh::TxnHandle> txnHandler, DatabaseInfo& info) {
+sh::Status DatabaseInfoHandler::DeleteDatabase(DatabaseInfo& info) {
     sh::dto::SKVRecord record = getRecord(info);
-    auto [status]  = txnHandler->write(record, true).get();
+    auto [status]  = TXMgr.write(record, true).get();
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to delete database ID {} in Collection {}, due to {}",
             info.database_id, collection_name_, status);

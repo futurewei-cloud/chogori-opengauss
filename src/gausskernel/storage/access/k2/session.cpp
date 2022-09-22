@@ -31,10 +31,9 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2pg_aux.h"
 
 #include "session.h"
+using namespace std::chrono_literals;  // so that we can type "1ms"
 
 namespace k2pg {
-
-#define TXNFMT(txn) (txn ? "null" : fmt::format("{}", *txn).c_str())
 
 static void reportXactError(std::string&& msg, sh::Status& status) {
     K2PgStatus pg_status{};
@@ -45,148 +44,122 @@ static void reportXactError(std::string&& msg, sh::Status& status) {
     HandleK2PgStatus(pg_status);
 }
 
-static void K2XactCallback(XactEvent event, void* arg)
-{
-    auto currentTxn = TXMgr.GetTxn();
-
-    elog(DEBUG2, "xact_callback event %u, txn %s", event, TXNFMT(currentTxn));
-
+static void K2XactCallback(XactEvent event, void* arg) {
     if (event == XACT_EVENT_START) {
-        elog(DEBUG2, "XACT_EVENT_START, txn %s", TXNFMT(currentTxn));
-        if (currentTxn) {
-            auto [status] = TXMgr.EndTxn(sh::dto::EndAction::Abort);
-            if (!status.is2xxOK()) {
-                reportXactError("TXMgr abort failed", status);
-            }
+        elog(DEBUG2, "XACT_EVENT_START");
+        if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Abort).get(); !status.is2xxOK()) {
+            reportXactError("TXMgr abort failed", status);
         }
-        auto [status, txh] = TXMgr.BeginTxn(sh::dto::TxnOptions{
+
+        TXMgr.setSessionTxnOpts(sh::dto::TxnOptions{
                 .timeout= Config().getDurationMillis("k2.txn_op_timeout_ms", 1s),
                 .priority= static_cast<sh::dto::TxnPriority>(Config().get<uint8_t>("k2.txn_priority", 128)), // 0 is highest, 255 is lowest.
                 .syncFinalize = Config().get<bool>("k2.sync_finalize_txn", false)
             });
-        if (!status.is2xxOK()) {
+
+        if (auto [status] = TXMgr.beginTxn().get(); !status.is2xxOK()) {
             reportXactError("TXMgr begin failed", status);
         }
     } else if (event == XACT_EVENT_COMMIT) {
-        elog(DEBUG2, "XACT_EVENT_COMMIT, txn %s", TXNFMT(currentTxn));
-        auto [status] = TXMgr.EndTxn(sh::dto::EndAction::Commit);
-        if (!status.is2xxOK()) {
+        elog(DEBUG2, "XACT_EVENT_COMMIT");
+        if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Commit).get(); !status.is2xxOK()) {
             reportXactError("TXMgr commit failed", status);
         }
     } else if (event == XACT_EVENT_ABORT) {
-        elog(DEBUG2, "XACT_EVENT_ABORT, txn %s", TXNFMT(currentTxn));
-
-        auto [status] = TXMgr.EndTxn(sh::dto::EndAction::Abort);
-        if (!status.is2xxOK()) {
+        elog(DEBUG2, "XACT_EVENT_ABORT");
+        if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Abort).get(); !status.is2xxOK()) {
             reportXactError("TXMgr abort failed", status);
         }
     }
 }
 
-void TxnManager::Init() {
+void TxnManager::_init() {
     if (!_initialized) {
         RegisterXactCallback(K2XactCallback, NULL);
+        // TODO
         // We don't really handle nested transactions separately - all ops are just bundled in the parent
         // if we did, register this callback to handle nested txns:
         // RegisterSubXactCallback(K2SubxactCallback, NULL);
         _initialized = true;
-    }
 
-    if (!_client) {
-        auto clientConfig = _config().at("client");
-        if (clientConfig.is_object()) {
-            std::string host = clientConfig.value("host", "localhost");
-            int port = clientConfig.value("port", 30000);
-            K2LOG_I(log::k2pg, "Initializing SKVClient {}:{}", host, port);
-            _client = std::make_shared<sh::Client>(host, port);
-        } else {
-            K2LOG_I(log::k2pg, "Initializing SKVClient");
-            _client = std::make_shared<sh::Client>();
-        }
-
+        auto clientConfig = _config.sub("client");
+        std::string host = clientConfig.get<std::string>("host", "localhost");
+        int port = clientConfig.get<int>("port", 30000);
+        K2LOG_I(log::k2pg, "Initializing SKVClient with url {}:{}", host, port);
+        _client = std::make_shared<sh::Client>(host, port);
     }
 }
 
-std::shared_ptr<sh::TxnHandle> TxnManager::GetTxn() {
-    return _txn;
+void TxnManager::setSessionTxnOpts(sh::dto::TxnOptions opts) {
+    _init();
+    _txnOpts = std::move(opts);
 }
 
-sh::Response<std::shared_ptr<sh::TxnHandle>> TxnManager::BeginTxn(sh::dto::TxnOptions opts) {
-    Init();
+boost::future<sh::Response<>> TxnManager::beginTxn() {
+    _init();
     auto status = sh::Statuses::S200_OK;
     if (!_txn) {
         K2LOG_D(log::k2pg, "Starting new transaction");
-        auto resp = _client->beginTxn(std::move(opts)).get();
-        auto& [status, handle] = resp;
-        if (status.is2xxOK()) {
-            K2LOG_D(log::k2pg, "Started new txn: {}", handle);
-            _txn = std::make_shared<sh::TxnHandle>(std::move(handle));
-        }
-        else {
+        return _client->beginTxn(_txnOpts)
+        .then([this] (auto&& respFut) mutable {
+            auto&& [status, handle] = respFut.get();
+            if (status.is2xxOK()) {
+                K2LOG_D(log::k2pg, "Started new txn: {}", handle);
+                _txn = std::make_unique<sh::TxnHandle>(std::move(handle));
+            }
             K2LOG_E(log::k2pg, "Unable to begin txn due to: {}", status);
-        }
+            return sh::Response<>(std::move(status));
+        });
     }
-    return sh::Response<std::shared_ptr<sh::TxnHandle>>(std::move(status), _txn);
+    K2LOG_D(log::k2pg, "Found existing txn");
+    return sh::MakeResponse<>(std::move(status));
 }
 
-sh::Response<> TxnManager::EndTxn(sh::dto::EndAction endAction) {
-    auto status = sh::Statuses::S410_Gone("transaction not found in end");
+boost::future<sh::Response<>> TxnManager::endTxn(sh::dto::EndAction endAction) {
+    _init();
     if (_txn) {
-        status = std::get<0>(_txn->endTxn(endAction).get());
-    }
-
-    _txn.reset();
-    return sh::Response<>(std::move(status));
-}
-
-sh::Response<std::shared_ptr<sh::TxnHandle>> TxnManager::GetAdditionalTxn(sh::dto::TxnOptions opts) {
-    K2LOG_D(log::k2pg, "Starting additional new transaction");
-    Init();
-    std::shared_ptr<sh::TxnHandle> txnptr;
-    auto [status, handle] = _client->beginTxn(std::move(opts)).get();
-    if (status.is2xxOK()) {
-        K2LOG_D(log::k2pg, "Started additional new txn: {}", handle);
-        txnptr = std::make_shared<sh::TxnHandle>(std::move(handle));
+        K2LOG_D(log::k2pg, "end txn, with action: {}", endAction)
+        return _txn->endTxn(endAction)
+            .then([this](auto&& respFut) mutable {
+                auto&& [status] = respFut.get();
+                _txn.reset();
+                return sh::Response<>(std::move(status));
+            });
     }
     else {
-        K2LOG_E(log::k2pg, "Unable to begin txn due to: {}", status);
+        K2LOG_W(log::k2pg, "no txn found in endTxn");
     }
-    return sh::Response<std::shared_ptr<sh::TxnHandle>>(std::move(status), txnptr);
+    return sh::MakeResponse<>(sh::Statuses::S410_Gone("transaction not found in end"));
 }
 
-sh::Response<> TxnManager::EndAdditionalTxn(std::shared_ptr<sh::TxnHandle> txnHandle, sh::dto::EndAction endAction) {
-    auto status = sh::Statuses::S410_Gone("transaction not found in end");
-    if (txnHandle) {
-        status = std::get<0>(txnHandle->endTxn(endAction).get());
-    }
-    return sh::Response<>(std::move(status));
+boost::future<sh::Response<std::shared_ptr<sh::dto::Schema>>>
+TxnManager::getSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
+    _init();
+    K2LOG_D(log::k2pg, "cname: {}, sname: {}, version: {}", collectionName, schemaName, schemaVersion);
+    return _client->getSchema(collectionName, schemaName, schemaVersion);
 }
 
-
-sh::Response<std::shared_ptr<sh::dto::Schema>> TxnManager::GetSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
-    Init();
-    return _client->getSchema(collectionName, schemaName, schemaVersion).get();
+boost::future<sh::Response<>>
+TxnManager::createSchema(const sh::String& collectionName, const sh::dto::Schema& schema) {
+    _init();
+    K2LOG_D(log::k2pg, "cname: {}, schema: {}", collectionName, schema);
+    return _client->createSchema(collectionName, schema);
 }
 
-sh::Response<> TxnManager::CreateCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds) {
-    Init();
-    return _client->createCollection(metadata, rangeEnds).get();
+boost::future<sh::Response<>>
+TxnManager::createCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds) {
+    _init();
+    K2LOG_D(log::k2pg, "createCollection: {}, rends: {}", metadata, rangeEnds);
+    return _client->createCollection(metadata, rangeEnds);
 }
 
-sh::Response<> TxnManager::CreateSchema(const sh::String& collectionName, const sh::dto::Schema& schema) {
-    Init();
-    return _client->createSchema(collectionName, schema).get();
-}
+boost::future<sh::Response<>>
+TxnManager::createCollection(const std::string& collection_name, const std::string& DBName) {
+    _init();
+    K2LOG_D(log::k2pg, "Create collection: name={} for database: {}", collection_name, DBName);
 
-sh::Response<>  TxnManager::CreateCollection(const std::string& collection_name, const std::string& DBName) {
-    K2LOG_I(log::k2pg, "Create collection: name={} for Database: {}", collection_name, DBName);
-
-    // Working around json conversion to/from sh::String
-    std::vector<std::string> stdRangeEnds = _config()["create_collections"][DBName]["range_ends"];
-    std::vector<sh::String> rangeEnds;
-    for (const std::string& end : stdRangeEnds) {
-        rangeEnds.emplace_back(end);
-    }
+    auto cconf = _config.sub("create_collections").sub(DBName);
+    std::vector<std::string> rangeEnds = cconf.get<std::vector<std::string>>("range_ends");
 
     sh::dto::HashScheme scheme = rangeEnds.size() ? sh::dto::HashScheme::Range : sh::dto::HashScheme::HashCRC32C;
     sh::dto::CollectionMetadata metadata{
@@ -199,12 +172,114 @@ sh::Response<>  TxnManager::CreateCollection(const std::string& collection_name,
             .writeIOPs = 0,
             .minNodes = 1   // K2 Http proxy hangs if minNodes = 0
         },
-        .retentionPeriod = sh::Duration(1h) * 90 * 24,  //TODO: get this from config or from param in
+        .retentionPeriod = cconf.getDurationMillis("retention_period", 1h*24*90),
         .heartbeatDeadline = sh::Duration(0),
         .deleted = false
     };
 
-    return CreateCollection(metadata, rangeEnds);
+    return createCollection(metadata, rangeEnds);
+}
+
+boost::future<sh::Response<sh::dto::SKVRecord>>
+TxnManager::read(sh::dto::SKVRecord& record) {
+    K2LOG_D(log::k2pg, "read: {}", record);
+    return beginTxn()
+        .then([this, &record](auto&& beginFut) mutable {
+            auto&& [beginStatus] = beginFut.get();
+            if (!beginStatus.is2xxOK()) {
+                return sh::MakeResponse<sh::dto::SKVRecord>(std::move(beginStatus), sh::dto::SKVRecord{});
+            }
+            return _txn->read(record);
+        })
+        .unwrap();
+}
+
+boost::future<sh::Response<>>
+TxnManager::write(sh::dto::SKVRecord& record, bool erase,
+                  sh::dto::ExistencePrecondition precondition) {
+    K2LOG_D(log::k2pg, "write: {}, erase: {}, precond: {}", record, erase, precondition);
+    return beginTxn()
+        .then([this, &record, erase = erase, precondition = precondition](auto&& beginFut) mutable {
+            auto&& [beginStatus] = beginFut.get();
+            if (!beginStatus.is2xxOK()) {
+                return sh::MakeResponse<>(std::move(beginStatus));
+            }
+            return _txn->write(record, erase, precondition);
+        })
+        .unwrap();
+}
+
+boost::future<sh::Response<>>
+TxnManager::partialUpdate(sh::dto::SKVRecord& record, std::vector<uint32_t> fieldsForPartialUpdate) {
+    K2LOG_D(log::k2pg, "partialUpdate: {}, fields: {}", record, fieldsForPartialUpdate);
+    return beginTxn()
+        .then([this, &record, fields = std::move(fieldsForPartialUpdate)](auto&& beginFut) mutable {
+            auto&& [beginStatus] = beginFut.get();
+            if (!beginStatus.is2xxOK()) {
+                return sh::MakeResponse<>(std::move(beginStatus));
+            }
+            return _txn->partialUpdate(record, std::move(fields));
+        })
+        .unwrap();
+}
+
+boost::future<sh::Response<sh::dto::QueryResponse>>
+TxnManager::query(std::shared_ptr<sh::dto::QueryRequest> query) {
+    if (query) {
+        K2LOG_D(log::k2pg, "query: {}", *query);
+    }
+    else {
+        K2LOG_E(log::k2pg, "null query");
+    }
+    return beginTxn()
+        .then([this, query = std::move(query)](auto&& beginFut) mutable {
+            auto&& [beginStatus] = beginFut.get();
+            if (!beginStatus.is2xxOK()) {
+                return sh::MakeResponse<sh::dto::QueryResponse>(std::move(beginStatus), sh::dto::QueryResponse{});
+            }
+            return _txn->query(std::move(query));
+        })
+        .unwrap();
+}
+
+boost::future<sh::Response<std::shared_ptr<sh::dto::QueryRequest>>>
+TxnManager::createQuery(sh::dto::SKVRecord& startKey, sh::dto::SKVRecord& endKey,
+                        sh::dto::expression::Expression&& filter,
+                        std::vector<std::string>&& projection, int32_t recordLimit,
+                        bool reverseDirection, bool includeVersionMismatch) {
+    K2LOG_D(log::k2pg, "startKey={}, endKey={}, filter={}, projection={}, recordLimit={}, reverseDirection={}, includeVersionMismatch={}",
+            startKey, endKey, filter, projection, recordLimit, reverseDirection, includeVersionMismatch);
+    return beginTxn()
+        .then([this, &startKey, &endKey, filter = std::move(filter),
+               projection = std::move(projection), recordLimit, reverseDirection,
+               includeVersionMismatch](auto&& beginFut) mutable {
+            auto&& [beginStatus] = beginFut.get();
+            if (!beginStatus.is2xxOK()) {
+                return sh::MakeResponse<std::shared_ptr<sh::dto::QueryRequest>>(std::move(beginStatus), nullptr);
+            }
+            return _txn->createQuery(startKey, endKey, std::move(filter),
+                                     std::move(projection), recordLimit, reverseDirection,
+                                     includeVersionMismatch);
+        })
+        .unwrap();
+}
+
+boost::future<sh::Response<>>
+TxnManager::destroyQuery(std::shared_ptr<sh::dto::QueryRequest> query) {
+    if (query) {
+        K2LOG_D(log::k2pg, "query: {}", *query);
+    } else {
+        K2LOG_E(log::k2pg, "null query");
+    }
+    return beginTxn()
+        .then([this, query] (auto&& beginFut) mutable {
+            auto&& [beginStatus] = beginFut.get();
+            if (!beginStatus.is2xxOK()) {
+                return sh::MakeResponse<>(std::move(beginStatus));
+            }
+            return _txn->destroyQuery(query);
+        })
+        .unwrap();
 }
 
 } // ns

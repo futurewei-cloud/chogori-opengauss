@@ -36,18 +36,18 @@ ClusterInfoHandler::~ClusterInfoHandler() {
 }
 
 // Called only once in sql_catalog_manager::InitPrimaryCluster()
-sh::Status ClusterInfoHandler::InitClusterInfo(std::shared_ptr<sh::TxnHandle> txnHandler, ClusterInfo& cluster_info) {
-    auto [status] = TXMgr.CreateSchema(collection_name_, schema_);
+sh::Status ClusterInfoHandler::InitClusterInfo(ClusterInfo& cluster_info) {
+    auto [status] = TXMgr.createSchema(collection_name_, schema_).get();
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create schema for {} in {}, due to {}", schema_ptr_->name, collection_name_, status);
         return status;
     }
 
-    status = UpdateClusterInfo(txnHandler, cluster_info);
+    status = UpdateClusterInfo(cluster_info);
     return status;
 }
 
-sh::Status ClusterInfoHandler::UpdateClusterInfo(std::shared_ptr<sh::TxnHandle> txnHandler, ClusterInfo& cluster_info) {
+sh::Status ClusterInfoHandler::UpdateClusterInfo(ClusterInfo& cluster_info) {
     sh::dto::SKVRecordBuilder builder(collection_name_, schema_ptr_);
     builder.serializeNext<sh::String>(cluster_info.cluster_id);
     // use signed integers for unsigned integers since SKV does not support them
@@ -55,7 +55,7 @@ sh::Status ClusterInfoHandler::UpdateClusterInfo(std::shared_ptr<sh::TxnHandle> 
     builder.serializeNext<bool>(cluster_info.initdb_done);
     auto record = builder.build();
 
-    auto [status] = txnHandler->write(record, false).get();
+    auto [status] = TXMgr.write(record, false).get();
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to upsert cluster info record due to {}", status);
         return status;
@@ -63,13 +63,13 @@ sh::Status ClusterInfoHandler::UpdateClusterInfo(std::shared_ptr<sh::TxnHandle> 
     return status;
 }
 
-sh::Response<ClusterInfo> ClusterInfoHandler::GetClusterInfo(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& cluster_id) {
+sh::Response<ClusterInfo> ClusterInfoHandler::GetClusterInfo(const std::string& cluster_id) {
     ClusterInfo info;
     dto::SKVRecordBuilder keyBuilder(collection_name_, schema_ptr_);
     keyBuilder.serializeNext<sh::String>(cluster_id);
     auto key = keyBuilder.build();
 
-    auto [status, record] = txnHandler->read(key).get();
+    auto [status, record] = TXMgr.read(key).get();
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to read SKV record due to {}", status);
         return std::make_tuple(status, info);

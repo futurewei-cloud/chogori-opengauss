@@ -200,7 +200,7 @@ protected:
     void ClearIndexCacheForTable(const std::string& base_table_id);
 
     void UpdateIndexCacheForTable(std::shared_ptr<TableInfo> table_info);
-    
+
     void AddIndexCache(std::shared_ptr<IndexInfo> index_info);
 
 
@@ -218,22 +218,8 @@ protected:
 
     sh::Status CacheTablesFromStorage(const std::string& databaseName, bool isSysTableIncluded);
 
-    // start a new PG transaction and return the handler of it. NOTE: the underhood transaction has begun.
-    std::shared_ptr<sh::TxnHandle>  NewTransaction();
-
-    std::shared_ptr<sh::TxnHandle>  NewAdditionalTransaction();
-
-    void CommitAdditionalTransaction(std::shared_ptr<sh::TxnHandle> handle) {
-        TXMgr.EndAdditionalTxn(handle, sh::dto::EndAction::Commit);
-    }
-
-    void AbortAdditionalTransaction(std::shared_ptr<sh::TxnHandle> handle) {
-        TXMgr.EndAdditionalTxn(handle, sh::dto::EndAction::Abort);
-    }
-
-    
-    void CommitTransaction() {TXMgr.EndTxn(sh::dto::EndAction::Commit);}
-    void AbortTransaction() {TXMgr.EndTxn(sh::dto::EndAction::Abort);}
+    void CommitTransaction() {TXMgr.endTxn(sh::dto::EndAction::Commit);}
+    void AbortTransaction() {TXMgr.endTxn(sh::dto::EndAction::Abort);}
 
     std::shared_ptr<DatabaseInfo> CheckAndLoadDatabaseByName(const std::string& database_name);
 
@@ -267,7 +253,7 @@ private:
 
     // handler to access table and index information
     TableInfoHandler table_info_handler_;
-    
+
     // database information cache based on database id
     std::unordered_map<std::string, std::shared_ptr<DatabaseInfo>> database_id_map_;
 
