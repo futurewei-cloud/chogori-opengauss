@@ -20,24 +20,13 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-#pragma once
+#include <libintl.h>
+#include "postgres.h"
+#include "access/k2/status.h"
+#include <skvhttp/common/Status.h>
 
-#include <stddef.h>
-#include <stdint.h>
+namespace k2pg {
 
-#include "access/k2/pg_gate_typedefs.h"
+Status K2StatusToK2PgStatus(skv::http::Status&& status);
 
-struct varlena;
-
-void K2PgResolveHostname();
-
-typedef void* (*K2PgPAllocFn)(size_t size);
-
-typedef struct varlena* (*K2PgCStringToTextWithLenFn)(const char* c, int size);
-
-// Global initialization of the K2PG subsystem.
-
-K2PgStatus K2PgInit(
-    const char* argv0,
-    K2PgPAllocFn palloc_fn,
-    K2PgCStringToTextWithLenFn cstring_to_text_with_len_fn);
+}  // namespace k2pg

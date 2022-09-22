@@ -38,6 +38,10 @@ struct Status {
 
     static const Status OK;
     static const Status NotSupported;
+
+    bool IsOK() {
+        return pg_code == ERRCODE_SUCCESSFUL_COMPLETION;
+    }
 };
 
 }  // namespace k2pg
