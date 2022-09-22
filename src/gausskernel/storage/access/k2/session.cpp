@@ -181,25 +181,25 @@ TxnManager::createCollection(const std::string& collection_name, const std::stri
 }
 
 boost::future<sh::Response<sh::dto::SKVRecord>>
-TxnManager::read(sh::dto::SKVRecord& record) {
+TxnManager::read(sh::dto::SKVRecord record) {
     K2LOG_D(log::k2pg, "read: {}", record);
     return beginTxn()
-        .then([this, &record](auto&& beginFut) mutable {
+        .then([this, record=std::move(record)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
             if (!beginStatus.is2xxOK()) {
                 return sh::MakeResponse<sh::dto::SKVRecord>(std::move(beginStatus), sh::dto::SKVRecord{});
             }
-            return _txn->read(record);
+            return _txn->read(std::move(record));
         })
         .unwrap();
 }
 
 boost::future<sh::Response<>>
-TxnManager::write(sh::dto::SKVRecord& record, bool erase,
+TxnManager::write(sh::dto::SKVRecord record, bool erase,
                   sh::dto::ExistencePrecondition precondition) {
     K2LOG_D(log::k2pg, "write: {}, erase: {}, precond: {}", record, erase, precondition);
     return beginTxn()
-        .then([this, &record, erase = erase, precondition = precondition](auto&& beginFut) mutable {
+        .then([this, record=std::move(record), erase = erase, precondition = precondition](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
             if (!beginStatus.is2xxOK()) {
                 return sh::MakeResponse<>(std::move(beginStatus));
@@ -210,10 +210,10 @@ TxnManager::write(sh::dto::SKVRecord& record, bool erase,
 }
 
 boost::future<sh::Response<>>
-TxnManager::partialUpdate(sh::dto::SKVRecord& record, std::vector<uint32_t> fieldsForPartialUpdate) {
+TxnManager::partialUpdate(sh::dto::SKVRecord record, std::vector<uint32_t> fieldsForPartialUpdate) {
     K2LOG_D(log::k2pg, "partialUpdate: {}, fields: {}", record, fieldsForPartialUpdate);
     return beginTxn()
-        .then([this, &record, fields = std::move(fieldsForPartialUpdate)](auto&& beginFut) mutable {
+        .then([this, record=std::move(record), fields = std::move(fieldsForPartialUpdate)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
             if (!beginStatus.is2xxOK()) {
                 return sh::MakeResponse<>(std::move(beginStatus));
@@ -243,14 +243,14 @@ TxnManager::query(std::shared_ptr<sh::dto::QueryRequest> query) {
 }
 
 boost::future<sh::Response<std::shared_ptr<sh::dto::QueryRequest>>>
-TxnManager::createQuery(sh::dto::SKVRecord& startKey, sh::dto::SKVRecord& endKey,
+TxnManager::createQuery(sh::dto::SKVRecord startKey, sh::dto::SKVRecord endKey,
                         sh::dto::expression::Expression&& filter,
                         std::vector<std::string>&& projection, int32_t recordLimit,
                         bool reverseDirection, bool includeVersionMismatch) {
     K2LOG_D(log::k2pg, "startKey={}, endKey={}, filter={}, projection={}, recordLimit={}, reverseDirection={}, includeVersionMismatch={}",
             startKey, endKey, filter, projection, recordLimit, reverseDirection, includeVersionMismatch);
     return beginTxn()
-        .then([this, &startKey, &endKey, filter = std::move(filter),
+        .then([this, startKey=std::move(startKey), endKey=std::move(endKey), filter = std::move(filter),
                projection = std::move(projection), recordLimit, reverseDirection,
                includeVersionMismatch](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();

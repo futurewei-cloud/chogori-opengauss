@@ -42,16 +42,16 @@ public:
 
     // Any of the following operations will open a new txn if one does not exist
     boost::future<sh::Response<sh::dto::SKVRecord>>
-        read(sh::dto::SKVRecord& record);
+        read(sh::dto::SKVRecord record);
     boost::future<sh::Response<>>
-        write(sh::dto::SKVRecord& record, bool erase=false,
+        write(sh::dto::SKVRecord record, bool erase=false,
               sh::dto::ExistencePrecondition precondition=sh::dto::ExistencePrecondition::None);
     boost::future<sh::Response<>>
-        partialUpdate(sh::dto::SKVRecord& record, std::vector<uint32_t> fieldsForPartialUpdate);
+        partialUpdate(sh::dto::SKVRecord record, std::vector<uint32_t> fieldsForPartialUpdate);
     boost::future<sh::Response<sh::dto::QueryResponse>>
         query(std::shared_ptr<sh::dto::QueryRequest> query);
     boost::future<sh::Response<std::shared_ptr<sh::dto::QueryRequest>>>
-        createQuery(sh::dto::SKVRecord& startKey, sh::dto::SKVRecord& endKey,
+        createQuery(sh::dto::SKVRecord startKey, sh::dto::SKVRecord endKey,
                     sh::dto::expression::Expression&& filter=sh::dto::expression::Expression{},
                     std::vector<std::string>&& projection=std::vector<std::string>{}, int32_t recordLimit=-1,
                     bool reverseDirection=false, bool includeVersionMismatch=false);

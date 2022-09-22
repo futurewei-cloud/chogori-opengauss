@@ -116,8 +116,7 @@ void PgGate_DestroyPgGate() {
 K2PgStatus PgGate_InitSession(const char *database_name) {
     elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
 
-    k2pg::TXMgr.Init();
-    k2pg::TXMgr.EndTxn(skv::http::dto::EndAction::Abort);
+    k2pg::TXMgr.endTxn(skv::http::dto::EndAction::Abort).get();
 
     std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client = std::make_shared<k2pg::catalog::SqlCatalogClient>(pg_gate->GetCatalogManager());
     k2pg::pg_session = std::make_shared<k2pg::PgSession>(catalog_client, database_name);
@@ -547,8 +546,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
         return status;
     }
 
-    auto txn = k2pg::TXMgr.GetTxn();
-    auto [k2status] = txn->write(record, false, upsert ? skv::http::dto::ExistencePrecondition::None : skv::http::dto::ExistencePrecondition::NotExists).get();
+    auto [k2status] = k2pg::TXMgr.write(record, false, upsert ? skv::http::dto::ExistencePrecondition::None : skv::http::dto::ExistencePrecondition::NotExists).get();
     status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
@@ -623,9 +621,8 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     }
 
     // Send the partialUpdate request to SKV
-    auto txn = k2pg::TXMgr.GetTxn();
     skv::http::dto::SKVRecord record = builder->build();
-    auto [k2status] = txn->partialUpdate(record, std::move(fieldsForUpdate)).get();
+    auto [k2status] = k2pg::TXMgr.partialUpdate(record, std::move(fieldsForUpdate)).get();
     status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
@@ -680,9 +677,8 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
     }
 
     // Send the delete request to SKV
-    auto txn = k2pg::TXMgr.GetTxn();
     skv::http::dto::SKVRecord record = builder->build();
-    auto [k2status] = txn->write(record, true, skv::http::dto::ExistencePrecondition::Exists).get();
+    auto [k2status] = k2pg::TXMgr.write(record, true, skv::http::dto::ExistencePrecondition::Exists).get();
     status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
