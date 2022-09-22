@@ -152,58 +152,55 @@ class TableInfoHandler {
     };
 
     // create above three meta tables for a DB
-    sh::Status CreateMetaTables(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name);
+    sh::Status CreateMetaTables(const std::string& collection_name);
 
     // Create or update a user defined table fully, including all its secondary indexes if any.
-    sh::Status CreateOrUpdateTable(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, std::shared_ptr<TableInfo> table);
+    sh::Status CreateOrUpdateTable(const std::string& collection_name, std::shared_ptr<TableInfo> table);
 
-    sh::Response<std::shared_ptr<TableInfo>> GetTable(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& database_name, const std::string& table_id);
-    sh::Response<std::shared_ptr<TableInfo>> GetTableSchema(std::shared_ptr<sh::TxnHandle> txnHandler, std::shared_ptr<DatabaseInfo> database_info, const std::string& table_id,
+    sh::Response<std::shared_ptr<TableInfo>> GetTable(const std::string& collection_name, const std::string& database_name, const std::string& table_id);
+    sh::Response<std::shared_ptr<TableInfo>> GetTableSchema(std::shared_ptr<DatabaseInfo> database_info, const std::string& table_id,
         std::shared_ptr<IndexInfo> index_info,
-        std::function<std::shared_ptr<DatabaseInfo>(const std::string&)> fnc_db,
-        std::function<std::shared_ptr<sh::TxnHandle>()> fnc_tx);
+        std::function<std::shared_ptr<DatabaseInfo>(const std::string&)> fnc_db);
 
-    sh::Response<std::vector<std::shared_ptr<TableInfo>>> ListTables(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& database_name, bool isSysTableIncluded);
+    sh::Response<std::vector<std::shared_ptr<TableInfo>>> ListTables(const std::string& collection_name, const std::string& database_name, bool isSysTableIncluded);
 
-    sh::Response<std::vector<std::string>> ListTableIds(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, bool isSysTableIncluded);
+    sh::Response<std::vector<std::string>> ListTableIds(const std::string& collection_name, bool isSysTableIncluded);
 
     // CopyTable (meta and data) fully including secondary indexes, currently only support cross different database.
-    sh::Response<CopyTableResult> CopyTable(std::shared_ptr<sh::TxnHandle> target_txnHandler,
+    sh::Response<CopyTableResult> CopyTable(
             const std::string& target_coll_name,
             const std::string& target_database_name,
             uint32_t target_database_oid,
-            std::shared_ptr<sh::TxnHandle> source_txnHandler,
             const std::string& source_coll_name,
             const std::string& source_database_name,
             const std::string& source_table_id);
 
-    sh::Status CreateIndexSKVSchema(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name,
+    sh::Status CreateIndexSKVSchema(const std::string& collection_name,
         std::shared_ptr<TableInfo> table, const IndexInfo& index_info);
 
-    sh::Status PersistIndexMeta(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, std::shared_ptr<TableInfo> table, const IndexInfo& index_info);
+    sh::Status PersistIndexMeta(const std::string& collection_name, std::shared_ptr<TableInfo> table, const IndexInfo& index_info);
 
-    sh::Status DeleteTableMetadata(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, std::shared_ptr<TableInfo> table);
+    sh::Status DeleteTableMetadata(const std::string& collection_name, std::shared_ptr<TableInfo> table);
 
-    sh::Status DeleteTableData(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, std::shared_ptr<TableInfo> table);
+    sh::Status DeleteTableData(const std::string& collection_name, std::shared_ptr<TableInfo> table);
 
-    sh::Status DeleteIndexMetadata(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name,  const std::string& index_id);
+    sh::Status DeleteIndexMetadata(const std::string& collection_name,  const std::string& index_id);
 
-    sh::Status DeleteIndexData(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name,  const std::string& index_id);
+    sh::Status DeleteIndexData(const std::string& collection_name,  const std::string& index_id);
 
-    sh::Response<std::string> GetBaseTableId(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& index_id);
+    sh::Response<std::string> GetBaseTableId(const std::string& collection_name, const std::string& index_id);
 
     // check if passed id is that for a table or index, and if it is a shared table/index(just one instance shared by all databases and resides in primary cluster)
-    sh::Response<GetTableTypeInfoResult> GetTableTypeInfo(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& table_id);
+    sh::Response<GetTableTypeInfoResult> GetTableTypeInfo(const std::string& collection_name, const std::string& table_id);
 
     // create index table (handle create if exists flag)
-    sh::Response<std::shared_ptr<IndexInfo>> CreateIndexTable(std::shared_ptr<sh::TxnHandle> txnHandler, std::shared_ptr<DatabaseInfo> database_info, std::shared_ptr<TableInfo> base_table_info, CreateIndexTableParams &index_params);
+    sh::Response<std::shared_ptr<IndexInfo>> CreateIndexTable(std::shared_ptr<DatabaseInfo> database_info, std::shared_ptr<TableInfo> base_table_info, CreateIndexTableParams &index_params);
 
     private:
-    sh::Status CopySKVTable(std::shared_ptr<sh::TxnHandle> target_txnHandler,
+    sh::Status CopySKVTable(
             const std::string& target_coll_name,
             const std::string& target_schema_name,
             uint32_t target_schema_version,
-            std::shared_ptr<sh::TxnHandle> source_txnHandler,
             const std::string& source_coll_name,
             const std::string& source_schema_name,
             uint32_t source_schema_version,
@@ -211,10 +208,10 @@ class TableInfoHandler {
             PgOid source_index_oid);
 
     // A SKV Schema of perticular version is not mutable, thus, we only create a new specified version if that version doesn't exists yet
-    sh::Status CreateTableSKVSchema(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, std::shared_ptr<TableInfo> table);
+    sh::Status CreateTableSKVSchema(const std::string& collection_name, std::shared_ptr<TableInfo> table);
 
     // Persist (user) table's definition/meta into three sytem meta tables.
-    sh::Status PersistTableMeta(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, std::shared_ptr<TableInfo> table);
+    sh::Status PersistTableMeta(const std::string& collection_name, std::shared_ptr<TableInfo> table);
 
     std::shared_ptr<sh::dto::Schema> DeriveSKVSchemaFromTableInfo(std::shared_ptr<TableInfo> table);
 
@@ -234,19 +231,19 @@ class TableInfoHandler {
 
     DataType ToSqlType(sh::dto::FieldType type);
 
-    sh::Status FetchTableMetaSKVRecord(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& table_id, sh::dto::SKVRecord& resultSKVRecord);
+    sh::Status FetchTableMetaSKVRecord(const std::string& collection_name, const std::string& table_id, sh::dto::SKVRecord& resultSKVRecord);
 
     // TODO: change following API return Status instead of throw exception
 
-    std::vector<sh::dto::SKVRecord> FetchIndexMetaSKVRecords(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& base_table_id);
+    std::vector<sh::dto::SKVRecord> FetchIndexMetaSKVRecords(const std::string& collection_name, const std::string& base_table_id);
 
-    std::vector<sh::dto::SKVRecord> FetchTableColumnMetaSKVRecords(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& table_id);
+    std::vector<sh::dto::SKVRecord> FetchTableColumnMetaSKVRecords(const std::string& collection_name, const std::string& table_id);
 
-    std::vector<sh::dto::SKVRecord> FetchIndexColumnMetaSKVRecords(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, const std::string& table_id);
+    std::vector<sh::dto::SKVRecord> FetchIndexColumnMetaSKVRecords(const std::string& collection_name, const std::string& table_id);
 
     std::shared_ptr<TableInfo> BuildTableInfo(const std::string& database_id, const std::string& database_name, sh::dto::SKVRecord& table_meta, std::vector<sh::dto::SKVRecord>& table_columns);
 
-    IndexInfo BuildIndexInfo(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& collection_name, sh::dto::SKVRecord& index_table_meta);
+    IndexInfo BuildIndexInfo(const std::string& collection_name, sh::dto::SKVRecord& index_table_meta);
 
     IndexInfo BuildIndexInfo(std::shared_ptr<TableInfo> base_table_info, std::string index_name, uint32_t table_oid, std::string index_uuid,
                 const Schema& index_schema, bool is_unique, bool is_shared, IndexPermissions index_permissions);

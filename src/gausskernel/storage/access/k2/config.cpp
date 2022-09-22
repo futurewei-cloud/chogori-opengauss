@@ -21,6 +21,9 @@
 
 namespace k2pg {
 
+Config::Config(nlohmann::json conf) : _config(std::move(conf)) {
+}
+
 Config::Config() {
     const char* configFileName = getenv("K2_CONFIG_FILE");
     if (NULL == configFileName) {
@@ -37,4 +40,19 @@ Config::Config() {
 Config::~Config(){
 }
 
+Config Config::sub(const std::string& key) {
+    auto iter = _config.find(key);
+    if (iter != _config.end() && iter.value().is_object()) {
+        return Config(iter.value());
+    }
+    return Config(nlohmann::json{});
+}
+
+Config Config::sub(size_t pos) {
+    auto obj = _config.at(pos);
+    if (obj.is_object()) {
+        return Config(std::move(obj));
+    }
+    return Config(nlohmann::json{});
+}
 }

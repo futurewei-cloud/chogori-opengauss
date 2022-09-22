@@ -27,14 +27,16 @@ inline thread_local k2::logging::Logger k2pg("k2::pg");
 
 class Config {
 public:
+    Config(nlohmann::json conf);
     Config();
     ~Config();
-    nlohmann::json& operator()() {
-        return _config;
-    }
+
+    // get sub-config objects for nested configuration
+    Config sub(const std::string& key);
+    Config sub(size_t pos);
 
     template<typename T>
-    T get(const std::string& key, T defaultV) {
+    T get(const std::string& key, T defaultV={}) {
         auto iter = _config.find(key);
         if (iter != _config.end()) {
             return iter.value();
@@ -44,7 +46,7 @@ public:
         }
     }
 
-    k2::Duration getDurationMillis(const std::string& key, k2::Duration defaultV) {
+    k2::Duration getDurationMillis(const std::string& key, k2::Duration defaultV={}) {
         return k2::Duration(get<uint64_t>(key, k2::msec(defaultV).count())*1'000'000);
     }
 private:

@@ -37,7 +37,7 @@ sh::Status SqlCatalogManager::Start() {
     K2ASSERT(log::catalog, !initted_.load(std::memory_order_acquire), "Already started");
 
     // load cluster info
-    auto [status, clusterInfo] = cluster_info_handler_.GetClusterInfo(NewTransaction(), cluster_id_);
+    auto [status, clusterInfo] = cluster_info_handler_.GetClusterInfo(cluster_id_);
     if (!status.is2xxOK()) {
         AbortTransaction();
         if (status == sh::Statuses:: S404_Not_Found) {
@@ -57,9 +57,8 @@ sh::Status SqlCatalogManager::Start() {
    CommitTransaction();
 
     // load databases
-    auto txnHandler = NewTransaction();
-    auto [list_status, infos]  = database_info_handler_.ListDatabases(txnHandler);
-   CommitTransaction();
+    auto [list_status, infos]  = database_info_handler_.ListDatabases();
+    CommitTransaction();
 
     if (list_status.is2xxOK()) {
         if (!infos.empty()) {
@@ -118,19 +117,17 @@ sh::Status SqlCatalogManager::InitPrimaryCluster() {
     K2ASSERT(log::catalog, !initted_.load(std::memory_order_acquire), "Already started");
 
     // step 1/4 create the SKV collection for the primary
-    auto&& [ccResult] = TXMgr.CreateCollection(skv_collection_name_primary_cluster, primary_cluster_id);
+    auto&& [ccResult] = TXMgr.createCollection(skv_collection_name_primary_cluster, primary_cluster_id).get();
     if (!ccResult.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create SKV collection during initialization primary PG cluster due to {}", ccResult);
         return ccResult;
     }
 
-    auto txnHandler = NewTransaction();
-
     // step 2/4 Init Cluster info, including create the SKVSchema in the primary cluster's SKVCollection for cluster_info and insert current cluster info into
     //      Note: Initialize cluster info's init_db column with TRUE
     ClusterInfo cluster_info{cluster_id_, catalog_version_, false /*init_db_done*/};
 
-    auto status = cluster_info_handler_.InitClusterInfo(txnHandler, cluster_info);
+    auto status = cluster_info_handler_.InitClusterInfo(cluster_info);
     if (!status.is2xxOK()) {
         AbortTransaction();
         K2LOG_E(log::catalog, "Failed to initialize cluster info due to {}", status);
@@ -161,7 +158,6 @@ sh::Status SqlCatalogManager::InitPrimaryCluster() {
 sh::Status SqlCatalogManager::FinishInitDB() {
     K2LOG_D(log::catalog, "Setting initDbDone to be true...");
     if (!init_db_done_) {
-        auto txnHandler = NewTransaction();
         // check the latest cluster info on SKV
         auto [status, clusterInfo] = GetClusterInfo(false);
         if (!status.is2xxOK()) {
@@ -179,7 +175,7 @@ sh::Status SqlCatalogManager::FinishInitDB() {
 
         K2LOG_D(log::catalog, "Updating cluster info with initDbDone to be true");
         clusterInfo.initdb_done = true;
-        status = cluster_info_handler_.UpdateClusterInfo(txnHandler, clusterInfo);
+        status = cluster_info_handler_.UpdateClusterInfo(clusterInfo);
         if (!status.is2xxOK()) {
             AbortTransaction();
             K2LOG_E(log::catalog, "Failed to update cluster info due to {}", status);
@@ -235,8 +231,7 @@ uint64_t SqlCatalogManager::GetCatalogVersion() {
 }
 
 sh::Response<ClusterInfo> SqlCatalogManager::GetClusterInfo(bool commit) {
-    auto txnHandler = NewTransaction();
-    auto response = cluster_info_handler_.GetClusterInfo(txnHandler, cluster_id_);
+    auto response = cluster_info_handler_.GetClusterInfo(cluster_id_);
     if (commit)
        CommitTransaction();
     return response;
@@ -244,7 +239,6 @@ sh::Response<ClusterInfo> SqlCatalogManager::GetClusterInfo(bool commit) {
 
 sh::Response<uint64_t> SqlCatalogManager::IncrementCatalogVersion() {
     std::lock_guard<std::mutex> l(lock_);
-    auto txnHandler = NewTransaction();
     // TODO: use a background thread to fetch the ClusterInfo record periodically instead of fetching it for each call
     auto [status, clusterInfo] = GetClusterInfo(false);
     if (!status.is2xxOK()) {
@@ -258,7 +252,7 @@ sh::Response<uint64_t> SqlCatalogManager::IncrementCatalogVersion() {
     // need to update the catalog version on SKV
     // the update frequency could be reduced once we have a single or a quorum of catalog managers
     ClusterInfo new_cluster_info{cluster_id_, catalog_version_, init_db_done_};
-    status = cluster_info_handler_.UpdateClusterInfo(txnHandler, new_cluster_info);
+    status = cluster_info_handler_.UpdateClusterInfo(new_cluster_info);
     if (!status.is2xxOK()) {
         AbortTransaction();
         catalog_version_ = clusterInfo.catalog_version;
@@ -304,7 +298,7 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
     //   Note: using unique immutable databaseId as SKV collection name
     //   TODO: pass in other collection configurations/parameters later.
     K2LOG_D(log::catalog, "Creating SKV collection for database {}", request.databaseId);
-    auto [ccResult] = TXMgr.CreateCollection(request.databaseId, request.databaseName);
+    auto [ccResult] = TXMgr.createCollection(request.databaseId, request.databaseName).get();
     if (!ccResult.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create SKV collection {} due to {}", request.databaseId, ccResult);
         return std::make_tuple(ccResult, std::shared_ptr<DatabaseInfo>());
@@ -318,11 +312,10 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
     new_ns->next_pg_oid = request.nextPgOid.value();
     // persist the new database record
     K2LOG_D(log::catalog, "Adding database {} on SKV", request.databaseId);
-    auto ns_txnHandler = NewAdditionalTransaction();
-    auto status = database_info_handler_.UpsertDatabase(ns_txnHandler, *new_ns);
+    auto status = database_info_handler_.UpsertDatabase(*new_ns);
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to add database {}, due to {}", request.databaseId, status);
-        AbortAdditionalTransaction(ns_txnHandler);
+        AbortTransaction();
         return std::make_tuple(std::move(status), std::shared_ptr<DatabaseInfo>());
     }
     // cache databases by database id and database name
@@ -330,28 +323,23 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
     database_name_map_[new_ns->database_name] = new_ns;
 
     // step 2.3 Add new system tables for the new database(database)
-    auto target_txnHandler = NewAdditionalTransaction();
     K2LOG_D(log::catalog, "Creating system tables for target database {}", new_ns->database_id);
-    if (auto status = table_info_handler_.CreateMetaTables(target_txnHandler, new_ns->database_id); !status.is2xxOK()) {
+    if (auto status = table_info_handler_.CreateMetaTables(new_ns->database_id); !status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to create meta tables for target database {} due to {}",
         new_ns->database_id, status);
-        AbortAdditionalTransaction(target_txnHandler);
-        AbortAdditionalTransaction(ns_txnHandler);
+        AbortTransaction();
         return std::make_tuple(status, std::shared_ptr<DatabaseInfo>());
     }
 
     // step 3/3: If source database(database) is present in the request, copy all the rest of tables from source database(database)
     if (!request.sourceDatabaseId.empty()) {
         K2LOG_D(log::catalog, "Creating database from source database {}", request.sourceDatabaseId);
-        std::shared_ptr<sh::TxnHandle> source_txnHandler = NewAdditionalTransaction();
         // get the source table ids
         K2LOG_D(log::catalog, "Listing table ids from source database {}", request.sourceDatabaseId);
-        auto [status, tableIds] = table_info_handler_.ListTableIds(source_txnHandler, source_database_info->database_id, true);
+        auto [status, tableIds] = table_info_handler_.ListTableIds(source_database_info->database_id, true);
         if (!status.is2xxOK()) {
             K2LOG_E(log::catalog, "Failed to list table ids for database {} due to {}", source_database_info->database_id, status);
-            AbortAdditionalTransaction(source_txnHandler);
-            AbortAdditionalTransaction(target_txnHandler);
-            AbortAdditionalTransaction(ns_txnHandler);
+            AbortTransaction();
             return std::make_tuple(status, std::shared_ptr<DatabaseInfo>());
         }
         K2LOG_D(log::catalog, "Found {} table ids from source database {}", tableIds.size(), request.sourceDatabaseId);
@@ -360,38 +348,32 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
             // copy the source table metadata to the target table
             K2LOG_D(log::catalog, "Copying from source table {}", source_table_id);
             auto [status, result] = table_info_handler_.CopyTable(
-                target_txnHandler,
                 new_ns->database_id,
                 new_ns->database_name,
                 new_ns->database_oid,
-                source_txnHandler,
                 source_database_info->database_id,
                 source_database_info->database_name,
                 source_table_id);
             if (!status.is2xxOK()) {
                 K2LOG_E(log::catalog, "Failed to copy from source table {} due to {}", source_table_id, status);
-                AbortAdditionalTransaction(source_txnHandler);
-                AbortAdditionalTransaction(target_txnHandler);
-                AbortAdditionalTransaction(ns_txnHandler);
+                AbortTransaction();
                 return std::make_tuple(status, std::shared_ptr<DatabaseInfo>());
             }
             num_index += result.num_index;
         }
-        CommitAdditionalTransaction(source_txnHandler);
+        CommitTransaction();
         K2LOG_D(log::catalog, "Finished copying {} tables and {} indexes from source database {} to {}",
-        tableIds.size(), num_index, source_database_info->database_id, new_ns->database_id);
+                tableIds.size(), num_index, source_database_info->database_id, new_ns->database_id);
     }
 
-    CommitAdditionalTransaction(target_txnHandler);
-    CommitAdditionalTransaction(ns_txnHandler);
+    CommitTransaction();
     K2LOG_D(log::catalog, "Created database {}", new_ns->database_id);
     return std::make_pair(sh::Statuses::S200_OK, new_ns);
 }
 
 sh::Response<std::vector<DatabaseInfo>> SqlCatalogManager::ListDatabases() {
     K2LOG_D(log::catalog, "Listing databases...");
-    auto txnHandler = NewTransaction();
-    auto [status, databaseInfos] = database_info_handler_.ListDatabases(txnHandler);
+    auto [status, databaseInfos] = database_info_handler_.ListDatabases();
     if (!status.is2xxOK()) {
         AbortTransaction();
         K2LOG_E(log::catalog, "Failed to list databases due to {}", status);
@@ -412,15 +394,14 @@ sh::Response<std::shared_ptr<DatabaseInfo>> SqlCatalogManager::GetDatabase(const
     if (std::shared_ptr<DatabaseInfo> database_info = GetCachedDatabaseById(databaseId); database_info != nullptr) {
         return std::make_pair(sh::Statuses::S200_OK, database_info);
     }
-    auto txnHandler = NewTransaction();
     // TODO: use a background task to refresh the database caches to avoid fetching from SKV on each call
-    auto [status, databaseInfo] = database_info_handler_.GetDatabase(txnHandler, databaseId);
+    auto [status, databaseInfo] = database_info_handler_.GetDatabase(databaseId);
     if (!status.is2xxOK()) {
         AbortTransaction();
         K2LOG_E(log::catalog, "Failed to get database {}, due to {}", databaseId, status);
         return sh::Response<std::shared_ptr<DatabaseInfo>>(status, nullptr);
     }
-   CommitTransaction();
+    CommitTransaction();
     auto di = std::make_shared<DatabaseInfo>(std::move(databaseInfo));
     // update database caches
     database_id_map_[di->database_id] = di;
@@ -431,17 +412,15 @@ sh::Response<std::shared_ptr<DatabaseInfo>> SqlCatalogManager::GetDatabase(const
 
 sh::Status SqlCatalogManager::DeleteDatabase(const std::string& databaseName, const std::string& databaseId) {
     K2LOG_D(log::catalog, "Deleting database with name: {}, id: {}", databaseName, databaseId);
-    auto txnHandler = NewTransaction();
     // TODO: use a background task to refresh the database caches to avoid fetching from SKV on each call
-    auto [status, database_info] = database_info_handler_.GetDatabase(txnHandler, databaseId);
+    auto [status, database_info] = database_info_handler_.GetDatabase(databaseId);
     CommitTransaction();
     if (!status.is2xxOK()) {
         K2LOG_E(log::catalog, "Failed to get deletion target database {} {}.", databaseId, status);
         return status;
     }
     // No need to delete table data or metadata, it will be dropped with the SKV collection
-    txnHandler = NewTransaction();
-    status  = database_info_handler_.DeleteDatabase(txnHandler, database_info);
+    status  = database_info_handler_.DeleteDatabase(database_info);
     if (!!status.is2xxOK()) {
         AbortTransaction();
         return status;
@@ -513,11 +492,10 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::CreateTable(const Cr
     new_table_info->set_is_shared_table(request.isSharedTable);
     new_table_info->set_next_column_id(table_schema.max_col_id() + 1);
 
-    auto txnHandler = NewTransaction();
     K2LOG_D(log::catalog, "Create or update table id: {}, name: {} in {}, shared: {}", new_table_info->table_id(), request.tableName,
         database_info->database_id, request.isSharedTable);
     try {
-        auto status = table_info_handler_.CreateOrUpdateTable(txnHandler, database_info->database_id, new_table_info);
+        auto status = table_info_handler_.CreateOrUpdateTable(database_info->database_id, new_table_info);
         if (!status.is2xxOK()) {
             // abort the transaction
             AbortTransaction();
@@ -554,10 +532,9 @@ sh::Response<std::shared_ptr<IndexInfo>> SqlCatalogManager::CreateIndexTable(con
 
     // check if the base table exists or not
     std::shared_ptr<TableInfo> base_table_info = GetCachedTableInfoById(base_table_uuid);
-    auto txnHandler = NewTransaction();
     // try to fetch the table from SKV if not found
     if (base_table_info == nullptr) {
-        auto [status, tableInfo] = table_info_handler_.GetTable(txnHandler, database_info->database_id, database_info->database_name, base_table_id);
+        auto [status, tableInfo] = table_info_handler_.GetTable(database_info->database_id, database_info->database_name, base_table_id);
         if (status.is2xxOK() && tableInfo != nullptr) {
             // update table cache
             UpdateTableCache(tableInfo);
@@ -583,7 +560,7 @@ sh::Response<std::shared_ptr<IndexInfo>> SqlCatalogManager::CreateIndexTable(con
     index_params.index_permissions = IndexPermissions::INDEX_PERM_READ_WRITE_AND_DELETE;
 
         // create the table index
-    auto [status, indexInfo] = table_info_handler_.CreateIndexTable(txnHandler, database_info, base_table_info, index_params);
+    auto [status, indexInfo] = table_info_handler_.CreateIndexTable(database_info, base_table_info, index_params);
     if (!status.is2xxOK()) {
         AbortTransaction();
         K2LOG_E(log::catalog, "Failed to create index ns name: {}, ns oid: {}, index name: {}, index oid: {}, base table oid: {}",
@@ -638,11 +615,9 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::GetTableSchema(const
         K2LOG_E(log::catalog, "Cannot find database {}", database_id);
         return std::make_tuple(sh::Statuses:: S404_Not_Found, std::shared_ptr<TableInfo>());
     }
-    auto txnHandler = NewTransaction();
     std::shared_ptr<IndexInfo> index_info = GetCachedIndexInfoById(table_uuid);
-    auto [status, tableInfo] = table_info_handler_.GetTableSchema(txnHandler, database_info, table_id, index_info,
-      [this] (const std::string &db_id) { return CheckAndLoadDatabaseById(db_id); },
-      [this] () { return NewAdditionalTransaction(); }
+    auto [status, tableInfo] = table_info_handler_.GetTableSchema(database_info, table_id, index_info,
+      [this] (const std::string &db_id) { return CheckAndLoadDatabaseById(db_id); }
         );
 
     if (status.is2xxOK() && tableInfo != nullptr) {
@@ -661,8 +636,7 @@ sh::Status SqlCatalogManager::CacheTablesFromStorage(const std::string& database
         K2LOG_E(log::catalog, "Cannot find database {}", databaseName);
         return sh::Statuses:: S404_Not_Found;
     }
-    auto txnHandler = NewTransaction();
-    auto [status, tableInfos] = table_info_handler_.ListTables(txnHandler, database_info->database_id,
+    auto [status, tableInfos] = table_info_handler_.ListTables(database_info->database_id,
         database_info->database_name, isSysTableIncluded);
     if (!status.is2xxOK()) {
         AbortTransaction();
@@ -687,7 +661,6 @@ sh::Response<DeleteTableResponse> SqlCatalogManager::DeleteTable(const uint32_t 
     response.tableId = table_id;
 
     std::shared_ptr<TableInfo> table_info = GetCachedTableInfoById(table_uuid);
-    auto txnHandler = NewTransaction();
     if (table_info == nullptr) {
         // try to find table from SKV by looking at database first
         std::shared_ptr<DatabaseInfo> database_info = CheckAndLoadDatabaseById(database_id);
@@ -697,7 +670,7 @@ sh::Response<DeleteTableResponse> SqlCatalogManager::DeleteTable(const uint32_t 
         }
 
         // fetch the table from K2
-        auto [status, tableInfo] = table_info_handler_.GetTable(txnHandler, database_info->database_id, database_info->database_name,
+        auto [status, tableInfo] = table_info_handler_.GetTable(database_info->database_id, database_info->database_name,
                 table_id);
         if (!status.is2xxOK()) {
             AbortTransaction();
@@ -714,13 +687,13 @@ sh::Response<DeleteTableResponse> SqlCatalogManager::DeleteTable(const uint32_t 
 
     // delete indexes and the table itself
     // delete table data
-    if (auto status = table_info_handler_.DeleteTableData(txnHandler, database_id, table_info); !status.is2xxOK()) {
+    if (auto status = table_info_handler_.DeleteTableData(database_id, table_info); !status.is2xxOK()) {
         AbortTransaction();
         return std::make_tuple(status, response);
     }
 
     // delete table schema metadata
-    if (auto status = table_info_handler_.DeleteTableMetadata(txnHandler, database_id, table_info); !status.is2xxOK()) {
+    if (auto status = table_info_handler_.DeleteTableMetadata(database_id, table_info); !status.is2xxOK()) {
         AbortTransaction();
         return std::make_tuple(status, response);
     }
@@ -743,11 +716,10 @@ sh::Response<DeleteIndexResponse> SqlCatalogManager::DeleteIndex(const uint32_t 
         K2LOG_E(log::catalog, "Cannot find database {}", database_id);
         return std::make_tuple(sh::Statuses:: S404_Not_Found, response);
     }
-    auto txnHandler = NewTransaction();
     std::shared_ptr<IndexInfo> index_info = GetCachedIndexInfoById(table_uuid);
     std::string base_table_id;
     if (index_info == nullptr) {
-        auto [status, baseTableId] = table_info_handler_.GetBaseTableId(txnHandler, database_id, table_id);
+        auto [status, baseTableId] = table_info_handler_.GetBaseTableId(database_id, table_id);
         if (!status.is2xxOK()) {
             AbortTransaction();
             return std::make_tuple(status, response);
@@ -760,7 +732,7 @@ sh::Response<DeleteIndexResponse> SqlCatalogManager::DeleteIndex(const uint32_t 
     std::shared_ptr<TableInfo> base_table_info = GetCachedTableInfoById(base_table_id);
     // try to fetch the table from SKV if not found
     if (base_table_info == nullptr) {
-        auto [status, tableInfo] = table_info_handler_.GetTable(txnHandler, database_id, database_info->database_name,
+        auto [status, tableInfo] = table_info_handler_.GetTable(database_id, database_info->database_name,
                     base_table_id);
         if (!status.is2xxOK()) {
             AbortTransaction();
@@ -776,13 +748,13 @@ sh::Response<DeleteIndexResponse> SqlCatalogManager::DeleteIndex(const uint32_t 
     }
 
     // delete index data
-    if (auto status = table_info_handler_.DeleteIndexData(txnHandler, database_id, table_id); status.is2xxOK()) {
+    if (auto status = table_info_handler_.DeleteIndexData(database_id, table_id); status.is2xxOK()) {
         AbortTransaction();
         return std::make_tuple(status, response);
     }
 
     // delete index metadata
-    if (auto status = table_info_handler_.DeleteIndexMetadata(txnHandler, database_id, table_id); status.is2xxOK()) {
+    if (auto status = table_info_handler_.DeleteIndexMetadata(database_id, table_id); status.is2xxOK()) {
         AbortTransaction();
         return std::make_tuple(status, response);
     }
@@ -800,8 +772,7 @@ sh::Response<ReservePgOidsResponse> SqlCatalogManager::ReservePgOid(const std::s
     ReservePgOidsResponse response;
     K2LOG_D(log::catalog, "Reserving PgOid with nextOid: {}, count: {}, for ns: {}",
             nextOid, count, databaseId);
-    auto txnHandler = NewTransaction();
-    auto [status, databaseInfo] = database_info_handler_.GetDatabase(txnHandler, databaseId);
+    auto [status, databaseInfo] = database_info_handler_.GetDatabase(databaseId);
     if (!status.is2xxOK()) {
         AbortTransaction();
         K2LOG_E(log::catalog, "Failed to get database {}", databaseId);
@@ -831,7 +802,7 @@ sh::Response<ReservePgOidsResponse> SqlCatalogManager::ReservePgOid(const std::s
     // won't override each other and won't lose the correctness of PgNextOid
     databaseInfo.next_pg_oid = end_oid;
     K2LOG_D(log::catalog, "Updating nextPgOid on SKV to {} for database {}", end_oid, databaseId);
-    if (auto status = database_info_handler_.UpsertDatabase(txnHandler, databaseInfo); status.is2xxOK()) {
+    if (auto status = database_info_handler_.UpsertDatabase(databaseInfo); status.is2xxOK()) {
         AbortTransaction();
         K2LOG_E(log::catalog, "Failed to update nextPgOid on SKV due to {}", status);
         return std::make_tuple(status, response);
@@ -982,25 +953,9 @@ std::shared_ptr<DatabaseInfo> SqlCatalogManager::GetCachedDatabaseByName(const s
     return nullptr;
 }
 
-std::shared_ptr<sh::TxnHandle> SqlCatalogManager::NewTransaction() {
-    auto [status, txn] = TXMgr.BeginTxn({});
-    if (!status.is2xxOK()) {
-        throw std::runtime_error("Cannot start new transaction.");
-    }
-    return txn;
-}
-
-std::shared_ptr<sh::TxnHandle> SqlCatalogManager::NewAdditionalTransaction() {
-    auto [status, txn] = TXMgr.GetAdditionalTxn({});
-    if (!status.is2xxOK()) {
-        throw std::runtime_error("Cannot start new transaction.");
-    }
-    return txn;
-}
 
 void SqlCatalogManager::LoadDatabases() {
-    auto txnHandler = NewTransaction();
-    auto [status, databaseInfos] = database_info_handler_.ListDatabases(txnHandler);
+    auto [status, databaseInfos] = database_info_handler_.ListDatabases();
     CommitTransaction();
     if (status.is2xxOK() && !databaseInfos.empty()) {
         // update database caches

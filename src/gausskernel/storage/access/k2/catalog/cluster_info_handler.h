@@ -44,11 +44,11 @@ public:
     ClusterInfoHandler();
     ~ClusterInfoHandler();
 
-    sh::Status InitClusterInfo(std::shared_ptr<sh::TxnHandle> txnHandler,ClusterInfo& cluster_info);
+    sh::Status InitClusterInfo(ClusterInfo& cluster_info);
 
-    sh::Status UpdateClusterInfo(std::shared_ptr<sh::TxnHandle> txnHandler,ClusterInfo& cluster_info);
+    sh::Status UpdateClusterInfo(ClusterInfo& cluster_info);
 
-    sh::Response<ClusterInfo> GetClusterInfo(std::shared_ptr<sh::TxnHandle> txnHandler, const std::string& cluster_id);
+    sh::Response<ClusterInfo> GetClusterInfo(const std::string& cluster_id);
 
 private:
     std::string collection_name_ = "K2RESVD_COLLECTION_SQL_PRIMARY_CLUSTER";

@@ -222,22 +222,8 @@ protected:
 
     sh::Status CacheTablesFromStorage(const std::string& databaseName, bool isSysTableIncluded);
 
-    // start a new PG transaction and return the handler of it. NOTE: the underhood transaction has begun.
-    std::shared_ptr<sh::TxnHandle>  NewTransaction();
-
-    std::shared_ptr<sh::TxnHandle>  NewAdditionalTransaction();
-
-    void CommitAdditionalTransaction(std::shared_ptr<sh::TxnHandle> handle) {
-        TXMgr.EndAdditionalTxn(handle, sh::dto::EndAction::Commit);
-    }
-
-    void AbortAdditionalTransaction(std::shared_ptr<sh::TxnHandle> handle) {
-        TXMgr.EndAdditionalTxn(handle, sh::dto::EndAction::Abort);
-    }
-
-
-    void CommitTransaction() {TXMgr.EndTxn(sh::dto::EndAction::Commit);}
-    void AbortTransaction() {TXMgr.EndTxn(sh::dto::EndAction::Abort);}
+    void CommitTransaction() {TXMgr.endTxn(sh::dto::EndAction::Commit);}
+    void AbortTransaction() {TXMgr.endTxn(sh::dto::EndAction::Abort);}
 
     std::shared_ptr<DatabaseInfo> CheckAndLoadDatabaseByName(const std::string& database_name);
 

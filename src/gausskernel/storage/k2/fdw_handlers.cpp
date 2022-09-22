@@ -176,7 +176,7 @@ struct K2FdwExecState
 
     PgExecParameters *exec_params; /* execution control parameters for K2 PG */
     bool is_exec_done; /* Each statement should be executed exactly one time */
-    skv::http::dto::QueryRequest query;
+    std::shared_ptr<skv::http::dto::QueryRequest> query;
 };
 
 struct K2FdwScanPlanData
@@ -651,7 +651,7 @@ k2IterateForeignScan(ForeignScanState *node)
             // err
         }
 
-        k2pg_state->query = std::move(query);
+        k2pg_state->query = query;
         //k2SetupScanTargets(node);
         //HandleK2PgStatusWithOwner(PgGate_ExecSelect(k2pg_state->handle, k2pg_state->exec_params),
         //                        k2pg_state->handle,

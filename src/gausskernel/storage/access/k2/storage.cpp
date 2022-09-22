@@ -85,7 +85,7 @@ K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid,
     const std::string& collectionName = pg_table->collection_name();
     const std::string& schemaName = pg_table->schema_name();
 
-    auto [status, schema] = k2pg::TXMgr.GetSchema(collectionName, schemaName);
+    auto [status, schema] = k2pg::TXMgr.getSchema(collectionName, schemaName).get();
     if (!status.is2xxOK()) {
         return k2pg::K2StatusToK2PgStatus(std::move(status));
     }
