@@ -887,7 +887,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveSKVSchemaFromTableInfo(
     schema->version = table->schema().version();
     // add two partitionkey fields
     AddDefaultPartitionKeys(schema);
-    uint32_t count = numDefaultPartitionKeys;
+    uint32_t count = 2;
     for (ColumnSchema col_schema : table->schema().columns()) {
         sh::dto::SchemaField field;
         field.type = ToK2Type(col_schema.type()->id());

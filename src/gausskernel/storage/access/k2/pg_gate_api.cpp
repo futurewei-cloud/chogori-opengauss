@@ -101,7 +101,6 @@ namespace {
 void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
     assert(pg_gate == nullptr && "PgGate should only be initialized once");
     elog(INFO, "K2 PgGate open");
-    K2LOG_I(::k2pg::log::k2pg, "Initializing Pggate");
     pg_gate = std::make_shared<PgGate>(k2PgDataTypeTable, count, pg_callbacks);
 }
 
@@ -199,39 +198,19 @@ K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
                                  K2PgOid next_oid) {
   elog(LOG, "PgGateAPI: PgGate_ExecCreateDatabase %s, %d, %d, %d",
          database_name, database_oid, source_database_oid, next_oid);
-  auto skvstat = pg_gate->GetCatalogClient()->CreateDatabase(database_name,
+  return pg_gate->GetCatalogClient()->CreateDatabase(database_name,
       k2pg::PgObjectId::GetDatabaseUuid(database_oid),
       database_oid,
       source_database_oid != k2pg::kPgInvalidOid ? k2pg::PgObjectId::GetDatabaseUuid(source_database_oid) : "",
       "" /* creator_role_name */, next_oid);
-    if (skvstat.is2xxOK()) {
-        return k2pg::Status::OK;
-    }
-    K2PgStatus status {
-        .pg_code = ERRCODE_INTERNAL_ERROR,
-        .k2_code = skvstat.code,
-        .msg = skvstat.message,
-        .detail = "PgGate_ExecCreateDatabase() failed"
-    };
-    return status;
 }
 
 // Drop database.
 K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
                                    K2PgOid database_oid) {
     elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
-    auto skvstat = pg_gate->GetCatalogClient()->DeleteDatabase(database_name,
+    return pg_gate->GetCatalogClient()->DeleteDatabase(database_name,
         k2pg::PgObjectId::GetDatabaseUuid(database_oid));
-    if (skvstat.is2xxOK()) {
-        return k2pg::Status::OK;
-    }
-    K2PgStatus status {
-      .pg_code = ERRCODE_INTERNAL_ERROR,
-      .k2_code = skvstat.code,
-      .msg = skvstat.message,
-      .detail = "PgGate_ExecDropDatabase() failed"
-    };
-    return status;
 }
 
 // Alter database.
@@ -363,20 +342,11 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               const std::vector<K2PGColumnDef>& columns) {
     elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
     auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
-    if (!status.ok()) {
+    if (!status.IsOK()) {
         return status;
     }
     const k2pg::PgObjectId table_object_id(database_oid, table_oid);
-    auto skvstat = pg_gate->GetCatalogClient()->CreateTable(database_name, table_name, table_object_id, schema, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
-    if (skvstat.is2xxOK()) {
-        return k2pg::Status::OK;
-    }
-    return K2PgStatus {
-        .pg_code = ERRCODE_INTERNAL_ERROR,
-        .k2_code = skvstat.code,
-        .msg = skvstat.message,
-        .detail = "PgGate_ExecCreateTable() failed"
-    };
+    return pg_gate->GetCatalogClient()->CreateTable(database_name, table_name, table_object_id, schema, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
 }
 
 K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
@@ -475,21 +445,12 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               const std::vector<K2PGColumnDef>& columns){
     elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
     auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
-    if (!status.ok()) {
+    if (!status.IsOK()) {
         return status;
     }
     const k2pg::PgObjectId index_object_id(database_oid, index_oid);
     const k2pg::PgObjectId base_table_object_id(database_oid, table_oid);
-    auto skvstat = pg_gate->GetCatalogClient()->CreateIndexTable(database_name, index_name, index_object_id, base_table_object_id, schema, is_unique_index, skip_index_backfill, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
-    if (skvstat.is2xxOK()) {
-        return k2pg::Status::OK;
-    }
-    return K2PgStatus {
-        .pg_code = ERRCODE_INTERNAL_ERROR,
-        .k2_code = skvstat.code,
-        .msg = skvstat.message,
-        .detail = " PgGate_ExecCreateIndex() failed"
-    };
+    return pg_gate->GetCatalogClient()->CreateIndexTable(database_name, index_name, index_object_id, base_table_object_id, schema, is_unique_index, skip_index_backfill, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
 }
 
 K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,

@@ -37,8 +37,6 @@ Copyright(c) 2022 Futurewei Cloud
 namespace k2pg {
     typedef int32_t ColumnId;
     constexpr ColumnId kFirstColumnId = 0;
-    // Additional partition keys TableId and ColumnId added to each table
-    constexpr int numDefaultPartitionKeys = 2;
 
     enum IndexPermissions {
         INDEX_PERM_DELETE_ONLY = 0,
