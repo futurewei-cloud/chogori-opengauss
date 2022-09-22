@@ -26,12 +26,11 @@ Copyright(c) 2022 Futurewei Cloud
 namespace k2pg {
 namespace catalog {
 
+// TODO: change to report time metrics from catalog manager
 Status SqlCatalogClient::IsInitDbDone(bool* isDone) {
-    auto start = k2::Clock::now();
     auto [status, done] = catalog_manager_->IsInitDbDone();
-    K2LOG_D(log::catalog, "IsInitDbDone took {}", k2::Clock::now() - start);
     if (!status.is2xxOK()) {
-      return k2pg::K2StatusToK2PgStatus(std::move(status));
+        return k2pg::K2StatusToK2PgStatus(std::move(status));
     }
     *isDone = done;
     return k2pg::Status::OK;
@@ -59,9 +58,7 @@ Status SqlCatalogClient::CreateDatabase(const std::string& database_name,
       .creatorRoleName = creator_role_name,
       .nextPgOid = next_pg_oid
     };
-    auto start = k2::Clock::now();
     auto result = catalog_manager_->CreateDatabase(request);
-    K2LOG_D(log::catalog, "CreateDatabase {} took {}", database_name, k2::Clock::now() - start);
     return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(result)));
 }
 
@@ -70,10 +67,7 @@ Status SqlCatalogClient::DeleteDatabase(const std::string& database_name, const 
 }
 
 Status SqlCatalogClient::UseDatabase(const std::string& database_name) {
-    auto start = k2::Clock::now();
-    auto status = catalog_manager_->UseDatabase(database_name);
-    K2LOG_D(log::catalog, "UseDatabase {} took {}", database_name, k2::Clock::now() - start);
-    return k2pg::K2StatusToK2PgStatus(std::move(status));
+    return k2pg::K2StatusToK2PgStatus(catalog_manager_->UseDatabase(database_name));
 }
 
 Status SqlCatalogClient::CreateTable(
@@ -94,10 +88,7 @@ Status SqlCatalogClient::CreateTable(
       .isSharedTable = is_shared_table,
       .isNotExist = if_not_exist
     };
-    auto start = k2::Clock::now();
-    auto response = catalog_manager_->CreateTable(request);
-    K2LOG_D(log::catalog, "CreateTable {} in {} took {}", table_name, database_name, k2::Clock::now() - start);
-    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(response)));
+    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(catalog_manager_->CreateTable(request))));
 }
 
 Status SqlCatalogClient::CreateIndexTable(
@@ -125,10 +116,7 @@ Status SqlCatalogClient::CreateIndexTable(
       .isSharedTable = is_shared_table,
       .isNotExist = if_not_exist
     };
-    auto start = k2::Clock::now();
-    auto response = catalog_manager_->CreateIndexTable(request);
-    K2LOG_D(log::catalog, "CreateIndexTable {} in {} took {}", table_name, database_name, k2::Clock::now() - start);
-    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(response)));
+    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(catalog_manager_->CreateIndexTable(request))));
 }
 
 Status SqlCatalogClient::DeleteTable(const PgOid database_oid, const PgOid table_oid, bool wait) {
@@ -139,7 +127,7 @@ Status SqlCatalogClient::DeleteTable(const PgOid database_oid, const PgOid table
 Status SqlCatalogClient::DeleteIndexTable(const PgOid database_oid, const PgOid table_oid, PgOid *base_table_oid, bool wait) {
     auto [status, response] = catalog_manager_->DeleteIndex(database_oid, table_oid);
     if (!status.is2xxOK()) {
-      return k2pg::K2StatusToK2PgStatus(std::move(status));
+        return k2pg::K2StatusToK2PgStatus(std::move(status));
     }
     *base_table_oid = response.baseIndexTableOid;
     // TODO: add wait logic once we refactor the catalog manager APIs to be asynchronous for state/response
@@ -147,9 +135,7 @@ Status SqlCatalogClient::DeleteIndexTable(const PgOid database_oid, const PgOid 
 }
 
 std::shared_ptr<TableInfo> SqlCatalogClient::OpenTable(const PgOid database_oid, const PgOid table_oid) {
-    auto start = k2::Clock::now();
     auto [status, tableInfo] = catalog_manager_->GetTableSchema(database_oid, table_oid);
-    K2LOG_D(log::catalog, "GetTableSchema ({} : {}) took {}", database_oid, table_oid, k2::Clock::now() - start);
     if (!status.is2xxOK()) {
         K2LOG_W(log::catalog, "Failed to get TableSchema {} : {} due to {}", database_oid, table_oid, status);
         return nullptr;
@@ -159,11 +145,9 @@ std::shared_ptr<TableInfo> SqlCatalogClient::OpenTable(const PgOid database_oid,
 }
 
 Status SqlCatalogClient::OpenTable(const PgOid database_oid, const PgOid table_oid, std::shared_ptr<TableInfo>* table) {
-    auto start = k2::Clock::now();
     auto [status, tableInfo] = catalog_manager_->GetTableSchema(database_oid, table_oid);
-    K2LOG_D(log::catalog, "GetTableSchema ({} : {}) took {}", database_oid, table_oid, k2::Clock::now() - start);
     if (!status.is2xxOK()) {
-      return k2pg::K2StatusToK2PgStatus(std::move(status));
+        return k2pg::K2StatusToK2PgStatus(std::move(status));
     }
 
     table->swap(tableInfo);
@@ -176,9 +160,7 @@ Status SqlCatalogClient::ReservePgOids(const PgOid database_oid,
                                   uint32_t* begin_oid,
                                   uint32_t* end_oid) {
     auto databaseId = PgObjectId::GetDatabaseUuid(database_oid);
-    auto start = k2::Clock::now();
     auto [status, response] = catalog_manager_->ReservePgOid(databaseId, next_oid, count);
-    K2LOG_D(log::catalog, "ReservePgOid took {}", k2::Clock::now() - start);
     if (!status.is2xxOK()) {
         return k2pg::K2StatusToK2PgStatus(std::move(status));
     }
@@ -188,17 +170,12 @@ Status SqlCatalogClient::ReservePgOids(const PgOid database_oid,
 }
 
 Status SqlCatalogClient::GetCatalogVersion(uint64_t *pg_catalog_version) {
-  auto start = k2::Clock::now();
-  *pg_catalog_version = catalog_manager_->GetCatalogVersion();
-  K2LOG_D(log::catalog, "GetCatalogVersion took {}", k2::Clock::now() - start);
-  return k2pg::Status::OK;
+    *pg_catalog_version = catalog_manager_->GetCatalogVersion();
+    return k2pg::Status::OK;
 }
 
 Status SqlCatalogClient::IncrementCatalogVersion() {
-  auto start = k2::Clock::now();
-  auto result  = catalog_manager_->IncrementCatalogVersion();
-  K2LOG_D(log::catalog, "IncrementCatalogVersion took {}", k2::Clock::now() - start);
-  return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(result)));
+    return k2pg::K2StatusToK2PgStatus(std::move(std::get<0>(catalog_manager_->IncrementCatalogVersion())));
 }
 } // namespace catalog
 }  // namespace k2pg
