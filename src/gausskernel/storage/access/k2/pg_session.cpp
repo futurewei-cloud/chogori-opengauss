@@ -58,35 +58,37 @@ std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgOid database_oid, cons
 
 std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgObjectId& table_object_id) {
     std::string t_table_uuid = std::move(table_object_id.GetTableUuid());
-    std::shared_ptr<TableInfo> table;
 
     auto cached_table = table_cache_.find(t_table_uuid);
     if (cached_table == table_cache_.end()) {
+        std::shared_ptr<TableInfo> table;
         Status status = catalog_client_->OpenTable(table_object_id.GetDatabaseOid(), table_object_id.GetObjectOid(), &table);
         if (!status.IsOK()) {
             ereport(ERROR, (errcode(status.pg_code), errmsg("Error loading table with oid %d in database %d",
                 table_object_id.GetObjectOid(), table_object_id.GetDatabaseOid())));
         }
-        table_cache_[t_table_uuid] = table;
+
+        std::shared_ptr<PgTableDesc> table_desc;
+        std::string t_table_id = std::move(table_object_id.GetTableId());
+        // check if the t_table_id is for a table or an index
+        if (table->table_id().compare(t_table_id) == 0) {
+            // a table
+            table_desc = std::make_shared<PgTableDesc>(table);
+        } else {
+            // an index
+            const auto itr = table->secondary_indexes().find(t_table_id);
+            if (itr == table->secondary_indexes().end()) {
+                ereport(ERROR, (errcode(ERRCODE_CASE_NOT_FOUND), errmsg("Error loading index with oid %s in database %s",
+                    t_table_id.c_str(), table->database_id().c_str())));
+            }
+            table_desc = std::make_shared<PgTableDesc>(itr->second, table->database_id());
+        }
+        // cache it
+        table_cache_[t_table_uuid] = table_desc;
+        return table_desc;
     } else {
-        table = cached_table->second;
+        return cached_table->second;
     }
-
-    std::string t_table_id = std::move(table_object_id.GetTableId());
-    // check if the t_table_id is for a table or an index
-    if (table->table_id().compare(t_table_id) == 0) {
-        // a table
-        return std::make_shared<PgTableDesc>(table);
-    }
-
-    // an index
-    const auto itr = table->secondary_indexes().find(t_table_id);
-    if (itr == table->secondary_indexes().end()) {
-        ereport(ERROR, (errcode(ERRCODE_CASE_NOT_FOUND), errmsg("Error loading index with oid %s in database %s",
-            t_table_id.c_str(), table->database_id().c_str())));
-    }
-
-    return std::make_shared<PgTableDesc>(itr->second, table->database_id());
 }
 
 }  // namespace k2pg

@@ -81,7 +81,7 @@ private:
     std::string connected_database_;
 
     // table cache
-    std::unordered_map<std::string, std::shared_ptr<TableInfo>> table_cache_;
+    std::unordered_map<std::string, std::shared_ptr<PgTableDesc>> table_cache_;
 
     std::string client_id_;
 
