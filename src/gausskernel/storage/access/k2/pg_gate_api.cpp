@@ -400,32 +400,30 @@ K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
+    *handle = k2pg::pg_session->LoadTable(database_oid, table_oid).get();
+    return K2PgStatus::OK;
 }
 
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              int16_t attr_number,
                              bool *is_primary,
                              bool *is_hash) {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
-                                  K2PgTableProperties *properties){
-  elog(DEBUG5, "PgGateAPI: PgGate_GetTableProperties");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
+    return table_desc->GetColumnInfo(attr_number, is_primary, is_hash);
 }
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
+    // TODO: check if we don't need this
+    handle->SetSysCatalogVersionChange();
+    return pg_gate->GetCatalogClient()->IncrementCatalogVersion();
 }
 
 K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_cache_version){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
+    handle->SetCatalogCacheVersion(catalog_cache_version);
+    return K2PgStatus::OK;
 }
 
 // INDEX -------------------------------------------------------------------------------------------

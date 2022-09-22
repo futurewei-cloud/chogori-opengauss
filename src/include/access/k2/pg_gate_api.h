@@ -161,9 +161,6 @@ K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              bool *is_primary,
                              bool *is_hash);
 
-K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
-                                  K2PgTableProperties *properties);
-
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle);
 
 K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_cache_version);
