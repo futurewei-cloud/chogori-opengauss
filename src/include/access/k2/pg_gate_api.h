@@ -187,17 +187,6 @@ K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
 
 K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle);
 
-K2PgStatus PgGate_WaitUntilIndexPermissionsAtLeast(
-    const K2PgOid database_oid,
-    const K2PgOid table_oid,
-    const K2PgOid index_oid,
-    const uint32_t target_index_permissions,
-    uint32_t *actual_index_permissions);
-
-K2PgStatus PgGate_AsyncUpdateIndexPermissions(
-    const K2PgOid database_oid,
-    const K2PgOid indexed_table_oid);
-
 //--------------------------------------------------------------------------------------------------
 // DML statements (select, insert, update, delete, truncate)
 //--------------------------------------------------------------------------------------------------
@@ -227,17 +216,6 @@ struct K2PgAttributeDef {
 };
 
 class K2PgScanHandle;
-
-// bind range condition so as to derive key prefix
-// TODO maybe remove if not needed after user table scan is hooked in
-K2PgStatus PgGate_DmlBindRangeConds(K2PgStatement handle, K2PgExpr where_conds);
-
-// bind where clause for a DML operation
-// TODO maybe remove if not needed after user table scan is hooked in
-K2PgStatus PgGate_DmlBindWhereConds(K2PgStatement handle, K2PgExpr where_conds);
-
-// Binding Tables: Bind the whole table in a statement.  Do not use with BindColumn.
-K2PgStatus PgGate_DmlBindTable(K2PgStatement handle);
 
 // This function is to fetch the targets in the vector from the Exec call, from the rows that were defined
 // by the constraints vector in the Exec call
@@ -356,16 +334,6 @@ K2PgStatus PgGate_NewConstant(K2PgStatement stmt, const K2PgTypeEntity *type_ent
 K2PgStatus PgGate_NewConstantOp(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
                            uint64_t datum, bool is_null, K2PgExpr *expr_handle, bool is_gt);
 
-// The following update functions only work for constants.
-// Overwriting the constant expression with new value.
-K2PgStatus PgGate_UpdateConstInt2(K2PgExpr expr, int16_t value, bool is_null);
-K2PgStatus PgGate_UpdateConstInt4(K2PgExpr expr, int32_t value, bool is_null);
-K2PgStatus PgGate_UpdateConstInt8(K2PgExpr expr, int64_t value, bool is_null);
-K2PgStatus PgGate_UpdateConstFloat4(K2PgExpr expr, float value, bool is_null);
-K2PgStatus PgGate_UpdateConstFloat8(K2PgExpr expr, double value, bool is_null);
-K2PgStatus PgGate_UpdateConstText(K2PgExpr expr, const char *value, bool is_null);
-K2PgStatus PgGate_UpdateConstChar(K2PgExpr expr, const char *value, int64_t bytes, bool is_null);
-
 // Expressions with operators "=", "+", "between", "in", ...
 K2PgStatus PgGate_NewOperator(K2PgStatement stmt, const char *opname,
                            const K2PgTypeEntity *type_entity,
@@ -383,20 +351,6 @@ K2PgStatus PgGate_CacheForeignKeyReference(K2PgOid table_oid, const char* k2pgct
 K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t k2pgctid);
 
 void PgGate_ClearForeignKeyReferenceCache();
-
-bool PgGate_IsInitDbModeEnvVarSet();
-
-// This is called by initdb. Used to customize some behavior.
-void PgGate_InitFlags();
-
-// Retrieves value of psql_max_read_restart_attempts gflag
-int32_t PgGate_GetMaxReadRestartAttempts();
-
-// Retrieves value of psql_output_buffer_size gflag
-int32_t PgGate_GetOutputBufferSize();
-
-// Retrieve value of psql_disable_index_backfill gflag.
-bool PgGate_GetDisableIndexBackfill();
 
 bool PgGate_IsK2PgEnabled();
 
