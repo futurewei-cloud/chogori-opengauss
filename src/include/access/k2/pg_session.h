@@ -25,6 +25,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <atomic>
 
 #include "access/k2/status.h"
@@ -37,6 +38,11 @@ namespace catalog {
     // forward definition of SqlCatalogClient to avoid bring in various dependencies
     class SqlCatalogClient;
 }
+
+struct PgForeignKeyReference {
+  uint32_t table_oid;
+  std::string k2pgctid;
+};
 
 class PgSession {
 public:
@@ -74,6 +80,20 @@ public:
 
     void InvalidateTableCache(const PgObjectId& table_object_id);
 
+    // Returns true if the row referenced by k2pgctid exists in FK reference cache (Used for caching
+    // foreign key checks).
+    bool ForeignKeyReferenceExists(uint32_t table_oid, std::string&& k2pgctid);
+
+    // Adds the row referenced by k2pgctid to FK reference cache.
+    Status CacheForeignKeyReference(uint32_t table_oid, std::string&& k2pgctid);
+
+    // Deletes the row referenced by k2pgctid from FK reference cache.
+    Status DeleteForeignKeyReference(uint32_t table_oid, std::string&& k2pgctid);
+
+    void InvalidateForeignKeyReferenceCache() {
+        fk_reference_cache_.clear();
+    }
+
 private:
     std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client_;
 
@@ -82,6 +102,8 @@ private:
 
     // table cache
     std::unordered_map<std::string, std::shared_ptr<PgTableDesc>> table_cache_;
+
+    std::unordered_set<PgForeignKeyReference, boost::hash<PgForeignKeyReference>> fk_reference_cache_;
 
     std::string client_id_;
 
