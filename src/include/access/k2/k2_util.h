@@ -22,10 +22,27 @@ Copyright(c) 2022 Futurewei Cloud
 */
 #include <libintl.h>
 #include "postgres.h"
+#include "c.h"
+#include "fmgr/fmgr_comp.h"
 #include "access/k2/status.h"
 #include <skvhttp/common/Status.h>
 
 namespace k2pg {
+// A class for untoasted datums so that freeing data can be done by the destructor and exception-safe
+class UntoastedDatum {
+public:
+    bytea* untoasted;
+    Datum datum;
+    UntoastedDatum(Datum d) : datum(d) {
+        untoasted = DatumGetByteaP(datum);
+    }
+
+    ~UntoastedDatum() {
+        if ((char*)datum != (char*)untoasted) {
+            pfree(untoasted);
+        }
+    }
+};
 
 Status K2StatusToK2PgStatus(skv::http::Status&& status);
 

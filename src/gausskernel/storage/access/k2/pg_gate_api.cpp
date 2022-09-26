@@ -787,23 +787,22 @@ K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg){
 // Referential Integrity Check Caching.
 // Check if foreign key reference exists in cache.
 bool PgGate_ForeignKeyReferenceExists(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
+    elog(DEBUG5, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
     return k2pg::pg_session->ForeignKeyReferenceExists(table_oid, std::string(k2pgctid, k2pgctid_size));
 }
 
 // Add an entry to foreign key reference cache.
 K2PgStatus PgGate_CacheForeignKeyReference(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size){
-    elog(DEBUG5, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
+    elog(DEBUG5, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
     return k2pg::pg_session->CacheForeignKeyReference(table_oid, std::string(k2pgctid, k2pgctid_size));
 }
 
 // Delete an entry from foreign key reference cache.
 K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t k2pgctid){
     elog(DEBUG5, "PgGateAPI: PgGate_DeleteFromForeignKeyReferenceCache %d, %lu", table_oid, k2pgctid);
-    char *value;
-    int64_t bytes;
-    const K2PgTypeEntity *type_entity = pg_gate->FindTypeEntity(k2pg::kPgByteArrayOid);
-    type_entity->datum_to_k2pg(k2pgctid, &value, &bytes);
+    k2pg::UntoastedDatum data = k2pg::UntoastedDatum(k2pgctid);
+    int64_t bytes = VARSIZE(data.untoasted); // includes header len VARHDRSZ
+    char *value = (char*)data.untoasted;
     return k2pg::pg_session->DeleteForeignKeyReference(table_oid, std::string(value, bytes));
 }
 
