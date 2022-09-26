@@ -514,10 +514,6 @@ static void BindScanKeys(Relation relation,
         }
     }
 
-    //HandleK2PgStatusWithOwner(PgGate_DmlBindRangeConds(fdw_state->handle, range_conds),
-    //                                                    fdw_state->handle,
-    //                                                    fdw_state->stmt_owner);
-
     Expression where_conds{};
     // Top level should be an "AND" node
     where_conds.op = Operation::AND;
@@ -541,9 +537,6 @@ static void BindScanKeys(Relation relation,
         }
     }
 
-    //HandleK2PgStatusWithOwner(PgGate_DmlBindWhereConds(fdw_state->handle, where_conds),
-    //                                                    fdw_state->handle,
-    //                                                    fdw_state->stmt_owner);
     scan_plan->range_conds = std::move(range_conds);
     scan_plan->where_conds = std::move(where_conds);
 }

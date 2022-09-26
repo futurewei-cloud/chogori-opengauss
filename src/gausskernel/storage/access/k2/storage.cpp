@@ -29,7 +29,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2pg_aux.h"
 #include "access/sysattr.h"
 #include "catalog/pg_type.h"
-#include "fmgr/fmgr_comp.h"
 
 #include "access/k2/k2_util.h"
 #include "storage.h"
@@ -63,22 +62,6 @@ bool is8ByteIntType(Oid oid) {
     return (oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID);
 }
 
-// A class for untoasted datums so that freeing data can be done by the destructor and exception-safe
-class UntoastedDatum {
-public:
-    bytea* untoasted;
-    Datum datum;
-    UntoastedDatum(Datum d) : datum(d) {
-        untoasted = DatumGetByteaP(datum);
-    }
-
-    ~UntoastedDatum() {
-        if ((char*)datum != (char*)untoasted) {
-            pfree(untoasted);
-        }
-    }
-};
-
 K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid,
                          std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder) {
     std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
@@ -107,7 +90,7 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
     }
     else if (isStringType(constant.type_id)) {
         // Borrowed from MOT. This handles stripping the datum header for toasted or non-toasted data
-        UntoastedDatum data = UntoastedDatum(constant.datum);
+        k2pg::UntoastedDatum data = k2pg::UntoastedDatum(constant.datum);
         size_t size = VARSIZE(data.untoasted);  // includes header len VARHDRSZ
         char* src = VARDATA(data.untoasted);
         builder.serializeNext<std::string>(std::string(src, size - VARHDRSZ));
@@ -140,14 +123,14 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
         builder.serializeNext<double>(dval);
     } else {
         // Anything else we treat as opaque bytes and include the datum header
-        UntoastedDatum data = UntoastedDatum(constant.datum);
+        k2pg::UntoastedDatum data = k2pg::UntoastedDatum(constant.datum);
         size_t size = VARSIZE(data.untoasted);  // includes header len VARHDRSZ
         builder.serializeNext<std::string>(std::string((char*)data.untoasted, size));
     }
 }
 
 skv::http::dto::SKVRecord tupleIDDatumToSKVRecord(Datum tuple_id, std::string collection, std::shared_ptr<skv::http::dto::Schema> schema) {
-    UntoastedDatum data = UntoastedDatum(tuple_id);
+    k2pg::UntoastedDatum data = k2pg::UntoastedDatum(tuple_id);
     size_t size = VARSIZE(data.untoasted) - VARHDRSZ;
     char* src = VARDATA(data.untoasted);
     // No-op deleter. Data is owned by PG heap and we will not access it outside of this function

@@ -400,32 +400,30 @@ K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
+    *handle = k2pg::pg_session->LoadTable(database_oid, table_oid).get();
+    return K2PgStatus::OK;
 }
 
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              int16_t attr_number,
                              bool *is_primary,
                              bool *is_hash) {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_GetTableProperties(K2PgTableDesc table_desc,
-                                  K2PgTableProperties *properties){
-  elog(DEBUG5, "PgGateAPI: PgGate_GetTableProperties");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
+    return table_desc->GetColumnInfo(attr_number, is_primary, is_hash);
 }
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
+    // TODO: check if we don't need this
+    handle->SetSysCatalogVersionChange();
+    return pg_gate->GetCatalogClient()->IncrementCatalogVersion();
 }
 
 K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_cache_version){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
+    handle->SetCatalogCacheVersion(catalog_cache_version);
+    return K2PgStatus::OK;
 }
 
 // INDEX -------------------------------------------------------------------------------------------
@@ -466,87 +464,9 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
   return K2PgStatus::NotSupported;
 }
 
-K2PgStatus PgGate_WaitUntilIndexPermissionsAtLeast(
-    const K2PgOid database_oid,
-    const K2PgOid table_oid,
-    const K2PgOid index_oid,
-    const uint32_t target_index_permissions,
-    uint32_t *actual_index_permissions) {
-  elog(DEBUG5, "PgGateAPI: PgGate_WaitUntilIndexPermissionsAtLeast %d, %d, %d", database_oid, table_oid, index_oid);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_AsyncUpdateIndexPermissions(
-    const K2PgOid database_oid,
-    const K2PgOid indexed_table_oid){
-  elog(DEBUG5, "PgGateAPI: PgGate_AsyncUpdateIndexPermissions %d, %d", database_oid,  indexed_table_oid);
-  return K2PgStatus::NotSupported;
-}
-
 //--------------------------------------------------------------------------------------------------
 // DML statements (select, insert, update, delete, truncate)
 //--------------------------------------------------------------------------------------------------
-
-// This function is for specifying the selected or returned expressions.
-// - SELECT target_expr1, target_expr2, ...
-// - INSERT / UPDATE / DELETE ... RETURNING target_expr1, target_expr2, ...
-K2PgStatus PgGate_DmlAppendTarget(K2PgStatement handle, K2PgExpr target){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlAppendTarget");
-  return K2PgStatus::NotSupported;
-}
-
-// Binding Columns: Bind column with a value (expression) in a statement.
-// + This API is used to identify the rows you want to operate on. If binding columns are not
-//   there, that means you want to operate on all rows (full scan). You can view this as a
-//   a definitions of an initial rowset or an optimization over full-scan.
-//
-// + There are some restrictions on when BindColumn() can be used.
-//   Case 1: INSERT INTO tab(x) VALUES(x_expr)
-//   - BindColumn() can be used for BOTH primary-key and regular columns.
-//   - This bind-column function is used to bind "x" with "x_expr", and "x_expr" that can contain
-//     bind-variables (placeholders) and constants whose values can be updated for each execution
-//     of the same allocated statement.
-//
-//   Case 2: SELECT / UPDATE / DELETE <WHERE key = "key_expr">
-//   - BindColumn() can only be used for primary-key columns.
-//   - This bind-column function is used to bind the primary column "key" with "key_expr" that can
-//     contain bind-variables (placeholders) and constants whose values can be updated for each
-//     execution of the same allocated statement.
-//
-// NOTE ON KEY BINDING
-// - For Sequential Scan, the target columns of the bind are those in the main table.
-// - For Primary Scan, the target columns of the bind are those in the main table.
-// - For Index Scan, the target columns of the bind are those in the index table.
-//   The index-scan will use the bind to find base-k2pgctid which is then use to read data from
-//   the main-table, and therefore the bind-arguments are not associated with columns in main table.
-K2PgStatus PgGate_DmlBindColumn(K2PgStatement handle, int attr_num, K2PgExpr attr_value){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlBindColumn %d", attr_num);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_DmlBindRangeConds(K2PgStatement handle, K2PgExpr range_conds) {
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlBindRangeConds");
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_DmlBindWhereConds(K2PgStatement handle, K2PgExpr where_conds) {
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlBindWhereConds");
-  return K2PgStatus::NotSupported;
-}
-
-// Binding Tables: Bind the whole table in a statement.  Do not use with BindColumn.
-K2PgStatus PgGate_DmlBindTable(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlBindTable");
-  return K2PgStatus::NotSupported;
-}
-
-// API for SET clause.
-K2PgStatus PgGate_DmlAssignColumn(K2PgStatement handle,
-                               int attr_num,
-                               K2PgExpr attr_value){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlAssignColumn %d", attr_num);
-  return K2PgStatus::NotSupported;
-}
 
 // This function is to fetch the targets in PgGate_DmlAppendTarget() from the rows that were defined
 // by PgGate_DmlBindColumn().
@@ -851,43 +771,6 @@ K2PgStatus PgGate_NewConstantOp(K2PgStatement stmt, const K2PgTypeEntity *type_e
   return K2PgStatus::NotSupported;
 }
 
-// The following update functions only work for constants.
-// Overwriting the constant expression with new value.
-K2PgStatus PgGate_UpdateConstInt2(K2PgExpr expr, int16_t value, bool is_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt2 %d, %d", value, is_null);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_UpdateConstInt4(K2PgExpr expr, int32_t value, bool is_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt4 %d, %d", value, is_null);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_UpdateConstInt8(K2PgExpr expr, int64_t value, bool is_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstInt8 %ld, %d", value, is_null);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_UpdateConstFloat4(K2PgExpr expr, float value, bool is_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstFloat4 %f, %d", value, is_null);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_UpdateConstFloat8(K2PgExpr expr, double value, bool is_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstFloat8 %f, %d", value, is_null);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_UpdateConstText(K2PgExpr expr, const char *value, bool is_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstText %s, %d", value, is_null);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_UpdateConstChar(K2PgExpr expr, const char *value, int64_t bytes, bool is_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_UpdateConstChar %s, %ld, %d", value, bytes, is_null);
-  return K2PgStatus::NotSupported;
-}
-
 // Expressions with operators "=", "+", "between", "in", ...
 K2PgStatus PgGate_NewOperator(K2PgStatement stmt, const char *opname,
                            const K2PgTypeEntity *type_entity,
@@ -904,52 +787,28 @@ K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg){
 // Referential Integrity Check Caching.
 // Check if foreign key reference exists in cache.
 bool PgGate_ForeignKeyReferenceExists(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
-  return false;
+    elog(DEBUG5, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
+    return k2pg::pg_session->ForeignKeyReferenceExists(table_oid, std::string(k2pgctid, k2pgctid_size));
 }
 
 // Add an entry to foreign key reference cache.
 K2PgStatus PgGate_CacheForeignKeyReference(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size){
-  elog(DEBUG5, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %s, %ld", table_oid, k2pgctid, k2pgctid_size);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
+    return k2pg::pg_session->CacheForeignKeyReference(table_oid, std::string(k2pgctid, k2pgctid_size));
 }
 
 // Delete an entry from foreign key reference cache.
 K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t k2pgctid){
-  elog(DEBUG5, "PgGateAPI: PgGate_DeleteFromForeignKeyReferenceCache %d, %lu", table_oid, k2pgctid);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_DeleteFromForeignKeyReferenceCache %d, %lu", table_oid, k2pgctid);
+    k2pg::UntoastedDatum data = k2pg::UntoastedDatum(k2pgctid);
+    int64_t bytes = VARSIZE(data.untoasted); // includes header len VARHDRSZ
+    char *value = (char*)data.untoasted;
+    return k2pg::pg_session->DeleteForeignKeyReference(table_oid, std::string(value, bytes));
 }
 
 void PgGate_ClearForeignKeyReferenceCache() {
-  elog(DEBUG5, "PgGateAPI: PgGate_ClearForeignKeyReferenceCache");
-}
-
-bool PgGate_IsInitDbModeEnvVarSet() {
-  elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbModeEnvVarSet");
-  return false;
-}
-
-// This is called by initdb. Used to customize some behavior.
-void PgGate_InitFlags() {
-  elog(DEBUG5, "PgGateAPI: PgGate_InitFlags");
-}
-
-// Retrieves value of psql_max_read_restart_attempts gflag
-int32_t PgGate_GetMaxReadRestartAttempts() {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetMaxReadRestartAttempts");
-  return default_max_read_restart_attempts;
-}
-
-// Retrieves value of psql_output_buffer_size gflag
-int32_t PgGate_GetOutputBufferSize() {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetOutputBufferSize");
-  return default_output_buffer_size;
-}
-
-// Retrieve value of psql_disable_index_backfill gflag.
-bool PgGate_GetDisableIndexBackfill() {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetDisableIndexBackfill");
-  return default_disable_index_backfill;
+    elog(DEBUG5, "PgGateAPI: PgGate_ClearForeignKeyReferenceCache");
+    k2pg::pg_session->InvalidateForeignKeyReferenceCache();
 }
 
 bool PgGate_IsK2PgEnabled() {

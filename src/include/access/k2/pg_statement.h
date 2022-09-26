@@ -52,38 +52,50 @@ enum StmtOp {
 };
 
 class PgStatement {
- public:
+  public:
 
-  //------------------------------------------------------------------------------------------------
-  // Constructors.
-  // pg_session is the session that this statement belongs to. If PostgreSQL cancels the session
-  // while statement is running, pg_session::sharedptr can still be accessed without crashing.
-  explicit PgStatement(std::shared_ptr<PgSession> pg_session);
-  virtual ~PgStatement();
+    //------------------------------------------------------------------------------------------------
+    // Constructors.
+    // pg_session is the session that this statement belongs to. If PostgreSQL cancels the session
+    // while statement is running, pg_session::sharedptr can still be accessed without crashing.
+    explicit PgStatement(std::shared_ptr<PgSession> pg_session);
+    virtual ~PgStatement();
 
-  const std::shared_ptr<PgSession>& pg_session() {
-    return pg_session_;
-  }
+    const std::shared_ptr<PgSession>& pg_session() {
+        return pg_session_;
+    }
 
-  // Statement type.
-  virtual StmtOp stmt_op() const = 0;
+    // Statement type.
+    virtual StmtOp stmt_op() const = 0;
 
-  //------------------------------------------------------------------------------------------------
-  static bool IsValidStmt(PgStatement* stmt, StmtOp op) {
-    return (stmt != nullptr && stmt->stmt_op() == op);
-  }
+    //------------------------------------------------------------------------------------------------
+    static bool IsValidStmt(PgStatement* stmt, StmtOp op) {
+        return (stmt != nullptr && stmt->stmt_op() == op);
+    }
 
-  int64_t stmt_id() const {
-    return stmt_id_;
-  }
+    int64_t stmt_id() const {
+        return stmt_id_;
+    }
 
- protected:
-  // PgSession that this statement belongs to.
-  std::shared_ptr<PgSession> pg_session_;
+    void SetCatalogCacheVersion(uint64_t catalog_cache_version) {
+        catalog_cache_version_ = catalog_cache_version;
+    }
 
-  std::string client_id_;
+    void SetSysCatalogVersionChange() {
+        catalog_version_change_ = true;
+    }
 
-  int64_t stmt_id_;
+    protected:
+    // PgSession that this statement belongs to.
+    std::shared_ptr<PgSession> pg_session_;
+
+    std::string client_id_;
+
+    int64_t stmt_id_;
+
+    uint64_t catalog_cache_version_ = 0;
+
+    bool catalog_version_change_ = false;
 };
 
 }  // namespace k2pg
