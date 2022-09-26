@@ -700,14 +700,146 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
                          const K2PgSelectIndexParams& index_params,
                          K2PgScanHandle **handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
+    // TODO add to memctx
+    *handle = new K2PgScanHandle();
+    (*handle)->indexParams = index_params;
+
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+    if (pg_table == nullptr) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 404,
+            .msg = "LoadTable failed",
+            .detail = ""
+        };
+        return status;
+    }
+    (*handle)->primaryTable = pg_table;
+
+    (*handle)->collectionName = pg_table->collection_name();
+    const std::string& schemaName = pg_table->schema_name();
+
+    auto [status, primarySchema] = k2pg::TXMgr.getSchema((*handle)->collectionName, schemaName).get();
+    if (!status.is2xxOK()) {
+        return k2pg::K2StatusToK2PgStatus(std::move(status));
+    }
+    (*handle)->primarySchema = primarySchema;
+
+    if (index_params.index_oid == kInvalidOid || index_params.index_oid == table_oid) {
+        return K2PgStatus::OK;
+    }
+
+    pg_table = k2pg::pg_session->LoadTable(database_oid, index_params.index_oid);
+    if (pg_table == nullptr) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 404,
+            .msg = "LoadTable failed",
+            .detail = ""
+        };
+        return status;
+    }
+    (*handle)->secondaryTable = pg_table;
+
+    const std::string& secondarySchemaName = pg_table->schema_name();
+    auto [secondaryStatus, secondarySchema] = k2pg::TXMgr.getSchema((*handle)->collectionName, secondarySchemaName).get();
+    if (!secondaryStatus.is2xxOK()) {
+        return k2pg::K2StatusToK2PgStatus(std::move(secondaryStatus));
+    }
+    (*handle)->secondarySchema = secondarySchema;
+
+    return K2PgStatus::OK;
 }
 
 K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
                              bool whole_table_scan, bool forward_scan, const K2PgSelectLimitParams& limit_params) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecSelect");
-  return K2PgStatus::NotSupported;
+    using namespace skv::http::dto::expression;
+    Expression range_conds{}, where_conds{};
+    range_conds.op = Operation::AND;
+    where_conds.op = Operation::AND;
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = handle->secondaryTable ? handle->secondaryTable : handle->primaryTable;
+
+    std::unordered_map<int, uint32_t> attr_to_offset;
+    for (const auto& column : constraints) {
+        k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
+        if (pg_column == NULL) {
+            K2PgStatus status {
+                .pg_code = ERRCODE_INTERNAL_ERROR,
+                .k2_code = 404,
+                .msg = "Cannot find column with attr_num",
+                .detail = "Load table failed"
+            };
+            return status;
+        }
+        // we have two extra fields, i.e., table_id and index_id, in skv key
+        attr_to_offset[column.attr_num] = pg_column->index() + 2;
+    }
+
+    std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
+    for (const K2PgConstraintDef& constraint: constraints) {
+        Expression expr = buildScanExpr(handle, constraint, attr_to_offset);
+        if (expr.op == Operation::UNKNOWN) {
+            // Unsupported pg type or operation, it will be processed by pg and not pushed down
+            continue;
+        }
+
+        uint32_t offset = attr_to_offset[constraint.attr_num];
+        if (offset < schema->partitionKeyFields.size()) {
+            range_conds.expressionChildren.push_back(std::move(expr));
+        } else {
+            where_conds.expressionChildren.push_back(std::move(expr));
+        }
+    }
+
+    uint32_t base_table_oid = pg_table->base_table_oid();
+    uint32_t index_id = pg_table->index_oid();
+
+    skv::http::dto::SKVRecordBuilder start(handle->collectionName, schema);
+    skv::http::dto::SKVRecordBuilder end(handle->collectionName, schema);
+
+    try {
+        start.serializeNext<int32_t>(base_table_oid);
+        end.serializeNext<int32_t>(base_table_oid);
+        start.serializeNext<int32_t>(index_id);
+        end.serializeNext<int32_t>(index_id);
+
+        if (!whole_table_scan) {
+            BuildRangeRecords(range_conds, where_conds.expressionChildren, start, end);
+        }
+    }
+    catch (const std::exception& err) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 0,
+            .msg = "K2 Serialization error in ExecSelect",
+            .detail = err.what()
+        };
+
+        return status;
+    }
+
+    std::vector<std::string> projection;
+    if (schema == handle->primarySchema) {
+        for (int target_attr : targets_attrnum) {
+            uint32_t offset = attr_to_offset[target_attr];
+            projection.push_back(schema->fields[offset].name);
+        }
+    }
+
+    int limit = -1;
+    if (!limit_params.limit_use_default && limit_params.limit_count > 0) {
+        limit = limit_params.limit_count + limit_params.limit_offset;
+    }
+
+    auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();
+    if (!status.is2xxOK()) {
+        return k2pg::K2StatusToK2PgStatus(std::move(status));
+    }
+    handle->query = query;
+    // prefetch first page
+    handle->queryReq = k2pg::TXMgr.query(handle->query);
+    return K2PgStatus::OK;
 }
 
 // Transaction control -----------------------------------------------------------------------------

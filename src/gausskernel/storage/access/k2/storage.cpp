@@ -34,6 +34,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "storage.h"
 #include "session.h"
 
+#include <skvhttp/dto/Expression.h>
 #include <skvhttp/dto/SKVRecord.h>
 
 namespace k2pg {
@@ -96,7 +97,7 @@ static void AppendValueToRecord(skv::http::dto::expression::Value& value, skv::h
 }
 
 // Start and end builders must be passed with the metadata fields already serialized (e.g. table and index ID)
-static void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
+void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
                               skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end) {
     using namespace skv::http::dto::expression;
     using namespace skv::http;
@@ -223,7 +224,7 @@ static void BuildRangeRecords(skv::http::dto::expression::Expression& range_cond
     }
 }
 
-static skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& constant) {
+skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& constant) {
     using namespace skv::http::dto::expression;
     // Three different types of constants to handle:
     // 1: String-like types that we can push down operations into K2.
@@ -232,7 +233,7 @@ static skv::http::dto::expression::Value serializePGConstToValue(const K2PgConst
 
     if (constant.is_null) {
         // TODO
-        return;
+        return skv::http::dto::expression::Value();
     }
     else if (isStringType(constant.type_id)) {
         // Borrowed from MOT. This handles stripping the datum header for toasted or non-toasted data
@@ -243,30 +244,30 @@ static skv::http::dto::expression::Value serializePGConstToValue(const K2PgConst
     }
     else if (is1ByteIntType(constant.type_id)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
-        return makeValueLiteral<int16_t>(byte);
+        return makeValueLiteral<int16_t>(std::move(byte));
     }
     else if (is2ByteIntType(constant.type_id)) {
         int16_t byte2 = (int16_t)(((uintptr_t)(constant.datum)) & 0x0000ffff);
-        return makeValueLiteral<int16_t>(byte2);
+        return makeValueLiteral<int16_t>(std::move(byte2));
     }
     else if (is4ByteIntType(constant.type_id)) {
         int32_t byte4 = (int32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
-        return makeValueLiteral<int32_t>(byte4);
+        return makeValueLiteral<int32_t>(std::move(byte4));
     }
     else if (is8ByteIntType(constant.type_id)) {
         int64_t byte8 = (int64_t)constant.datum;
-        return makeValueLiteral<int64_t>(byte8);
+        return makeValueLiteral<int64_t>(std::move(byte8));
     }
     else if (constant.type_id == FLOAT4OID) {
         uint32_t fbytes = (uint32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
         // We don't want to convert, we want to treat the bytes directly as the float's bytes
         float fval = *(float*)&fbytes;
-        return makeValueLiteral<float>(fval);
+        return makeValueLiteral<float>(std::move(fval));
     }
     else if (constant.type_id == FLOAT8OID) {
         // We don't want to convert, we want to treat the bytes directly as the double's bytes
         double dval = *(double*)&(constant.datum);
-        return makeValueLiteral<double>(dval);
+        return makeValueLiteral<double>(std::move(dval));
     } else {
         // Anything else we treat as opaque bytes and include the datum header
         UntoastedDatum data = UntoastedDatum(constant.datum);
@@ -292,16 +293,21 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
         case K2PgConstraintType::K2PG_CONSTRAINT_BETWEEN:
         case K2PgConstraintType::K2PG_CONSTRAINT_IN:
         default:
-            K2LOG_W(log::k2pg, "Ignoring scan constraint of type: ", constraint.constraint);
+            K2LOG_W(log::k2pg, "Ignoring scan constraint of type: {}", constraint.constraint);
             return opr_expr;
     }
 
-    uint32_t offset = attr_to_offset[constraint.attr_num];
+    auto it = attr_to_offset.find(constraint.attr_num);
+    if (it == attr_to_offset.end()) {
+        K2LOG_W(log::k2pg, "Attr_num not found in map for buildScanExpr: {}", constraint.attr_num);
+        return opr_expr;
+    }
+    uint32_t offset = it->second;
+
     std::shared_ptr<skv::http::dto::Schema> schema = scan->secondarySchema ? scan->secondarySchema : scan->primarySchema;
     expression::Value col_ref = expression::makeValueReference(schema->fields[offset].name);
-    // TODO null?
-    int32_t k2val = (int32_t)(opr_cond->val->value & 0xffffffff);
-    expression::Value constant = expression::makeValueLiteral<int32_t>(std::move(k2val));
+    // TODO null, etc
+    expression::Value constant = serializePGConstToValue(constraint.constants[0]);
     opr_expr.valueChildren.push_back(std::move(col_ref));
     opr_expr.valueChildren.push_back(std::move(constant));
 
@@ -322,119 +328,6 @@ K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid,
     builder = std::make_unique<skv::http::dto::SKVRecordBuilder>(collectionName, schema);
     return K2PgStatus::OK;
 }
-struct K2PgSelectIndexParams {
-  K2PgOid index_oid;
-  bool index_only_scan;
-  bool use_secondary_index;
-};
-
-struct K2PgScanHandle {
-    std::string collectionName;
-    std::shared_ptr<skv::http::dto::Schema> primarySchema;
-    std::shared_ptr<skv::http::dto::Schema> secondarySchema;
-    std::shared_ptr<k2pg::PgTableDesc> primaryTable;
-    std::shared_ptr<k2pg::PgTableDesc> secondaryTable;
-    boost::future<sh::Response<sh::dto::QueryResponse>> queryReq;
-    std::shared_ptr<sh::dto::QueryRequest> query;
-    std::deque<skv::http::dto::SKVRecord> queryRecords;
-    std::deque<boost::future<sh::Response<sh::dto::SKVRecord>>> readReqs;
-    K2PgSelectIndexParams indexParams;
-};
-
-// NOTE ON KEY CONSTRAINTS
-// Scan type is speficied as part of index_params in NewSelect
-// - For Sequential Scan, the target columns of the bind are those in the main table.
-// - For Primary Scan, the target columns of the bind are those in the main table.
-// - For Index Scan, the target columns of the bind are those in the index table.
-//   The index-scan will use the bind to find base-k2pgctid which is then use to read data from
-//   the main-table, and therefore the bind-arguments are not associated with columns in main table.
-K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
-                             bool whole_table_scan, bool forward_scan, const K2PgSelectLimitParams& limit_params) {
-    using namespace skv::http::dto::expression;
-    Expression range_conds{}, where_conds{};
-    range_conds.op = Operation::AND;
-    where_conds.cop = Operation::AND;
-    shared_ptr<k2pg::PgTableDesc> pg_table = handle->secondaryTable ? handle->secondaryTable : handle->primaryTable;
-
-    std::unordered_map<int, uint32_t> attr_to_offset;
-    for (const auto& column : columns) {
-        k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
-        if (pg_column == NULL) {
-            K2PgStatus status {
-                .pg_code = ERRCODE_INTERNAL_ERROR,
-                .k2_code = 404,
-                .msg = "Cannot find column with attr_num",
-                .detail = "Load table failed"
-            };
-            return status;
-        }
-        // we have two extra fields, i.e., table_id and index_id, in skv key
-        attr_to_offset[column.attr_num] = pg_column->index() + 2;
-    }
-
-    for (const K2PgConstraintDef& constraint: constraints) {
-
-    }
-
-// make key constraints
-// make where constraints
-// make projection
-}
-
-
-// SELECT ------------------------------------------------------------------------------------------
-K2PgStatus PgGate_NewSelect(K2PgOid database_oid, K2PgOid table_oid, const K2PgSelectIndexParams& index_params, K2PgScanHandle **handle) {
-    // TODO add to memctx
-    *handle = new K2PgScanHandle();
-    *handle->indexParams = index_params;
-
-    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
-    if (pg_table == nullptr) {
-        K2PgStatus status {
-            .pg_code = ERRCODE_INTERNAL_ERROR,
-            .k2_code = 404,
-            .msg = "LoadTable failed",
-            .detail = ""
-        };
-        return status;
-    }
-    *handle->primaryTable = pg_table;
-
-    *handle->collectionName = pg_table->collection_name();
-    const std::string& schemaName = pg_table->schema_name();
-
-    auto [status, primarySchema] = k2pg::TXMgr.getSchema(collectionName, schemaName).get();
-    if (!status.is2xxOK()) {
-        return k2pg::K2StatusToK2PgStatus(std::move(status));
-    }
-    *handle->primarySchema = primarySchema;
-
-    if (index_params.index_oid == kInvalidOid || index_params.index_oid == table_oid) {
-        return Status::OK;
-    }
-
-    pg_table = k2pg::pg_session->LoadTable(database_oid, index_params.index_oid);
-    if (pg_table == nullptr) {
-        K2PgStatus status {
-            .pg_code = ERRCODE_INTERNAL_ERROR,
-            .k2_code = 404,
-            .msg = "LoadTable failed",
-            .detail = ""
-        };
-        return status;
-    }
-    *handle->secondaryTable = pg_table;
-
-    const std::string& secondarySchemaName = pg_table->schema_name();
-    auto [secondaryStatus, secondarySchema] = k2pg::TXMgr.getSchema(collectionName, secondarySchemaName).get();
-    if (!secondaryStatus.is2xxOK()) {
-        return k2pg::K2StatusToK2PgStatus(std::move(secondaryStatus));
-    }
-    *handle->secondarySchema = secondarySchema;
-
-    return Status::OK;
-}
-
 
 // May throw if there is a schema mismatch bug
 void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant) {
