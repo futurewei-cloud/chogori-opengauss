@@ -222,8 +222,15 @@ protected:
 
     sh::Status CacheTablesFromStorage(const std::string& databaseName, bool isSysTableIncluded);
 
-    void CommitTransaction() {TXMgr.endTxn(sh::dto::EndAction::Commit);}
-    void AbortTransaction() {TXMgr.endTxn(sh::dto::EndAction::Abort);}
+    // Don't commit or abort Txn, as gaussdb manages catalog txn through callbacks.
+    // However keeping these function calls with empty implementation so that if needed later,
+    // we can manage txn here without rewriting all caller code.
+    void CommitTransaction() {
+        // TXMgr.endTxn(sh::dto::EndAction::Commit).get();
+    }
+    void AbortTransaction() {
+        // TXMgr.endTxn(sh::dto::EndAction::Abort).get();
+    }
 
     std::shared_ptr<DatabaseInfo> CheckAndLoadDatabaseByName(const std::string& database_name);
 

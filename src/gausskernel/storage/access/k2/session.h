@@ -34,7 +34,7 @@ public:
     // For exceptional cases, you can force the end of a txn if needed here.
     // Note that any further operations (read/write) issued in this thread will open a new txn
     boost::future<sh::Response<>>
-        endTxn(sh::dto::EndAction endAction);
+        endTxn(sh::dto::EndAction endAction, bool ignoreNotExists=false);
 
     // this method creates a new txn in the session if one does not exist already
     boost::future<sh::Response<>>
