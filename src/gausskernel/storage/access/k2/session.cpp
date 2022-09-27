@@ -47,7 +47,7 @@ static void reportXactError(std::string&& msg, sh::Status& status) {
 static void K2XactCallback(XactEvent event, void* arg) {
     if (event == XACT_EVENT_START) {
         elog(DEBUG2, "XACT_EVENT_START");
-        if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Abort).get(); !status.is2xxOK()) {
+        if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Abort, true).get(); !status.is2xxOK()) {
             reportXactError("TXMgr abort failed", status);
         }
 
@@ -81,7 +81,6 @@ void TxnManager::_init() {
         // if we did, register this callback to handle nested txns:
         // RegisterSubXactCallback(K2SubxactCallback, NULL);
         _initialized = true;
-
         auto clientConfig = _config.sub("client");
         std::string host = clientConfig.get<std::string>("host", "localhost");
         int port = clientConfig.get<int>("port", 30000);
@@ -106,8 +105,9 @@ boost::future<sh::Response<>> TxnManager::beginTxn() {
             if (status.is2xxOK()) {
                 K2LOG_D(log::k2pg, "Started new txn: {}", handle);
                 _txn = std::make_unique<sh::TxnHandle>(std::move(handle));
+            } else {
+                K2LOG_E(log::k2pg, "Unable to begin txn due to: {}", status);
             }
-            K2LOG_E(log::k2pg, "Unable to begin txn due to: {}", status);
             return sh::Response<>(std::move(status));
         });
     }
@@ -115,18 +115,25 @@ boost::future<sh::Response<>> TxnManager::beginTxn() {
     return sh::MakeResponse<>(std::move(status));
 }
 
-boost::future<sh::Response<>> TxnManager::endTxn(sh::dto::EndAction endAction) {
+boost::future<sh::Response<>> TxnManager::endTxn(sh::dto::EndAction endAction, bool ignoreNotExists) {
     _init();
     if (_txn) {
         K2LOG_D(log::k2pg, "end txn, with action: {}", endAction)
         return _txn->endTxn(endAction)
-            .then([this](auto&& respFut) mutable {
+            .then([this, endAction, ignoreNotExists](auto&& respFut) mutable {
+                K2LOG_D(log::k2pg, "txn ended, with action: {}", endAction);
                 auto&& [status] = respFut.get();
                 _txn.reset();
+                if (ignoreNotExists && status.code == 410) {
+                    return sh::Response<>(sh::Statuses::S200_OK);
+                }
                 return sh::Response<>(std::move(status));
             });
     }
     else {
+        if (ignoreNotExists) {
+            return sh::MakeResponse<>(sh::Statuses::S200_OK);
+        }
         K2LOG_W(log::k2pg, "no txn found in endTxn");
     }
     return sh::MakeResponse<>(sh::Statuses::S410_Gone("transaction not found in end"));

@@ -5,7 +5,7 @@
     },
     "create_collections": {
         "PG_DEFAULT_CLUSTER": {
-            "range_ends": []
+            "range_ends": [""]
         }
     }
 }

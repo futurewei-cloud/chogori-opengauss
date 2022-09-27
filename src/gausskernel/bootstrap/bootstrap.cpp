@@ -358,6 +358,8 @@ void BootStrapProcessMain(int argc, char* argv[])
             bootstrap_signals();
             BootStrapXLOG();
             MemoryContextUnSeal(t_thrd.top_mem_cxt);
+            /* Connect to K2PG cluster. */
+            K2PgInitPostgresBackend("postgres", nullptr, "");
             BootstrapModeMain();
             MemoryContextSeal(t_thrd.top_mem_cxt);
             proc_exit(1); /* should never return */
