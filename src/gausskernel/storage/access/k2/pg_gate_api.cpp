@@ -117,7 +117,7 @@ void PgGate_DestroyPgGate() {
 K2PgStatus PgGate_InitSession(const char *database_name) {
     elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
 
-    k2pg::TXMgr.endTxn(skv::http::dto::EndAction::Abort, true).get();
+    k2pg::TXMgr.endTxn(skv::http::dto::EndAction::Abort).get();
 
     std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client = std::make_shared<k2pg::catalog::SqlCatalogClient>(pg_gate->GetCatalogManager());
     k2pg::pg_session = std::make_shared<k2pg::PgSession>(catalog_client, database_name);
