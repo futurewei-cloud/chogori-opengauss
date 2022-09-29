@@ -1437,11 +1437,10 @@ IndexInfo TableInfoHandler::BuildIndexInfo(const std::string& collection_name, s
         int32_t col_id = column.deserializeNext<int32_t>().value();
         // ColumnName
         std::string col_name = column.deserializeNext<sh::String>().value();
-        // ColumnType OID
-        int16_t col_type_oid = column.deserializeNext<int16_t>().value();
         // ColumnType
         int16_t col_type = column.deserializeNext<int16_t>().value();
-
+        // ColumnType OID
+        int16_t col_type_oid = column.deserializeNext<int16_t>().value();
         // IsNullable
         bool is_nullable = column.deserializeNext<bool>().value();
         // IsHash
