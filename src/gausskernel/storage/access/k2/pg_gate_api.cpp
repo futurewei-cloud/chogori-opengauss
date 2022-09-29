@@ -273,7 +273,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
 }
 
 // Make ColumnSchema from column information
-k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, K2SqlDataType k2pg_type, bool is_key, bool is_desc, bool is_nulls_first) {
+k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, K2SqlDataType k2pg_type, int type_oid, bool is_key, bool is_desc, bool is_nulls_first) {
     using SortingType = k2pg::ColumnSchema::SortingType;
     SortingType sorting_type = SortingType::kNotSpecified;
     if (is_key) {
@@ -285,7 +285,7 @@ k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, K2SqlDataT
     }
     std::shared_ptr<k2pg::SQLType> data_type = k2pg::SQLType::Create(static_cast<DataType>( k2pg_type));
     bool is_nullable = !is_key;
-    return k2pg::ColumnSchema(col_name, data_type, is_nullable, is_key, order, order, sorting_type);
+    return k2pg::ColumnSchema(col_name, data_type, type_oid, is_nullable, is_key, order, order, sorting_type);
 }
 
 std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key = false) {
@@ -299,7 +299,8 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schem
         // For regular user table, k2pgrowid should be a hash key because k2pgrowid is a random uuid.
         k2pgcols.push_back(makeColumn("k2pgrowid",
                 static_cast<int32_t>(k2pg::PgSystemAttrNum::kPgRowId),
-                static_cast<DataType>( K2SQL_DATA_TYPE_BINARY),
+                static_cast<DataType>(K2SQL_DATA_TYPE_BINARY),
+                InvalidOid,
                 true /* is_key */, false /* is_desc */, false /* is_nulls_first */));
     }
     // Add key columns at the beginning
@@ -308,7 +309,7 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schem
             continue;
         }
         num_key_columns++;
-        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.attr_type->type_oid, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Add data columns
     for (auto& col : columns) {
@@ -316,7 +317,7 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schem
             continue;
         }
 
-        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.attr_type->type_oid, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Get column ids
     for (size_t i=0; i < k2pgcols.size(); i++) {
@@ -402,6 +403,14 @@ K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgTableDesc *handle) {
     elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
     *handle = k2pg::pg_session->LoadTable(database_oid, table_oid).get();
+    if (*handle == nullptr) {
+        return K2PgStatus {
+            .pg_code = ERRCODE_UNDEFINED_OBJECT,
+            .k2_code = 404,
+            .msg = "Table not found",
+            .detail = ""
+        };
+    }
     return K2PgStatus::OK;
 }
 

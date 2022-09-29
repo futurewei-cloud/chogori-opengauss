@@ -36,6 +36,8 @@ Copyright(c) 2022 Futurewei Cloud
 
 namespace k2pg {
     typedef int32_t ColumnId;
+    // Postgres type OID
+    typedef int PgTypeOid;
     constexpr ColumnId kFirstColumnId = 0;
 
     enum IndexPermissions {
@@ -65,6 +67,7 @@ namespace k2pg {
 
         ColumnSchema(std::string name,
                 const std::shared_ptr<SQLType>& type,
+                PgTypeOid type_oid,
                 bool is_nullable,
                 bool is_primary,
                 bool is_hash,
@@ -72,22 +75,24 @@ namespace k2pg {
                 SortingType sorting_type)
             : name_(std::move(name)),
             type_(type),
+            type_oid_(type_oid),
             is_nullable_(is_nullable),
             is_primary_(is_primary),
             is_hash_(is_hash),
             order_(order),
-            sorting_type_(sorting_type) {
+            sorting_type_(sorting_type){
         }
 
         // convenience constructor for creating columns with simple (non-parametric) data types
         ColumnSchema(std::string name,
                 DataType type,
+                PgTypeOid type_oid,
                 bool is_nullable,
                 bool is_primary,
                 bool is_hash,
                 int32_t order,
                 SortingType sorting_type)
-            : ColumnSchema(name, SQLType::Create(type), is_nullable, is_primary, is_hash, order, sorting_type) {
+            : ColumnSchema(name, SQLType::Create(type), type_oid, is_nullable, is_primary, is_hash, order, sorting_type) {
         }
 
         const std::shared_ptr<SQLType>& type() const {
@@ -96,6 +101,14 @@ namespace k2pg {
 
         void set_type(const std::shared_ptr<SQLType>& type) {
             type_ = type;
+        }
+
+        PgTypeOid type_oid() const {
+            return type_oid_;
+        }
+
+        void set_type_oid(PgTypeOid type_oid) {
+            type_oid_ = type_oid;
         }
 
         bool is_nullable() const {
@@ -143,7 +156,8 @@ namespace k2pg {
                    is_primary_ == other.is_primary_ &&
                    is_hash_ == other.is_hash_ &&
                    sorting_type_ == other.sorting_type_ &&
-                   type_ == other.type();
+                   type_ == other.type() &&
+                   type_oid_ == other.type_oid();
         }
 
         bool Equals(const ColumnSchema &other) const {
@@ -157,6 +171,7 @@ namespace k2pg {
 
         std::string name_;
         std::shared_ptr<SQLType> type_;
+        PgTypeOid type_oid_;
         bool is_nullable_;
         bool is_primary_;
         bool is_hash_;
@@ -412,6 +427,7 @@ namespace k2pg {
         ColumnId column_id;             // Column id in the index table.
         std::string column_name;        // Column name in the index table - colexpr.MangledName().
         DataType type;                  // data type
+        PgTypeOid type_oid;             // Postgress Type Oid
         bool is_nullable;               // can be null or not
         bool is_hash;                   // is hash key
         bool is_range;                  // is range key
@@ -421,21 +437,21 @@ namespace k2pg {
         std::shared_ptr<PgExpr> colexpr = nullptr;    // Index expression.
 
         explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
-                DataType in_type, bool in_is_nullable, bool in_is_hash, bool in_is_range,
+            DataType in_type, PgTypeOid in_type_oid, bool in_is_nullable, bool in_is_hash, bool in_is_range,
                 int32_t in_order, ColumnSchema::SortingType in_sorting_type,
                 ColumnId in_base_column_id, std::shared_ptr<PgExpr> in_colexpr)
                 : column_id(in_column_id), column_name(std::move(in_column_name)),
-                    type(in_type), is_nullable(in_is_nullable), is_hash(in_is_hash),
+                    type(in_type), type_oid(in_type_oid), is_nullable(in_is_nullable), is_hash(in_is_hash),
                     is_range(in_is_range), order(in_order), sorting_type(in_sorting_type),
                     base_column_id(in_base_column_id), colexpr(in_colexpr) {
         }
 
         explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
-                DataType in_type, bool in_is_nullable, bool in_is_hash, bool in_is_range,
+                DataType in_type, PgTypeOid in_type_oid, bool in_is_nullable, bool in_is_hash, bool in_is_range,
                 int32_t in_order, ColumnSchema::SortingType in_sorting_type,
                 ColumnId in_base_column_id)
                 : column_id(in_column_id), column_name(std::move(in_column_name)),
-                    type(in_type), is_nullable(in_is_nullable), is_hash(in_is_hash),
+                    type(in_type), type_oid(in_type_oid), is_nullable(in_is_nullable), is_hash(in_is_hash),
                     is_range(in_is_range), order(in_order), sorting_type(in_sorting_type),
                     base_column_id(in_base_column_id) {
         }
