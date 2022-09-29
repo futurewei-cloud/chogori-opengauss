@@ -53,6 +53,11 @@ namespace k2pg {
 namespace gate {
     constexpr int K2_FIELD_OFFSET = 2;
 
+    K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::shared_ptr<k2pg::PgTableDesc> pg_table,
+                                           int nattrs, Datum* values, bool* isnulls, K2PgSysColumns* syscols);
+
+    skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord& secondary, std::shared_ptr<skv::http::dto::Schema> primarySchema);
+
     void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
                            skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end);
 

@@ -476,13 +476,64 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
 //--------------------------------------------------------------------------------------------------
 // DML statements (select, insert, update, delete, truncate)
 //--------------------------------------------------------------------------------------------------
-
-// This function is to fetch the targets in PgGate_DmlAppendTarget() from the rows that were defined
-// by PgGate_DmlBindColumn().
 K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", natts);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", natts);
+
+    *has_data = false;
+    boost::future<skv::http::Response<skv::http::dto::QueryResponse>> queryReq;
+    std::shared_ptr<skv::http::dto::QueryRequest> query;
+    std::deque<skv::http::dto::SKVRecord> queryRecords;
+    std::deque<boost::future<skv::http::Response<skv::http::dto::SKVRecord>>> readReqs;
+
+    if (!handle->queryRecords.size() && handle->queryInFlight) {
+        auto [status, resp] = handle->queryReq.get();
+        handle->queryInFlight = false;
+        if (!status.is2xxOK()) {
+            return K2StatusToK2PgStatus(std::move(status));
+        }
+
+        for (skv::http::dto::SKVRecord& record : resp.records) {
+            handle->queryRecords.push_back(std::move(record));
+        }
+
+        if (!handle->query.isDone()) {
+            handle->queryReq = k2pg::TXMgr.query(handle->query);
+            handle->queryInFlight = true;
+        }
+    }
+
+    if (handle->secondarySchema && readReqs.size() < 5) {
+        while (readReqs.size() < 5 && queryRecords.size()) {
+            skv::http::dto::SKVRecord readKey = makePrimaryKeyFromSecondary(queryRecords.front(), handle->primarySchema);
+            queryRecords.pop_front();
+            readReqs.push_back(k2pg::TXMgr.read(std::move(readKey));
+        }
+    }
+
+    if ((handle->secondarySchema && handle->readReqs.size() == 0) || (!handle->secondarySchema && handle->queryRecords.size() == 0)) {
+        // No results left
+        return K2PgStatus::OK;
+    }
+
+    skv::http::dto::SKVRecord resultRecord{};
+
+    if (handle->secondarySchema) {
+        auto [status, resp] = handle->readReqs.front().get();
+        handle->readReqs.pop_front();
+        if (!status.is2xxOK()) {
+            return K2StatusToK2PgStatus(std::move(status));
+        }
+        resultRecord = std::move(resp);
+    } else {
+        resultRecord = std::move(handle->queryRecords.front());
+        handle->queryRecords.pop_front();
+    }
+
+    *has_data = true;
+    K2PgStatus status = populateDatumsFromSKVRecord(resultRecord, handle->primaryTable, nattrs, values, isnulls, syscols);
+
+    return status;
 }
 
 // Utility method that checks stmt type and calls either exec insert, update, or delete internally.
@@ -839,6 +890,7 @@ K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConst
     handle->query = query;
     // prefetch first page
     handle->queryReq = k2pg::TXMgr.query(handle->query);
+    handle->queryInFlight = true;
     return K2PgStatus::OK;
 }
 

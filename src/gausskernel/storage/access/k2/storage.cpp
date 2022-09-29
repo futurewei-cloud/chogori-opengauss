@@ -67,6 +67,92 @@ bool isPushdownType(Oid oid) {
     return isStringType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID);
 }
 
+K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::shared_ptr<k2pg::PgTableDesc> pg_table,
+                                       int nattrs, Datum* values, bool* isnulls, K2PgSysColumns* syscols) {
+    for (int i=0; i < nattrs; ++i) {
+        values[i] = 0;
+        isnulls[i] = true;
+    }
+
+    std::unordered_map<uint32_t, int> offset_to_attr;
+    std::unordered_map<uint32_t, Oid> offset_to_oid;
+    for (const auto& column : pg_table->columns()) {
+        // we have two extra fields, i.e., table_id and index_id, in skv key
+        offset_to_attr[column.index() + K2_FIELD_OFFSET] = column.attr_num();
+        offset_to_oid[column.index() + K2_FIELD_OFFSET] = column.oid();
+    }
+
+    uint32_t offset = K2_FIELD_OFFSET;
+    record.seek(K2_FIELD_OFFSET);
+    for (; offset < record.schema->fields.size(); ++offset) {
+        if (offset_to_attr[offset] < 0) {
+            populateSysColumnFromSKVRecord(record, offset_to_attr[offset], syscols);
+            continue;
+        }
+
+        Oid id = offset_to_oid[offset];
+        int datum_offset = offset_to_attr[offset] - 1;
+
+        if (isStringType(id)) {
+            std::optional<std::string> value = record.deserializeNext<std::string>();
+            if (value.has_value()) {
+                bytea* datum = (bytea*)palloc(*value.size() + VARHDRSZ);
+                memcpy(VARDATA(datum), *value.data(), *value.size());
+                SET_VARSIZE(datum, *value.size() + VARHDRSZ);
+
+                values[datum_offset] = PointerGetDatum(datum);
+                isnulls[datum_offset] = false;
+            }
+        }
+        else if (is1ByteIntType(id) || is2ByteIntType(id)) {
+            std::optional<int16_t> value = record.deserializeNext<int16_t>();
+            if (value.has_value()) {
+                values[datum_offset] = NumericGetDatum(*value);
+                isnulls[datum_offset] = false;
+            }
+        }
+        else if (is4ByteIntType(id)) {
+            std::optional<int32_t> value = record.deserializeNext<int32_t>();
+            if (value.has_value()) {
+                values[datum_offset] = NumericGetDatum(*value);
+                isnulls[datum_offset] = false;
+            }
+        }
+        else if (is8ByteIntType(id)) {
+            std::optional<int64_t> value = record.deserializeNext<int64_t>();
+            if (value.has_value()) {
+                values[datum_offset] = NumericGetDatum(*value);
+                isnulls[datum_offset] = false;
+            }
+        }
+        else if (id == FLOAT4OID) {
+            std::optional<float> value = record.deserializeNext<float>();
+            if (value.has_value()) {
+                values[datum_offset] = NumericGetDatum(*value);
+                isnulls[datum_offset] = false;
+            }
+        }
+        else if (id == FLOAT8OID) {
+            std::optional<double> value = record.deserializeNext<double>();
+            if (value.has_value()) {
+                values[datum_offset] = NumericGetDatum(*value);
+                isnulls[datum_offset] = false;
+            }
+        } else {
+            std::optional<std::string> value = record.deserializeNext<std::string>();
+            if (value.has_value()) {
+                bytea* datum = (bytea*)palloc(*value.size());
+                memcpy(datum, *value.data(), *value.size());
+
+                values[datum_offset] = PointerGetDatum(datum);
+                isnulls[datum_offset] = false;
+            }
+        }
+    }
+}
+
+skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord& secondary, std::shared_ptr<skv::http::dto::Schema> primarySchema);
+
 // Checks if the value children structure of an expression match what is expected by BuildRangeRecords and throws if not
 static void ValidateExprChildren(const skv::http::dto::expression::Expression& expr) {
     auto& child_args = expr.valueChildren;
