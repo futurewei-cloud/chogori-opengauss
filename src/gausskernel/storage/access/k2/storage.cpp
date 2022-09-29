@@ -144,7 +144,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
     for (const auto& column : pg_table->columns()) {
         // we have two extra fields, i.e., table_id and index_id, in skv key
         offset_to_attr[column.index() + K2_FIELD_OFFSET] = column.attr_num();
-        offset_to_oid[column.index() + K2_FIELD_OFFSET] = column.oid();
+        offset_to_oid[column.index() + K2_FIELD_OFFSET] = column.type_oid();
     }
 
     // Iterate through the SKV record's fields

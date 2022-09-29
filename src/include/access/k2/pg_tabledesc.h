@@ -44,6 +44,7 @@ class ColumnDesc {
   void Init(int index,
             int id,
             std::string name,
+            int type_oid,
             bool is_hash,
             bool is_primary,
             int32_t attr_num,
@@ -51,6 +52,7 @@ class ColumnDesc {
             ColumnSchema::SortingType sorting_type) {
     index_ = index,
     id_ = id;
+    type_oid_ = type_oid;
     name_ = name;
     is_hash_ = is_hash;
     is_primary_ = is_primary;
@@ -87,6 +89,10 @@ class ColumnDesc {
     return attr_num_;
   }
 
+  int type_oid() const {
+    return type_oid_;
+  }
+
   std::shared_ptr<SQLType> sql_type() const {
     return sql_type_;
   }
@@ -98,6 +104,7 @@ class ColumnDesc {
  private:
   int index_ = -1;
   int id_ = -1;
+  int type_oid_ = -1;
   std::string name_;
   bool is_hash_ = false;
   bool is_primary_ = false;
@@ -147,7 +154,9 @@ class PgColumn {
   }
 
   // Pg type oid for this column
-  int oid() const;
+  int type_oid() const {
+    return desc_.type_oid();
+  }
 
   bool is_system_column() {
     return attr_num() < 0;
