@@ -146,6 +146,9 @@ class PgColumn {
     return desc_.id();
   }
 
+  // Pg type oid for this column
+  int oid() const;
+
   bool is_system_column() {
     return attr_num() < 0;
   }

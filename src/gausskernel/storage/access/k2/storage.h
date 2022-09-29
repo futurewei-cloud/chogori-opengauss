@@ -47,6 +47,7 @@ struct K2PgScanHandle {
     std::deque<skv::http::dto::SKVRecord> queryRecords;
     std::deque<boost::future<skv::http::Response<skv::http::dto::SKVRecord>>> readReqs;
     K2PgSelectIndexParams indexParams;
+    bool queryInFlight = false;
 };
 
 namespace k2pg {
@@ -56,7 +57,8 @@ namespace gate {
     K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::shared_ptr<k2pg::PgTableDesc> pg_table,
                                            int nattrs, Datum* values, bool* isnulls, K2PgSysColumns* syscols);
 
-    skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord& secondary, std::shared_ptr<skv::http::dto::Schema> primarySchema);
+    skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord& secondary, std::shared_ptr<k2pg::PgTableDesc> secondaryTable,
+                                                          std::shared_ptr<skv::http::dto::Schema> primarySchema);
 
     void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
                            skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end);

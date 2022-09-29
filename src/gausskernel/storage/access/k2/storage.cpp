@@ -29,6 +29,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2pg_aux.h"
 #include "access/sysattr.h"
 #include "catalog/pg_type.h"
+#include "utils/numeric.h"
 
 #include "access/k2/k2_util.h"
 #include "storage.h"
@@ -67,13 +68,77 @@ bool isPushdownType(Oid oid) {
     return isStringType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID);
 }
 
+static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, int attr_num, K2PgSysColumns* syscols) {
+    PgSystemAttrNum attr_enum = (PgSystemAttrNum) attr_num;
+    switch (attr_enum) {
+        case PgSystemAttrNum::kObjectId:
+        case PgSystemAttrNum::kMinTransactionId:
+        case PgSystemAttrNum::kMinCommandId:
+        case PgSystemAttrNum::kMaxTransactionId:
+        case PgSystemAttrNum::kMaxCommandId:
+        case PgSystemAttrNum::kTableOid: {
+            std::optional<int32_t> value = record.deserializeNext<int32_t>();
+            if (!value.has_value()) {
+                throw std::runtime_error("System attribute in skvrecord was null");
+            }
+            switch (attr_enum) {
+                case PgSystemAttrNum::kObjectId:
+                    syscols->oid = (uint32_t)*value;
+                    break;
+                case PgSystemAttrNum::kMinTransactionId:
+                    syscols->xmin = (uint32_t)*value;
+                    break;
+                case PgSystemAttrNum::kMinCommandId:
+                    syscols->cmin = (uint32_t)*value;
+                    break;
+                case PgSystemAttrNum::kMaxTransactionId:
+                    syscols->xmax = (uint32_t)*value;
+                    break;
+                case PgSystemAttrNum::kMaxCommandId:
+                    syscols->cmax = (uint32_t)*value;
+                    break;
+                case PgSystemAttrNum::kTableOid:
+                    syscols->tableoid = (uint32_t)*value;
+                    break;
+                default:
+                    throw std::runtime_error("Unexpected system attribute id");
+            }
+        }
+            break;
+        case PgSystemAttrNum::kSelfItemPointer: {
+            std::optional<int64_t> value = record.deserializeNext<int64_t>();
+            if (!value.has_value()) {
+                throw std::runtime_error("System attribute in skvrecord was null");
+            }
+            syscols->ctid = *value;
+        }
+            break;
+        case PgSystemAttrNum::kPgIdxBaseTupleId: {
+            std::optional<std::string> value = record.deserializeNext<std::string>();
+            if (!value.has_value()) {
+                throw std::runtime_error("System attribute in skvrecord was null");
+            }
+
+            char *datum = (char*)palloc(value->size() + VARHDRSZ);
+            SET_VARSIZE(datum, value->size() + VARHDRSZ);
+            memcpy(VARDATA(datum), value->data(), value->size());
+            syscols->k2pgbasectid = (uint8_t*)PointerGetDatum(datum);
+        }
+            break;
+        default:
+            throw std::runtime_error("Unexpected system attribute id");
+    }
+}
+
 K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::shared_ptr<k2pg::PgTableDesc> pg_table,
                                        int nattrs, Datum* values, bool* isnulls, K2PgSysColumns* syscols) {
+    // Initialize output
     for (int i=0; i < nattrs; ++i) {
         values[i] = 0;
         isnulls[i] = true;
     }
 
+    // Setup some helper data structures
     std::unordered_map<uint32_t, int> offset_to_attr;
     std::unordered_map<uint32_t, Oid> offset_to_oid;
     for (const auto& column : pg_table->columns()) {
@@ -82,9 +147,12 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         offset_to_oid[column.index() + K2_FIELD_OFFSET] = column.oid();
     }
 
+    // Iterate through the SKV record's fields
+    try {
     uint32_t offset = K2_FIELD_OFFSET;
-    record.seek(K2_FIELD_OFFSET);
+    record.seekField(K2_FIELD_OFFSET);
     for (; offset < record.schema->fields.size(); ++offset) {
+        // If attribute number is < 0, then it is a system column
         if (offset_to_attr[offset] < 0) {
             populateSysColumnFromSKVRecord(record, offset_to_attr[offset], syscols);
             continue;
@@ -93,12 +161,13 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         Oid id = offset_to_oid[offset];
         int datum_offset = offset_to_attr[offset] - 1;
 
+        // Otherwise field is a normal user column
         if (isStringType(id)) {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (value.has_value()) {
-                bytea* datum = (bytea*)palloc(*value.size() + VARHDRSZ);
-                memcpy(VARDATA(datum), *value.data(), *value.size());
-                SET_VARSIZE(datum, *value.size() + VARHDRSZ);
+                bytea* datum = (bytea*)palloc(value->size() + VARHDRSZ);
+                memcpy(VARDATA(datum), value->data(), value->size());
+                SET_VARSIZE(datum, value->size() + VARHDRSZ);
 
                 values[datum_offset] = PointerGetDatum(datum);
                 isnulls[datum_offset] = false;
@@ -141,17 +210,79 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         } else {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (value.has_value()) {
-                bytea* datum = (bytea*)palloc(*value.size());
-                memcpy(datum, *value.data(), *value.size());
+                bytea* datum = (bytea*)palloc(value->size());
+                memcpy(datum, value->data(), value->size());
 
                 values[datum_offset] = PointerGetDatum(datum);
                 isnulls[datum_offset] = false;
             }
         }
     }
+    } // try
+    catch (const std::exception& err) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 0,
+            .msg = "Deserialization error when convertin skvrecord to datums",
+            .detail = err.what()
+        };
+
+        return status;
+    }
+
+    // Last step is the k2pgctid system column, which is virtual and not stored in the record so it is constructed here
+    skv::http::dto::SKVRecord keyRecord = record.getSKVKeyRecord();
+    skv::http::MPackWriter _writer;
+    skv::http::Binary serializedStorage;
+    _writer.write(keyRecord.getStorage());
+    bool flushResult = _writer.flush(serializedStorage);
+    if (!flushResult) {
+        K2PgStatus err {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 0,
+            .msg = "Serialization error in _writer flush",
+            .detail = ""
+        };
+        return err;
+    }
+
+    // This comes from cstring_to_text_with_len which is used to create a proper datum
+    // that is prepended with the data length. Doing it by hand here to avoid the extra copy
+    char *datum = (char*)palloc(serializedStorage.size() + VARHDRSZ);
+    SET_VARSIZE(datum, serializedStorage.size() + VARHDRSZ);
+    memcpy(VARDATA(datum), serializedStorage.data(), serializedStorage.size());
+    syscols->k2pgctid = (uint8_t*)PointerGetDatum(datum);
+
+    return K2PgStatus::OK;
 }
 
-skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord& secondary, std::shared_ptr<skv::http::dto::Schema> primarySchema);
+skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord& secondary, std::shared_ptr<k2pg::PgTableDesc> secondaryTable,
+                                                      std::shared_ptr<skv::http::dto::Schema> primarySchema) {
+    // Find the skv offset that matches the basetupleid attribute
+    uint32_t offset = 0;
+    bool found = false;
+    for (const auto& column : secondaryTable->columns()) {
+        if (column.attr_num() == (int)PgSystemAttrNum::kPgIdxBaseTupleId) {
+            offset = column.index() + K2_FIELD_OFFSET;
+            found = true;
+        }
+    }
+    if (!found) {
+        throw std::runtime_error("kPgIdxBaseTupleId not found for secondary index table");
+    }
+
+    secondary.seekField(offset);
+    std::optional<std::string> baseidStr = secondary.deserializeNext<std::string>();
+    if (!baseidStr.has_value()) {
+        throw std::runtime_error("kPgIdxBaseTupleId is null in skv record");
+    }
+
+    skv::http::Binary binary(baseidStr->data(), baseidStr->size(), [] () {});
+    skv::http::MPackReader reader(binary);
+    skv::http::dto::SKVRecord::Storage storage;
+    reader.read(storage);
+    return skv::http::dto::SKVRecord(secondary.collectionName, primarySchema, std::move(storage), true).getSKVKeyRecord();
+}
 
 // Checks if the value children structure of an expression match what is expected by BuildRangeRecords and throws if not
 static void ValidateExprChildren(const skv::http::dto::expression::Expression& expr) {

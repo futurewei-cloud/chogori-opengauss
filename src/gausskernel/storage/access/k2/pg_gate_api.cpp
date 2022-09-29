@@ -476,38 +476,53 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
 //--------------------------------------------------------------------------------------------------
 // DML statements (select, insert, update, delete, truncate)
 //--------------------------------------------------------------------------------------------------
-K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *values, bool *isnulls,
+K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
-    elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", natts);
+    elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", nattrs);
 
     *has_data = false;
-    boost::future<skv::http::Response<skv::http::dto::QueryResponse>> queryReq;
-    std::shared_ptr<skv::http::dto::QueryRequest> query;
-    std::deque<skv::http::dto::SKVRecord> queryRecords;
-    std::deque<boost::future<skv::http::Response<skv::http::dto::SKVRecord>>> readReqs;
 
+    // First check if we need to wait for more records from our top-level query
     if (!handle->queryRecords.size() && handle->queryInFlight) {
         auto [status, resp] = handle->queryReq.get();
         handle->queryInFlight = false;
         if (!status.is2xxOK()) {
-            return K2StatusToK2PgStatus(std::move(status));
+            return k2pg::K2StatusToK2PgStatus(std::move(status));
         }
 
-        for (skv::http::dto::SKVRecord& record : resp.records) {
+        // Save the result records from the query
+        for (skv::http::dto::SKVRecord::Storage& storage : resp.records) {
+            std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
+            skv::http::dto::SKVRecord record(handle->primaryTable->collection_name(), schema, std::move(storage), true);
             handle->queryRecords.push_back(std::move(record));
         }
 
-        if (!handle->query.isDone()) {
+        // Prefetch the next page in the query
+        if (!resp.done) {
             handle->queryReq = k2pg::TXMgr.query(handle->query);
             handle->queryInFlight = true;
         }
     }
 
-    if (handle->secondarySchema && readReqs.size() < 5) {
-        while (readReqs.size() < 5 && queryRecords.size()) {
-            skv::http::dto::SKVRecord readKey = makePrimaryKeyFromSecondary(queryRecords.front(), handle->primarySchema);
-            queryRecords.pop_front();
-            readReqs.push_back(k2pg::TXMgr.read(std::move(readKey));
+    // If we are doing a secondary index scan, try to keep a number of primary index read requests in flight
+    constexpr int maxParallelReads = 5;
+    if (handle->secondarySchema && handle->readReqs.size() < maxParallelReads) {
+        while (handle->readReqs.size() < maxParallelReads && handle->queryRecords.size()) {
+            try {
+                skv::http::dto::SKVRecord readKey = makePrimaryKeyFromSecondary(handle->queryRecords.front(), handle->secondaryTable, handle->primarySchema);
+                handle->queryRecords.pop_front();
+                handle->readReqs.push_back(k2pg::TXMgr.read(std::move(readKey)));
+            }
+            catch (const std::exception& err) {
+                K2PgStatus status {
+                    .pg_code = ERRCODE_INTERNAL_ERROR,
+                    .k2_code = 0,
+                    .msg = "Error in makePrimaryKeyFromSecondary",
+                    .detail = err.what()
+                };
+
+                return status;
+            }
         }
     }
 
@@ -518,11 +533,12 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *valu
 
     skv::http::dto::SKVRecord resultRecord{};
 
+    // Get one record from the result set, either from the read requests (for secondary index scan) or from the query results (for primary scan)
     if (handle->secondarySchema) {
         auto [status, resp] = handle->readReqs.front().get();
         handle->readReqs.pop_front();
         if (!status.is2xxOK()) {
-            return K2StatusToK2PgStatus(std::move(status));
+            return k2pg::K2StatusToK2PgStatus(std::move(status));
         }
         resultRecord = std::move(resp);
     } else {
@@ -530,8 +546,11 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *valu
         handle->queryRecords.pop_front();
     }
 
-    *has_data = true;
+    // Last call helper to actually populate output result
     K2PgStatus status = populateDatumsFromSKVRecord(resultRecord, handle->primaryTable, nattrs, values, isnulls, syscols);
+    if (status.IsOK()) {
+        *has_data = true;
+    }
 
     return status;
 }
@@ -547,11 +566,12 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
                                     uint64_t *k2pgctid){
     elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
 
-    skv::http::dto::SKVRecord record;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, record);
+    skv::http::dto::SKVRecord fullRecord;
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, fullRecord);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
+    skv::http::dto::SKVRecord record = fullRecord.getSKVKeyRecord();
 
 
     // TODO can we remove some of the copies being done?
@@ -872,9 +892,19 @@ K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConst
 
     std::vector<std::string> projection;
     if (schema == handle->primarySchema) {
+        std::unordered_set<std::string> projected;
+        // Always project key fields so that we can construct a tupleid
+        for (size_t i=0; i < schema->partitionKeyFields.size(); ++i) {
+            projection.push_back(schema->fields[i].name);
+            projected.insert(schema->fields[i].name);
+        }
+
         for (int target_attr : targets_attrnum) {
             uint32_t offset = attr_to_offset[target_attr];
-            projection.push_back(schema->fields[offset].name);
+            if (projected.find(schema->fields[offset].name) == projected.end()) {
+                projection.push_back(schema->fields[offset].name);
+                projected.insert(schema->fields[offset].name);
+            }
         }
     }
 
