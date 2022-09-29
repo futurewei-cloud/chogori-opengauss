@@ -35,7 +35,9 @@ int K2CodeToPGCode(int k2code) {
         case 403: // Forbidden, used to indicate AbortRequestTooOld in K23SI
             return ERRCODE_SNAPSHOT_INVALID;
         case 404: // Not found
-            return ERRCODE_SUCCESSFUL_COMPLETION;
+            // TODO: Return PG error code from catalog functions to return specific errors
+            // like undefined table, undefined database etc instead of generic 404 code.
+            return ERRCODE_UNDEFINED_OBJECT;
         case 405: // Not allowed, indicates a bug in K2 usage or operation
         case 406: // Not acceptable, used to indicate BadFilterExpression
         case 408: // Timeout
