@@ -68,7 +68,34 @@ bool isPushdownType(Oid oid) {
     return isStringType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID);
 }
 
-static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, int attr_num, K2PgSysColumns* syscols) {
+// Helper class to manager palloc'ed objects. All managed objects are freed on destruction.
+// The intent is that "release" is called after any possible error/exception path which releases
+// owneship so the objects can be passed to upper PG layers
+class PallocManager {
+public:
+    PallocManager() = default;
+
+    ~PallocManager() {
+        for (char* object : objects) {
+            pfree(object);
+        }
+    }
+
+    char* alloc(size_t size) {
+        char* p = (char*)palloc(size);
+        objects.push_back(p);
+        return p;
+    }
+
+    void release() {
+        objects.clear();
+    }
+
+private:
+    std::vector<char*> objects;
+};
+
+static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, int attr_num, K2PgSysColumns* syscols, PallocManager& allocManager) {
     PgSystemAttrNum attr_enum = (PgSystemAttrNum) attr_num;
     switch (attr_enum) {
         case PgSystemAttrNum::kObjectId:
@@ -119,7 +146,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
                 throw std::runtime_error("System attribute in skvrecord was null");
             }
 
-            char *datum = (char*)palloc(value->size() + VARHDRSZ);
+            char *datum = allocManager.alloc(value->size() + VARHDRSZ);
             SET_VARSIZE(datum, value->size() + VARHDRSZ);
             memcpy(VARDATA(datum), value->data(), value->size());
             syscols->k2pgbasectid = (uint8_t*)PointerGetDatum(datum);
@@ -139,6 +166,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
     }
 
     // Setup some helper data structures
+    PallocManager allocManager{};
     std::unordered_map<uint32_t, int> offset_to_attr;
     std::unordered_map<uint32_t, Oid> offset_to_oid;
     for (const auto& column : pg_table->columns()) {
@@ -154,7 +182,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
     for (; offset < record.schema->fields.size(); ++offset) {
         // If attribute number is < 0, then it is a system column
         if (offset_to_attr[offset] < 0) {
-            populateSysColumnFromSKVRecord(record, offset_to_attr[offset], syscols);
+            populateSysColumnFromSKVRecord(record, offset_to_attr[offset], syscols, allocManager);
             continue;
         }
 
@@ -165,7 +193,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         if (isStringType(id)) {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (value.has_value()) {
-                bytea* datum = (bytea*)palloc(value->size() + VARHDRSZ);
+                char* datum = allocManager.alloc(value->size() + VARHDRSZ);
                 memcpy(VARDATA(datum), value->data(), value->size());
                 SET_VARSIZE(datum, value->size() + VARHDRSZ);
 
@@ -210,7 +238,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         } else {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (value.has_value()) {
-                bytea* datum = (bytea*)palloc(value->size());
+                char* datum = allocManager.alloc(value->size());
                 memcpy(datum, value->data(), value->size());
 
                 values[datum_offset] = PointerGetDatum(datum);
@@ -248,11 +276,12 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
 
     // This comes from cstring_to_text_with_len which is used to create a proper datum
     // that is prepended with the data length. Doing it by hand here to avoid the extra copy
-    char *datum = (char*)palloc(serializedStorage.size() + VARHDRSZ);
+    char *datum = allocManager.alloc(serializedStorage.size() + VARHDRSZ);
     SET_VARSIZE(datum, serializedStorage.size() + VARHDRSZ);
     memcpy(VARDATA(datum), serializedStorage.data(), serializedStorage.size());
     syscols->k2pgctid = (uint8_t*)PointerGetDatum(datum);
 
+    allocManager.release();
     return K2PgStatus::OK;
 }
 
@@ -280,7 +309,10 @@ skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord&
     skv::http::Binary binary(baseidStr->data(), baseidStr->size(), [] () {});
     skv::http::MPackReader reader(binary);
     skv::http::dto::SKVRecord::Storage storage;
-    reader.read(storage);
+    bool success = reader.read(storage);
+    if (!success) {
+        throw std::runtime_error("Failed to deserialize SKVRecord storage in makePrimaryKeyFromSecondary");
+    }
     return skv::http::dto::SKVRecord(secondary.collectionName, primarySchema, std::move(storage), true).getSKVKeyRecord();
 }
 

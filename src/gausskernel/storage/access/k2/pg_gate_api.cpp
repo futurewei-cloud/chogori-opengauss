@@ -34,6 +34,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/pg_ids.h"
 
 #include "k2pg-internal.h"
+#include "config.h"
 #include "session.h"
 #include "access/k2/pg_session.h"
 #include "access/k2/k2_util.h"
@@ -505,9 +506,8 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *val
     }
 
     // If we are doing a secondary index scan, try to keep a number of primary index read requests in flight
-    constexpr int maxParallelReads = 5;
-    if (handle->secondarySchema && handle->readReqs.size() < maxParallelReads) {
-        while (handle->readReqs.size() < maxParallelReads && handle->queryRecords.size()) {
+    if (handle->secondarySchema && handle->readReqs.size() < handle->maxParallelReads) {
+        while (handle->readReqs.size() < handle->maxParallelReads && handle->queryRecords.size()) {
             try {
                 skv::http::dto::SKVRecord readKey = makePrimaryKeyFromSecondary(handle->queryRecords.front(), handle->secondaryTable, handle->primarySchema);
                 handle->queryRecords.pop_front();
@@ -819,6 +819,8 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
         return k2pg::K2StatusToK2PgStatus(std::move(secondaryStatus));
     }
     (*handle)->secondarySchema = secondarySchema;
+
+    (*handle)->maxParallelReads = k2pg::Config().get<uint32_t>("pggate.max_parallel_reads", 5);
 
     return K2PgStatus::OK;
 }

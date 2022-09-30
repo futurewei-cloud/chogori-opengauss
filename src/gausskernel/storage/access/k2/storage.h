@@ -47,6 +47,7 @@ struct K2PgScanHandle {
     std::deque<skv::http::dto::SKVRecord> queryRecords;
     std::deque<boost::future<skv::http::Response<skv::http::dto::SKVRecord>>> readReqs;
     K2PgSelectIndexParams indexParams;
+    uint32_t maxParallelReads = 5;
     bool queryInFlight = false;
 };
 
