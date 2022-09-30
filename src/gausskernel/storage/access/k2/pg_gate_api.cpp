@@ -34,6 +34,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/pg_ids.h"
 
 #include "k2pg-internal.h"
+#include "config.h"
 #include "session.h"
 #include "access/k2/pg_session.h"
 #include "access/k2/k2_util.h"
@@ -476,13 +477,82 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
 //--------------------------------------------------------------------------------------------------
 // DML statements (select, insert, update, delete, truncate)
 //--------------------------------------------------------------------------------------------------
-
-// This function is to fetch the targets in PgGate_DmlAppendTarget() from the rows that were defined
-// by PgGate_DmlBindColumn().
-K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *values, bool *isnulls,
+K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", natts);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", nattrs);
+
+    *has_data = false;
+
+    // First check if we need to wait for more records from our top-level query
+    if (!handle->queryRecords.size() && handle->queryInFlight) {
+        auto [status, resp] = handle->queryReq.get();
+        handle->queryInFlight = false;
+        if (!status.is2xxOK()) {
+            return k2pg::K2StatusToK2PgStatus(std::move(status));
+        }
+
+        // Save the result records from the query
+        for (skv::http::dto::SKVRecord::Storage& storage : resp.records) {
+            std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
+            skv::http::dto::SKVRecord record(handle->primaryTable->collection_name(), schema, std::move(storage), true);
+            handle->queryRecords.push_back(std::move(record));
+        }
+
+        // Prefetch the next page in the query
+        if (!resp.done) {
+            handle->queryReq = k2pg::TXMgr.query(handle->query);
+            handle->queryInFlight = true;
+        }
+    }
+
+    // If we are doing a secondary index scan, try to keep a number of primary index read requests in flight
+    if (handle->secondarySchema && handle->readReqs.size() < handle->maxParallelReads) {
+        while (handle->readReqs.size() < handle->maxParallelReads && handle->queryRecords.size()) {
+            try {
+                skv::http::dto::SKVRecord readKey = makePrimaryKeyFromSecondary(handle->queryRecords.front(), handle->secondaryTable, handle->primarySchema);
+                handle->queryRecords.pop_front();
+                handle->readReqs.push_back(k2pg::TXMgr.read(std::move(readKey)));
+            }
+            catch (const std::exception& err) {
+                K2PgStatus status {
+                    .pg_code = ERRCODE_INTERNAL_ERROR,
+                    .k2_code = 0,
+                    .msg = "Error in makePrimaryKeyFromSecondary",
+                    .detail = err.what()
+                };
+
+                return status;
+            }
+        }
+    }
+
+    if ((handle->secondarySchema && handle->readReqs.size() == 0) || (!handle->secondarySchema && handle->queryRecords.size() == 0)) {
+        // No results left
+        return K2PgStatus::OK;
+    }
+
+    skv::http::dto::SKVRecord resultRecord{};
+
+    // Get one record from the result set, either from the read requests (for secondary index scan) or from the query results (for primary scan)
+    if (handle->secondarySchema) {
+        auto [status, resp] = handle->readReqs.front().get();
+        handle->readReqs.pop_front();
+        if (!status.is2xxOK()) {
+            return k2pg::K2StatusToK2PgStatus(std::move(status));
+        }
+        resultRecord = std::move(resp);
+    } else {
+        resultRecord = std::move(handle->queryRecords.front());
+        handle->queryRecords.pop_front();
+    }
+
+    // Last call helper to actually populate output result
+    K2PgStatus status = populateDatumsFromSKVRecord(resultRecord, handle->primaryTable, nattrs, values, isnulls, syscols);
+    if (status.IsOK()) {
+        *has_data = true;
+    }
+
+    return status;
 }
 
 // Utility method that checks stmt type and calls either exec insert, update, or delete internally.
@@ -496,11 +566,12 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<
                                     uint64_t *k2pgctid){
     elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
 
-    skv::http::dto::SKVRecord record;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, record);
+    skv::http::dto::SKVRecord fullRecord;
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, fullRecord);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
+    skv::http::dto::SKVRecord record = fullRecord.getSKVKeyRecord();
 
 
     // TODO can we remove some of the copies being done?
@@ -700,14 +771,159 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
                          const K2PgSelectIndexParams& index_params,
                          K2PgScanHandle **handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
-  return K2PgStatus::NotSupported;
+    elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
+    // TODO add to memctx
+    *handle = new K2PgScanHandle();
+    (*handle)->indexParams = index_params;
+
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+    if (pg_table == nullptr) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 404,
+            .msg = "LoadTable failed",
+            .detail = ""
+        };
+        return status;
+    }
+    (*handle)->primaryTable = pg_table;
+
+    (*handle)->collectionName = pg_table->collection_name();
+    const std::string& schemaName = pg_table->schema_name();
+
+    auto [status, primarySchema] = k2pg::TXMgr.getSchema((*handle)->collectionName, schemaName).get();
+    if (!status.is2xxOK()) {
+        return k2pg::K2StatusToK2PgStatus(std::move(status));
+    }
+    (*handle)->primarySchema = primarySchema;
+
+    if (index_params.index_oid == kInvalidOid || index_params.index_oid == table_oid) {
+        return K2PgStatus::OK;
+    }
+
+    pg_table = k2pg::pg_session->LoadTable(database_oid, index_params.index_oid);
+    if (pg_table == nullptr) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 404,
+            .msg = "LoadTable failed",
+            .detail = ""
+        };
+        return status;
+    }
+    (*handle)->secondaryTable = pg_table;
+
+    const std::string& secondarySchemaName = pg_table->schema_name();
+    auto [secondaryStatus, secondarySchema] = k2pg::TXMgr.getSchema((*handle)->collectionName, secondarySchemaName).get();
+    if (!secondaryStatus.is2xxOK()) {
+        return k2pg::K2StatusToK2PgStatus(std::move(secondaryStatus));
+    }
+    (*handle)->secondarySchema = secondarySchema;
+
+    (*handle)->maxParallelReads = k2pg::TXMgr.getConfig().get<uint32_t>("pggate.max_parallel_reads", 5);
+
+    return K2PgStatus::OK;
 }
 
 K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
                              bool whole_table_scan, bool forward_scan, const K2PgSelectLimitParams& limit_params) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecSelect");
-  return K2PgStatus::NotSupported;
+    using namespace skv::http::dto::expression;
+    Expression range_conds{}, where_conds{};
+    range_conds.op = Operation::AND;
+    where_conds.op = Operation::AND;
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = handle->secondaryTable ? handle->secondaryTable : handle->primaryTable;
+
+    std::unordered_map<int, uint32_t> attr_to_offset;
+    for (const auto& column : constraints) {
+        k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
+        if (pg_column == NULL) {
+            K2PgStatus status {
+                .pg_code = ERRCODE_INTERNAL_ERROR,
+                .k2_code = 404,
+                .msg = "Cannot find column with attr_num",
+                .detail = "Load table failed"
+            };
+            return status;
+        }
+        // we have two extra fields, i.e., table_id and index_id, in skv key
+        attr_to_offset[column.attr_num] = pg_column->index() + 2;
+    }
+
+    std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
+    for (const K2PgConstraintDef& constraint: constraints) {
+        Expression expr = buildScanExpr(handle, constraint, attr_to_offset);
+        if (expr.op == Operation::UNKNOWN) {
+            // Unsupported pg type or operation, it will be processed by pg and not pushed down
+            continue;
+        }
+
+        uint32_t offset = attr_to_offset[constraint.attr_num];
+        if (offset < schema->partitionKeyFields.size()) {
+            range_conds.expressionChildren.push_back(std::move(expr));
+        } else {
+            where_conds.expressionChildren.push_back(std::move(expr));
+        }
+    }
+
+    uint32_t base_table_oid = pg_table->base_table_oid();
+    uint32_t index_id = pg_table->index_oid();
+
+    skv::http::dto::SKVRecordBuilder start(handle->collectionName, schema);
+    skv::http::dto::SKVRecordBuilder end(handle->collectionName, schema);
+
+    try {
+        start.serializeNext<int32_t>(base_table_oid);
+        end.serializeNext<int32_t>(base_table_oid);
+        start.serializeNext<int32_t>(index_id);
+        end.serializeNext<int32_t>(index_id);
+
+        if (!whole_table_scan) {
+            BuildRangeRecords(range_conds, where_conds.expressionChildren, start, end);
+        }
+    }
+    catch (const std::exception& err) {
+        K2PgStatus status {
+            .pg_code = ERRCODE_INTERNAL_ERROR,
+            .k2_code = 0,
+            .msg = "K2 Serialization error in ExecSelect",
+            .detail = err.what()
+        };
+
+        return status;
+    }
+
+    std::vector<std::string> projection;
+    if (schema == handle->primarySchema) {
+        std::unordered_set<std::string> projected;
+        // Always project key fields so that we can construct a tupleid
+        for (size_t i=0; i < schema->partitionKeyFields.size(); ++i) {
+            projection.push_back(schema->fields[i].name);
+            projected.insert(schema->fields[i].name);
+        }
+
+        for (int target_attr : targets_attrnum) {
+            uint32_t offset = attr_to_offset[target_attr];
+            if (projected.find(schema->fields[offset].name) == projected.end()) {
+                projection.push_back(schema->fields[offset].name);
+                projected.insert(schema->fields[offset].name);
+            }
+        }
+    }
+
+    int limit = -1;
+    if (!limit_params.limit_use_default && limit_params.limit_count > 0) {
+        limit = limit_params.limit_count + limit_params.limit_offset;
+    }
+
+    auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();
+    if (!status.is2xxOK()) {
+        return k2pg::K2StatusToK2PgStatus(std::move(status));
+    }
+    handle->query = query;
+    // prefetch first page
+    handle->queryReq = k2pg::TXMgr.query(handle->query);
+    handle->queryInFlight = true;
+    return K2PgStatus::OK;
 }
 
 // Transaction control -----------------------------------------------------------------------------

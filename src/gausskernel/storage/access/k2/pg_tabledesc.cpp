@@ -26,6 +26,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/catalog/k2_catalog_defaults.h"
 #include "access/k2/pg_tabledesc.h"
 
+#include "catalog/pg_type.h"
+
 namespace k2pg {
 
 using k2pg::catalog::CatalogConsts;
@@ -52,6 +54,7 @@ using k2pg::catalog::CatalogConsts;
             desc_.Init(idx,
                     idx,
                     "k2pgctid",
+                    BYTEAOID,
                     false,
                     false,
                     idx,
@@ -87,6 +90,7 @@ using k2pg::catalog::CatalogConsts;
             desc->Init(idx,
                     schema.column_id(idx),
                     col.name(),
+                    col.type_oid(),
                     idx < schema.num_hash_key_columns(),
                     idx < schema.num_key_columns(),
                     col.order() /* attr_num */,
@@ -117,6 +121,7 @@ using k2pg::catalog::CatalogConsts;
             desc->Init(idx,
                     col.column_id,
                     col.column_name,
+                    col.type_oid,
                     col.is_hash,
                     col.is_hash || col.is_range,
                     col.order /* attr_num */,

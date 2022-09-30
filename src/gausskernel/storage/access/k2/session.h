@@ -71,6 +71,8 @@ public:
     // use to set the txn options for all new txns in the thread/session
     void setSessionTxnOpts(sh::dto::TxnOptions opts);
 
+    Config& getConfig() { return _config; }
+
 private:
     // Helper used to initialize the skv client and register txn callbacks
     void _init();

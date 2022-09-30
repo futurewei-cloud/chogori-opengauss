@@ -33,11 +33,41 @@ Copyright(c) 2022 Futurewei Cloud
 #include "fmgr/fmgr_comp.h"
 
 #include <skvhttp/dto/SKVRecord.h>
+#include <skvhttp/dto/K23SI.h>
 #include <skvhttp/common/Status.h>
+
+struct K2PgScanHandle {
+    std::string collectionName;
+    std::shared_ptr<skv::http::dto::Schema> primarySchema;
+    std::shared_ptr<skv::http::dto::Schema> secondarySchema;
+    std::shared_ptr<k2pg::PgTableDesc> primaryTable;
+    std::shared_ptr<k2pg::PgTableDesc> secondaryTable;
+    boost::future<skv::http::Response<skv::http::dto::QueryResponse>> queryReq;
+    std::shared_ptr<skv::http::dto::QueryRequest> query;
+    std::deque<skv::http::dto::SKVRecord> queryRecords;
+    std::deque<boost::future<skv::http::Response<skv::http::dto::SKVRecord>>> readReqs;
+    K2PgSelectIndexParams indexParams;
+    uint32_t maxParallelReads = 5;
+    bool queryInFlight = false;
+};
 
 namespace k2pg {
 namespace gate {
     constexpr int K2_FIELD_OFFSET = 2;
+
+    K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::shared_ptr<k2pg::PgTableDesc> pg_table,
+                                           int nattrs, Datum* values, bool* isnulls, K2PgSysColumns* syscols);
+
+    skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord& secondary, std::shared_ptr<k2pg::PgTableDesc> secondaryTable,
+                                                          std::shared_ptr<skv::http::dto::Schema> primarySchema);
+
+    void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
+                           skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end);
+
+    skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& constant);
+
+    skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const K2PgConstraintDef& constraint, const std::unordered_map<int, uint32_t>& attr_to_offset);
+
     void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant);
 
     K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid, std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder);
