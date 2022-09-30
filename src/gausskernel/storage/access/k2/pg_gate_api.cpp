@@ -820,7 +820,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
     }
     (*handle)->secondarySchema = secondarySchema;
 
-    (*handle)->maxParallelReads = k2pg::Config().get<uint32_t>("pggate.max_parallel_reads", 5);
+    (*handle)->maxParallelReads = k2pg::TXMgr.getConfig().get<uint32_t>("pggate.max_parallel_reads", 5);
 
     return K2PgStatus::OK;
 }
