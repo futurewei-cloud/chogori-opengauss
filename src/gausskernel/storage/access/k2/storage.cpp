@@ -61,11 +61,11 @@ bool is4ByteIntType(Oid oid) {
 }
 
 bool is8ByteIntType(Oid oid) {
-    return (oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID);
+    return (oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID);
 }
 
 bool isPushdownType(Oid oid) {
-    return isStringType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID);
+    return isStringType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID);
 }
 
 // Helper class to manager palloc'ed objects. All managed objects are freed on destruction.
@@ -201,38 +201,45 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
                 isnulls[datum_offset] = false;
             }
         }
+        else if (id == BOOLOID) {
+            std::optional<bool> value = record.deserializeNext<bool>();
+            if (value.has_value()) {
+                values[datum_offset] = (Datum)(*value);
+                isnulls[datum_offset] = false;
+            }
+        }
         else if (is1ByteIntType(id) || is2ByteIntType(id)) {
             std::optional<int16_t> value = record.deserializeNext<int16_t>();
             if (value.has_value()) {
-                values[datum_offset] = NumericGetDatum(*value);
+                values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         }
         else if (is4ByteIntType(id)) {
             std::optional<int32_t> value = record.deserializeNext<int32_t>();
             if (value.has_value()) {
-                values[datum_offset] = NumericGetDatum(*value);
+                values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         }
         else if (is8ByteIntType(id)) {
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (value.has_value()) {
-                values[datum_offset] = NumericGetDatum(*value);
+                values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         }
         else if (id == FLOAT4OID) {
             std::optional<float> value = record.deserializeNext<float>();
             if (value.has_value()) {
-                values[datum_offset] = NumericGetDatum(*value);
+                values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         }
         else if (id == FLOAT8OID) {
             std::optional<double> value = record.deserializeNext<double>();
             if (value.has_value()) {
-                values[datum_offset] = NumericGetDatum(*value);
+                values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         } else {
@@ -477,7 +484,7 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
     using namespace skv::http::dto::expression;
     // Three different types of constants to handle:
     // 1: String-like types that we can push down operations into K2.
-    // 2: Numeric types that fit in a K2 equivalent.
+    // 2: Integer/float types that fit in a K2 equivalent.
     // 3: Arbitrary binary types that we store the datum contents directly including header
 
     if (constant.is_null) {
@@ -490,6 +497,10 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
         size_t size = VARSIZE(data.untoasted);  // includes header len VARHDRSZ
         char* src = VARDATA(data.untoasted);
         return makeValueLiteral<std::string>(std::string(src, size - VARHDRSZ));
+    }
+    else if (constant.type_id == BOOLOID) {
+        bool byte = (bool)(((uintptr_t)(constant.datum)) & 0x000000ff);
+        return makeValueLiteral<bool>(std::move(byte));
     }
     else if (is1ByteIntType(constant.type_id)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
@@ -582,7 +593,7 @@ K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid,
 void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgConstant constant) {
     // Three different types of constants to handle:
     // 1: String-like types that we can push down operations into K2.
-    // 2: Numeric types that fit in a K2 equivalent.
+    // 2: Integer/float types that fit in a K2 equivalent.
     // 3: Arbitrary binary types that we store the datum contents directly including header
 
     if (constant.is_null) {
@@ -595,6 +606,10 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
         size_t size = VARSIZE(data.untoasted);  // includes header len VARHDRSZ
         char* src = VARDATA(data.untoasted);
         builder.serializeNext<std::string>(std::string(src, size - VARHDRSZ));
+    }
+    else if (constant.type_id == BOOLOID) {
+        bool byte = (bool)(((uintptr_t)(constant.datum)) & 0x000000ff);
+        builder.serializeNext<bool>(byte);
     }
     else if (is1ByteIntType(constant.type_id)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
