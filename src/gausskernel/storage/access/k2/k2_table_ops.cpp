@@ -45,8 +45,6 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "utils/syscache.h"
 #include "access/k2/k2_table_ops.h"
-#include "access/k2/k2_expr.h"
-#include "access/k2/k2_type.h"
 #include "access/k2/k2_plan.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
@@ -134,11 +132,9 @@ static Bitmapset *GetTablePrimaryKey(Relation rel,
 		}
 
 		bool is_primary = false;
-		bool is_hash    = false;
 		HandleK2PgTableDescStatus(PgGate_GetColumnInfo(k2pg_tabledesc,
 		                                           attnum,
-		                                           &is_primary,
-		                                           &is_hash), k2pg_tabledesc);
+		                                           &is_primary), k2pg_tabledesc);
 		if (is_primary)
 		{
 			pkey = bms_add_member(pkey, attnum - minattr);

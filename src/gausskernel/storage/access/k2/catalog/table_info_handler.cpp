@@ -21,6 +21,11 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
+#include <libintl.h>
+#include "postgres.h"
+#include "catalog/pg_type.h"
+#include "access/k2/k2_types.h"
+
 #include "table_info_handler.h"
 
 #include <stdexcept>
@@ -850,15 +855,15 @@ IndexInfo TableInfoHandler::BuildIndexInfo(std::shared_ptr<TableInfo> base_table
             base_column_id = pair.second;
         }
         K2LOG_D(log::catalog,
-            "Index column id: {}, name: {}, type: {}, pg_type: {}, is_primary: {}, is_hash: {}, order: {}",
-            col_id, col_schema.name(), col_schema.type()->id(), col_schema.type_oid(), col_schema.is_primary(), col_schema.is_hash(), col_schema.order());
-        // TODO: change all Table schema and index schema to use is_hash and is_range directly instead of is_primary
+            "Index column id: {}, name: {}, pg_type: {}, is_primary: {}, order: {}",
+            col_id, col_schema.name(), col_schema.type_oid(), col_schema.is_primary(), col_schema.order());
+        // TODO: change all Table schema and index schema to use is_range directly instead of is_primary
         bool is_range = false;
-        if (col_schema.is_primary() && !col_schema.is_hash()) {
+        if (col_schema.is_primary()) {
             is_range = true;
         }
-        IndexColumn col(col_id, col_schema.name(), col_schema.type()->id(), col_schema.type_oid(), col_schema.is_nullable(),
-                col_schema.is_hash(), is_range, col_schema.order(), col_schema.sorting_type(), base_column_id);
+        IndexColumn col(col_id, col_schema.name(), col_schema.type_oid(), col_schema.is_nullable(),
+                is_range, col_schema.order(), col_schema.sorting_type(), base_column_id);
         columns.push_back(col);
     }
     IndexInfo index_info(index_name, table_oid, index_uuid, base_table_info->table_id(), index_schema.version(),
@@ -890,7 +895,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveSKVSchemaFromTableInfo(
     uint32_t count = 2;
     for (ColumnSchema col_schema : table->schema().columns()) {
         sh::dto::SchemaField field;
-        field.type = ToK2Type(col_schema.type()->id());
+        field.type = k2pg::OidToK2Type(col_schema.type_oid());
         field.name = col_schema.name();
         switch (col_schema.sorting_type()) {
             case ColumnSchema::SortingType::kAscending: {
@@ -940,7 +945,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveIndexSchema(const Index
     for (IndexColumn indexcolumn_schema : index_info.columns()) {
         sh::dto::SchemaField field;
         field.name = indexcolumn_schema.column_name;
-        field.type = ToK2Type(indexcolumn_schema.type);
+        field.type = k2pg::OidToK2Type(indexcolumn_schema.type_oid);
         switch (indexcolumn_schema.sorting_type) {
             case ColumnSchema::SortingType::kAscending: {
                 field.descending = false;
@@ -962,7 +967,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveIndexSchema(const Index
         }
         schema->fields.push_back(field);
         // use the keys from PG as the partition keys
-        if (indexcolumn_schema.is_hash || indexcolumn_schema.is_range) {
+        if (indexcolumn_schema.is_range) {
             schema->partitionKeyFields.push_back(count);
         }
         count++;
@@ -1057,16 +1062,12 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::DeriveTableColumnMetaRecords(c
         builder.serializeNext<int32_t>(column_id);
         // ColumnName
         builder.serializeNext<sh::String>(col_schema.name());
-        // ColumnType
-        builder.serializeNext<int16_t>(col_schema.type()->id());
         // ColumnTypeOid
         builder.serializeNext<int16_t>(col_schema.type_oid());
         // IsNullable
         builder.serializeNext<bool>(col_schema.is_nullable());
         // IsPrimary
         builder.serializeNext<bool>(col_schema.is_primary());
-        // IsHash
-        builder.serializeNext<bool>(col_schema.is_hash());
         // Order
         builder.serializeNext<int32_t>(col_schema.order());
         // SortingType
@@ -1092,14 +1093,10 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::DeriveIndexColumnMetaRecords(c
         builder.serializeNext<int32_t>(index_column.column_id);
         // ColumnName
         builder.serializeNext<sh::String>(index_column.column_name);
-        // ColumnType, we persist SQL type directly as an integer
-        builder.serializeNext<int16_t>(index_column.type);
         // ColumnTypeOid
         builder.serializeNext<int16_t>(index_column.type_oid);
         // IsNullable
         builder.serializeNext<bool>(index_column.is_nullable);
-        // IsHash
-        builder.serializeNext<bool>(index_column.is_hash);
         // IsRange
         builder.serializeNext<bool>(index_column.is_range);
         // Order
@@ -1112,60 +1109,6 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::DeriveIndexColumnMetaRecords(c
         response.push_back(std::move(record));
     }
     return response;
-}
-
-sh::dto::FieldType TableInfoHandler::ToK2Type(DataType type) {
-    sh::dto::FieldType field_type = sh::dto::FieldType::NOT_KNOWN;
-    switch (type) {
-        case DataType::K2SQL_DATA_TYPE_UINT8: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_INT8: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_UINT16: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_INT16: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_UINT32: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_INT32: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_UINT64: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_INT64: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_STRING: {
-            field_type = sh::dto::FieldType::STRING;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_BOOL: {
-            field_type = sh::dto::FieldType::BOOL;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_FLOAT: {
-            field_type = sh::dto::FieldType::FLOAT;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_DOUBLE: {
-            field_type = sh::dto::FieldType::DOUBLE;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_BINARY: {
-            field_type = sh::dto::FieldType::STRING;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_TIMESTAMP: {
-            field_type = sh::dto::FieldType::INT64T;
-        } break;
-        case DataType::K2SQL_DATA_TYPE_DECIMAL: {
-            field_type = sh::dto::FieldType::STRING;
-        } break;
-        default:
-            throw std::invalid_argument("Unsupported type " + type);
-    }
-    return field_type;
 }
 
 sh::Status TableInfoHandler::FetchTableMetaSKVRecord(const std::string& collection_name, const std::string& table_id, sh::dto::SKVRecord& resultSKVRecord) {
@@ -1356,21 +1299,17 @@ std::shared_ptr<TableInfo> TableInfoHandler::BuildTableInfo(const std::string& d
         int32_t col_id = column.deserializeNext<int32_t>().value();
         // ColumnName
         std::string col_name = column.deserializeNext<sh::String>().value();
-        // ColumnType, we persist SQL type directly as an integer
-        int16_t col_type = column.deserializeNext<int16_t>().value();
         // ColumnType Oid
         int16_t col_type_oid = column.deserializeNext<int16_t>().value();
         // IsNullable
         bool is_nullable = column.deserializeNext<bool>().value();
         // IsPrimary
         bool is_primary = column.deserializeNext<bool>().value();
-        // IsHash
-        bool is_hash = column.deserializeNext<bool>().value();
         // Order
         int32 col_order = column.deserializeNext<int32_t>().value();
         // SortingType
         int16_t sorting_type = column.deserializeNext<int16_t>().value();
-        ColumnSchema col_schema(col_name, static_cast<DataType>(col_type), col_type_oid, is_nullable, is_primary, is_hash,
+        ColumnSchema col_schema(col_name, col_type_oid, is_nullable, is_primary,
                 col_order, static_cast<ColumnSchema::SortingType>(sorting_type));
         cols.push_back(std::move(col_schema));
         ids.push_back(col_id);
@@ -1437,14 +1376,10 @@ IndexInfo TableInfoHandler::BuildIndexInfo(const std::string& collection_name, s
         int32_t col_id = column.deserializeNext<int32_t>().value();
         // ColumnName
         std::string col_name = column.deserializeNext<sh::String>().value();
-        // ColumnType
-        int16_t col_type = column.deserializeNext<int16_t>().value();
         // ColumnType OID
         int16_t col_type_oid = column.deserializeNext<int16_t>().value();
         // IsNullable
         bool is_nullable = column.deserializeNext<bool>().value();
-        // IsHash
-        bool is_hash = column.deserializeNext<bool>().value();
         // IsRange
         bool is_range = column.deserializeNext<bool>().value();
         // Order
@@ -1454,7 +1389,7 @@ IndexInfo TableInfoHandler::BuildIndexInfo(const std::string& collection_name, s
         // BaseColumnId
         int32_t base_col_id = column.deserializeNext<int32_t>().value();
         // TODO: add support for expression in index
-        IndexColumn index_column(col_id, col_name, static_cast<DataType>(col_type), col_type_oid, is_nullable, is_hash, is_range,
+        IndexColumn index_column(col_id, col_name, col_type_oid, is_nullable, is_range,
                 col_order, static_cast<ColumnSchema::SortingType>(sorting_type), base_col_id);
         columns.push_back(std::move(index_column));
     }

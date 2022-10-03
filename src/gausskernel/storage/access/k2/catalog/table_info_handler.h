@@ -120,11 +120,9 @@ class TableInfoHandler {
                 {sh::dto::FieldType::STRING, "TableId", false, false},
                 {sh::dto::FieldType::INT32T, "ColumnId", false, false},
                 {sh::dto::FieldType::STRING, "ColumnName", false, false},
-                {sh::dto::FieldType::INT16T, "ColumnType", false, false},
                 {sh::dto::FieldType::INT16T, "ColumnTypeOid", false, false},
                 {sh::dto::FieldType::BOOL, "IsNullable", false, false},
                 {sh::dto::FieldType::BOOL, "IsPrimary", false, false},
-                {sh::dto::FieldType::BOOL, "IsHash", false, false},
                 {sh::dto::FieldType::INT32T, "Order", false, false},
                 {sh::dto::FieldType::INT16T, "SortingType", false, false}},
         .partitionKeyFields = std::vector<uint32_t> { 0 , 1, 2},
@@ -141,10 +139,8 @@ class TableInfoHandler {
                 {sh::dto::FieldType::STRING, "TableId", false, false},
                 {sh::dto::FieldType::INT32T, "ColumnId", false, false},
                 {sh::dto::FieldType::STRING, "ColumnName", false, false},
-                {sh::dto::FieldType::INT16T, "ColumnType", false, false},
                 {sh::dto::FieldType::INT16T, "ColumnTypeOid", false, false},
                 {sh::dto::FieldType::BOOL, "IsNullable", false, false},
-                {sh::dto::FieldType::BOOL, "IsHash", false, false},
                 {sh::dto::FieldType::BOOL, "IsRange", false, false},
                 {sh::dto::FieldType::INT32T, "Order", false, false},
                 {sh::dto::FieldType::INT16T, "SortingType", false, false},
@@ -228,10 +224,6 @@ class TableInfoHandler {
     std::vector<sh::dto::SKVRecord> DeriveTableColumnMetaRecords(const std::string& collection_name, std::shared_ptr<TableInfo> table);
 
     std::vector<sh::dto::SKVRecord> DeriveIndexColumnMetaRecords(const std::string& collection_name, const IndexInfo& index, const Schema& base_tablecolumn_schema);
-
-    sh::dto::FieldType ToK2Type(DataType type);
-
-    DataType ToSqlType(sh::dto::FieldType type);
 
     sh::Status FetchTableMetaSKVRecord(const std::string& collection_name, const std::string& table_id, sh::dto::SKVRecord& resultSKVRecord);
 

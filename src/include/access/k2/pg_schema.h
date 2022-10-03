@@ -31,8 +31,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "access/k2/pg_ids.h"
 #include "access/k2/pg_param.h"
-#include "access/k2/pg_type.h"
-#include "access/k2/pg_expr.h"
+#include "status.h"
 
 namespace k2pg {
     typedef int32_t ColumnId;
@@ -66,44 +65,20 @@ namespace k2pg {
         };
 
         ColumnSchema(std::string name,
-                const std::shared_ptr<SQLType>& type,
                 PgTypeOid type_oid,
                 bool is_nullable,
                 bool is_primary,
-                bool is_hash,
                 int32_t order,
                 SortingType sorting_type)
             : name_(std::move(name)),
-            type_(type),
             type_oid_(type_oid),
             is_nullable_(is_nullable),
             is_primary_(is_primary),
-            is_hash_(is_hash),
             order_(order),
             sorting_type_(sorting_type){
         }
 
-        // convenience constructor for creating columns with simple (non-parametric) data types
-        ColumnSchema(std::string name,
-                DataType type,
-                PgTypeOid type_oid,
-                bool is_nullable,
-                bool is_primary,
-                bool is_hash,
-                int32_t order,
-                SortingType sorting_type)
-            : ColumnSchema(name, SQLType::Create(type), type_oid, is_nullable, is_primary, is_hash, order, sorting_type) {
-        }
-
-        const std::shared_ptr<SQLType>& type() const {
-            return type_;
-        }
-
-        void set_type(const std::shared_ptr<SQLType>& type) {
-            type_ = type;
-        }
-
-        PgTypeOid type_oid() const {
+       PgTypeOid type_oid() const {
             return type_oid_;
         }
 
@@ -116,11 +91,7 @@ namespace k2pg {
         }
 
         bool is_key() const {
-            return is_hash_ || is_primary_;
-        }
-
-        bool is_hash() const {
-            return is_hash_;
+            return is_primary_;
         }
 
         bool is_primary() const {
@@ -154,9 +125,7 @@ namespace k2pg {
         bool EqualsType(const ColumnSchema &other) const {
             return is_nullable_ == other.is_nullable_ &&
                    is_primary_ == other.is_primary_ &&
-                   is_hash_ == other.is_hash_ &&
                    sorting_type_ == other.sorting_type_ &&
-                   type_ == other.type() &&
                    type_oid_ == other.type_oid();
         }
 
@@ -170,11 +139,9 @@ namespace k2pg {
         }
 
         std::string name_;
-        std::shared_ptr<SQLType> type_;
         PgTypeOid type_oid_;
         bool is_nullable_;
         bool is_primary_;
-        bool is_hash_;
         int32_t order_;
         SortingType sorting_type_;
     };
@@ -186,7 +153,6 @@ namespace k2pg {
 
         Schema()
         : num_key_columns_(0),
-            num_hash_key_columns_(0),
             has_nullables_(false) {
         }
 
@@ -246,14 +212,8 @@ namespace k2pg {
             return num_key_columns_;
         }
 
-        // Number of hash key columns.
-        size_t num_hash_key_columns() const {
-            return num_hash_key_columns_;
-        }
-
-        // Number of range key columns.
         size_t num_range_key_columns() const {
-            return num_key_columns_ - num_hash_key_columns_;
+            return num_key_columns_;
         }
 
         // Return the ColumnSchema corresponding to the given column index.
@@ -326,24 +286,9 @@ namespace k2pg {
             return is_key_column(find_column(col_name));
         }
 
-        // Returns true if the specified column (by index) is a hash key
-        bool is_hash_key_column(size_t idx) const {
-            return idx < num_hash_key_columns_;
-        }
-
-        // Returns true if the specified column (by column id) is a hash key
-        bool is_hash_key_column(ColumnId column_id) const {
-            return is_hash_key_column(find_column_by_id(column_id));
-        }
-
-        // Returns true if the specified column (by name) is a hash key
-        bool is_hash_key_column(const std::string col_name) const {
-            return is_hash_key_column(find_column(col_name));
-        }
-
         // Returns true if the specified column (by index) is a range column
         bool is_range_column(size_t idx) const {
-            return is_key_column(idx) && !is_hash_key_column(idx);
+            return is_key_column(idx);
         }
 
         // Returns true if the specified column (by column id) is a range column
@@ -408,7 +353,6 @@ namespace k2pg {
         private:
         std::vector<ColumnSchema> cols_;
         size_t num_key_columns_;
-        size_t num_hash_key_columns_;
         ColumnId max_col_id_;
         std::vector<ColumnId> col_ids_;
         std::vector<size_t> col_offsets_;
@@ -426,32 +370,19 @@ namespace k2pg {
     struct IndexColumn {
         ColumnId column_id;             // Column id in the index table.
         std::string column_name;        // Column name in the index table - colexpr.MangledName().
-        DataType type;                  // data type
         PgTypeOid type_oid;             // Postgress Type Oid
         bool is_nullable;               // can be null or not
-        bool is_hash;                   // is hash key
         bool is_range;                  // is range key
         int32_t order;                  // attr_num
         ColumnSchema::SortingType sorting_type;       // sort type
         ColumnId base_column_id;      // Corresponding column id in base table.
-        std::shared_ptr<PgExpr> colexpr = nullptr;    // Index expression.
 
         explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
-            DataType in_type, PgTypeOid in_type_oid, bool in_is_nullable, bool in_is_hash, bool in_is_range,
-                int32_t in_order, ColumnSchema::SortingType in_sorting_type,
-                ColumnId in_base_column_id, std::shared_ptr<PgExpr> in_colexpr)
-                : column_id(in_column_id), column_name(std::move(in_column_name)),
-                    type(in_type), type_oid(in_type_oid), is_nullable(in_is_nullable), is_hash(in_is_hash),
-                    is_range(in_is_range), order(in_order), sorting_type(in_sorting_type),
-                    base_column_id(in_base_column_id), colexpr(in_colexpr) {
-        }
-
-        explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
-                DataType in_type, PgTypeOid in_type_oid, bool in_is_nullable, bool in_is_hash, bool in_is_range,
+                PgTypeOid in_type_oid, bool in_is_nullable, bool in_is_range,
                 int32_t in_order, ColumnSchema::SortingType in_sorting_type,
                 ColumnId in_base_column_id)
                 : column_id(in_column_id), column_name(std::move(in_column_name)),
-                    type(in_type), type_oid(in_type_oid), is_nullable(in_is_nullable), is_hash(in_is_hash),
+                    type_oid(in_type_oid), is_nullable(in_is_nullable),
                     is_range(in_is_range), order(in_order), sorting_type(in_sorting_type),
                     base_column_id(in_base_column_id) {
         }
@@ -461,8 +392,8 @@ namespace k2pg {
         public:
         explicit IndexInfo(std::string table_name, uint32_t table_oid, std::string table_uuid,
                 std::string base_table_id, uint32_t schema_version, bool is_unique,
-                bool is_shared, std::vector<IndexColumn> columns, size_t hash_column_count,
-                size_t range_column_count, std::vector<ColumnId> indexed_hash_column_ids,
+                bool is_shared, std::vector<IndexColumn> columns,
+                size_t range_column_count,
                 std::vector<ColumnId> indexed_range_column_ids, IndexPermissions index_permissions,
                 bool use_mangled_column_name)
                 : table_name_(table_name),
@@ -474,9 +405,7 @@ namespace k2pg {
                 is_unique_(is_unique),
                 is_shared_(is_shared),
                 columns_(std::move(columns)),
-                hash_column_count_(hash_column_count),
                 range_column_count_(range_column_count),
-                indexed_hash_column_ids_(std::move(indexed_hash_column_ids)),
                 indexed_range_column_ids_(std::move(indexed_range_column_ids)),
                 index_permissions_(index_permissions) {
         }
@@ -501,9 +430,7 @@ namespace k2pg {
                     columns_(std::move(columns)),
                     index_permissions_(index_permissions) {
                     for (auto& column : columns_) {
-                        if (column.is_hash) {
-                            hash_column_count_++;
-                        } else if (column.is_range) {
+                        if (column.is_range) {
                             range_column_count_++;
                         }
                     }
@@ -557,20 +484,12 @@ namespace k2pg {
             return columns_.size();
         }
 
-        size_t hash_column_count() const {
-            return hash_column_count_;
-        }
-
         size_t range_column_count() const {
             return range_column_count_;
         }
 
         size_t key_column_count() const {
-            return hash_column_count_ + range_column_count_;
-        }
-
-        const std::vector<ColumnId>& indexed_hash_column_ids() const {
-            return indexed_hash_column_ids_;
+            return range_column_count_;
         }
 
         const std::vector<ColumnId>& indexed_range_column_ids() const {
@@ -625,9 +544,7 @@ namespace k2pg {
         const bool is_unique_ = false;      // Whether this is a unique index.
         const bool is_shared_ = false;      // whether this is a shared index
         const std::vector<IndexColumn> columns_; // Index columns.
-        size_t hash_column_count_ = 0;     // Number of hash columns in the index.
         size_t range_column_count_ = 0;    // Number of range columns in the index.
-        const std::vector<ColumnId> indexed_hash_column_ids_;  // Hash column ids in the base table.
         const std::vector<ColumnId> indexed_range_column_ids_; // Range column ids in the base table.
         const IndexPermissions index_permissions_ = INDEX_PERM_READ_WRITE_AND_DELETE;
     };
@@ -701,11 +618,6 @@ namespace k2pg {
         // Return the length of the key prefix in this table.
         size_t num_key_columns() const {
             return schema_.num_key_columns();
-        }
-
-        // Number of hash key columns.
-        size_t num_hash_key_columns() const {
-            return schema_.num_hash_key_columns();
         }
 
         // Number of range key columns.

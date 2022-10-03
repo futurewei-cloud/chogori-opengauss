@@ -44,8 +44,8 @@ namespace k2pg {
 
     std::string ColumnSchema::TypeToString() const {
         std::stringstream ss;
-        ss << (*type_) << ", " << (is_nullable_ ? "NULLABLE" : "NOT NULL") << ", " << (is_primary_ ? "PRIMARY KEY" : "NOT A PRIMARY KEY") << ", "
-           << (is_hash_ ? "HASH KEY" : "NOT A HASH KEY") << ", " << order_;
+        ss << (type_oid_) << ", " << (is_nullable_ ? "NULLABLE" : "NOT NULL") << ", " << (is_primary_ ? "PRIMARY KEY" : "NOT A PRIMARY KEY") << ", "
+           << ", " << order_;
         return ss.str();
     }
 
@@ -62,7 +62,6 @@ namespace k2pg {
 
     void Schema::CopyFrom(const Schema& other) {
         num_key_columns_ = other.num_key_columns_;
-        num_hash_key_columns_ = other.num_hash_key_columns_;
         cols_ = other.cols_;
         col_ids_ = other.col_ids_;
         col_offsets_ = other.col_offsets_;
@@ -82,7 +81,6 @@ namespace k2pg {
 
     void Schema::swap(Schema& other) {
         std::swap(num_key_columns_, other.num_key_columns_);
-        std::swap(num_hash_key_columns_, other.num_hash_key_columns_);
         cols_.swap(other.cols_);
         col_ids_.swap(other.col_ids_);
         col_offsets_.swap(other.col_offsets_);
@@ -96,14 +94,10 @@ namespace k2pg {
                          int key_columns) {
         cols_ = cols;
         num_key_columns_ = key_columns;
-        num_hash_key_columns_ = 0;
 
-        // Determine whether any column is nullable or static, and count number of hash columns.
+        // Determine whether any column is nullable or static
         has_nullables_ = false;
         for (const ColumnSchema& col : cols_) {
-            if (col.is_key()) {
-                num_hash_key_columns_++;
-            }
             if (col.is_nullable()) {
                 has_nullables_ = true;
             }
@@ -190,7 +184,7 @@ namespace k2pg {
         }
 
         // Ensure clustering columns have a default sorting type of 'ASC' if not specified.
-        for (size_t i = num_hash_key_columns_; i < num_key_columns(); i++) {
+        for (size_t i = 0; i < num_key_columns(); i++) {
             ColumnSchema& col = cols_[i];
             if (col.sorting_type() == ColumnSchema::SortingType::kNotSpecified) {
                 col.set_sorting_type(ColumnSchema::SortingType::kAscending);
@@ -242,10 +236,7 @@ namespace k2pg {
             map[column.base_column_id] = column.column_id;
         }
         std::vector<ColumnId> ids;
-        ids.reserve(indexed_hash_column_ids_.size() + indexed_range_column_ids_.size());
-        for (const auto id : indexed_hash_column_ids_) {
-            ids.push_back(map[id]);
-        }
+        ids.reserve(indexed_range_column_ids_.size());
         for (const auto id : indexed_range_column_ids_) {
             ids.push_back(map[id]);
         }
@@ -253,7 +244,7 @@ namespace k2pg {
     }
 
     bool IndexInfo::PrimaryKeyColumnsOnly(const Schema& indexed_schema) const {
-        for (size_t i = 0; i < hash_column_count_ + range_column_count_; i++) {
+        for (size_t i = 0; i < range_column_count_; i++) {
             if (!indexed_schema.is_key_column(columns_[i].base_column_id)) {
                 return false;
             }

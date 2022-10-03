@@ -38,8 +38,6 @@ Copyright(c) 2022 Futurewei Cloud
 
 #include "access/k2/k2_bootstrap.h"
 #include "access/k2/pg_gate_api.h"
-#include "access/k2/k2_type.h"
-#include "access/k2/k2_expr.h"
 #include "access/k2/k2cat_cmds.h"
 #include "access/k2/k2pg_aux.h"
 
@@ -56,7 +54,6 @@ static void K2PgAddSysCatalogColumn(IndexStmt *pkey_idx,
 
 	ListCell      *lc;
 	bool          is_key    = false;
-	const K2PgTypeEntity *col_type  = K2PgDataTypeFromOidMod(attnum, type_id);
 
 	if (pkey_idx)
 	{
@@ -79,7 +76,7 @@ static void K2PgAddSysCatalogColumn(IndexStmt *pkey_idx,
         K2PGColumnDef column {
             .attr_name = attname,
             .attr_num = attnum,
-            .attr_type = col_type,
+            .type_oid = type_id,
             .is_key = is_key,
             .is_desc = false,
             .is_nulls_first = false

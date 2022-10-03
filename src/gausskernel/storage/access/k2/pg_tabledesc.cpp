@@ -56,9 +56,7 @@ using k2pg::catalog::CatalogConsts;
                     "k2pgctid",
                     BYTEAOID,
                     false,
-                    false,
                     idx,
-                    SQLType::Create(DataType::K2SQL_DATA_TYPE_BINARY),
                     ColumnSchema::SortingType::kNotSpecified);
             return;
         }
@@ -75,7 +73,7 @@ using k2pg::catalog::CatalogConsts;
     PgTableDesc::PgTableDesc(std::shared_ptr<TableInfo> pg_table) : is_index_(false),
         database_id_(pg_table->database_id()), table_id_(pg_table->table_id()), base_table_oid_(pg_table->table_oid()), index_oid_(0),
         schema_version_(pg_table->schema().version()),
-        hash_column_num_(pg_table->schema().num_hash_key_columns()), key_column_num_(pg_table->schema().num_key_columns())
+        key_column_num_(pg_table->schema().num_key_columns())
     {
         // create PgTableDesc from a table
         const auto& schema = pg_table->schema();
@@ -91,10 +89,8 @@ using k2pg::catalog::CatalogConsts;
                     schema.column_id(idx),
                     col.name(),
                     col.type_oid(),
-                    idx < schema.num_hash_key_columns(),
                     idx < schema.num_key_columns(),
                     col.order() /* attr_num */,
-                    col.type(),
                     col.sorting_type());
             attr_num_map_[col.order()] = idx;
         }
@@ -107,7 +103,7 @@ using k2pg::catalog::CatalogConsts;
     PgTableDesc::PgTableDesc(const IndexInfo& index_info, const std::string& database_id) : is_index_(true),
         database_id_(database_id), table_id_(index_info.table_id()), base_table_oid_(index_info.base_table_oid()), index_oid_(index_info.table_oid()),
         schema_version_(index_info.version()),
-        hash_column_num_(index_info.hash_column_count()), key_column_num_(index_info.key_column_count())
+        key_column_num_(index_info.key_column_count())
     {
         // create PgTableDesc from an index
         size_t num_columns = index_info.num_columns();
@@ -122,10 +118,8 @@ using k2pg::catalog::CatalogConsts;
                     col.column_id,
                     col.column_name,
                     col.type_oid,
-                    col.is_hash,
-                    col.is_hash || col.is_range,
+                    col.is_range,
                     col.order /* attr_num */,
-                    SQLType::Create(col.type),
                     col.sorting_type);
             attr_num_map_[col.order] = idx;
         }
@@ -152,16 +146,14 @@ using k2pg::catalog::CatalogConsts;
         return NULL;
     }
 
-    Status PgTableDesc::GetColumnInfo(int16_t attr_number, bool *is_primary, bool *is_hash) const
+    Status PgTableDesc::GetColumnInfo(int16_t attr_number, bool *is_primary) const
     {
         const auto itr = attr_num_map_.find(attr_number);
         if (itr != attr_num_map_.end()) {
             const ColumnDesc* desc = columns_[itr->second].desc();
             *is_primary = desc->is_primary();
-            *is_hash = desc->is_hash();
         } else {
             *is_primary = false;
-            *is_hash = false;
         }
         return Status::OK;
     }

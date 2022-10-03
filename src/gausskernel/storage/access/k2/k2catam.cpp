@@ -52,7 +52,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/nbtree.h"
 
 #include "access/k2/k2pg_aux.h"
-#include "access/k2/k2_expr.h"
 
 typedef struct CamScanPlanData
 {
@@ -90,7 +89,6 @@ static void camCheckPrimaryKeyAttribute(CamScanPlan      scan_plan,
 										AttrNumber      attnum)
 {
 	bool is_primary = false;
-	bool is_hash    = false;
 
 	/*
 	 * We shouldn't need to upload the table descriptor here because the structure
@@ -98,19 +96,14 @@ static void camCheckPrimaryKeyAttribute(CamScanPlan      scan_plan,
 	 * - Primary key indicator: IndexRelation->rd_index->indisprimary
 	 * - Number of key columns: IndexRelation->rd_index->indnkeyatts
 	 * - Number of all columns: IndexRelation->rd_index->indnatts
-	 * - Hash, range, etc: IndexRelation->rd_indoption (Bits INDOPTION_HASH, RANGE, etc)
+	 * - Range, etc: IndexRelation->rd_indoption (Bits INDOPTION_HASH, RANGE, etc)
 	 */
 	HandleK2PgTableDescStatus(PgGate_GetColumnInfo(k2pg_table_desc,
 											   attnum,
-											   &is_primary,
-											   &is_hash), k2pg_table_desc);
+											   &is_primary), k2pg_table_desc);
 
 	int idx = K2PgAttnumToBmsIndex(scan_plan->target_relation, attnum);
 
-	if (is_hash)
-	{
-		scan_plan->hash_key = bms_add_member(scan_plan->hash_key, idx);
-	}
 	if (is_primary)
 	{
 		scan_plan->primary_key = bms_add_member(scan_plan->primary_key, idx);

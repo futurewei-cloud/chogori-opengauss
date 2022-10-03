@@ -2910,9 +2910,8 @@ BuildPgTupleId(Relation pk_rel, Relation fk_rel, Relation idx_rel,
 	}
 
 	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(db_oid, table_oid, attrs, &tuple_id));
-
-	const K2PgTypeEntity *type_entity = K2PgDataTypeFromOidMod(K2PgTupleIdAttributeNumber, BYTEAOID);
-	type_entity->datum_to_k2pg(tuple_id, value, bytes);
+    *value = (void*)tuple_id;
+    *bytes = VARSIZE((Datum)tuple_id);
 }
 
 /*

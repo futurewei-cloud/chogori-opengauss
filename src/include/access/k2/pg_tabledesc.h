@@ -38,26 +38,21 @@ class ColumnDesc {
  public:
   typedef std::shared_ptr<ColumnDesc> SharedPtr;
 
-  ColumnDesc() : sql_type_(SQLType::Create(DataType::K2SQL_DATA_TYPE_UNKNOWN_DATA)) {
-  }
+  ColumnDesc() = default;
 
   void Init(int index,
             int id,
             std::string name,
             int type_oid,
-            bool is_hash,
             bool is_primary,
             int32_t attr_num,
-            const std::shared_ptr<SQLType>& sql_type,
             ColumnSchema::SortingType sorting_type) {
     index_ = index,
     id_ = id;
     type_oid_ = type_oid;
     name_ = name;
-    is_hash_ = is_hash;
     is_primary_ = is_primary;
     attr_num_ = attr_num;
-    sql_type_ = sql_type;
     sorting_type_ = sorting_type;
   }
 
@@ -77,10 +72,6 @@ class ColumnDesc {
     return name_;
   }
 
-  bool is_hash() const {
-    return is_hash_;
-  }
-
   bool is_primary() const {
     return is_primary_;
   }
@@ -93,10 +84,6 @@ class ColumnDesc {
     return type_oid_;
   }
 
-  std::shared_ptr<SQLType> sql_type() const {
-    return sql_type_;
-  }
-
   ColumnSchema::SortingType sorting_type() const {
     return sorting_type_;
   }
@@ -106,10 +93,8 @@ class ColumnDesc {
   int id_ = -1;
   int type_oid_ = -1;
   std::string name_;
-  bool is_hash_ = false;
   bool is_primary_ = false;
   int32_t attr_num_ = -1;
-  std::shared_ptr<SQLType> sql_type_;
   ColumnSchema::SortingType sorting_type_ = ColumnSchema::SortingType::kNotSpecified;
 };
 
@@ -209,10 +194,6 @@ class PgTableDesc {
     return columns_;
   }
 
-  const size_t num_hash_key_columns() const {
-    return hash_column_num_;
-  }
-
   const size_t num_key_columns() const {
     return key_column_num_;
   }
@@ -224,7 +205,7 @@ class PgTableDesc {
   // Find the column given the postgres attr number.
   PgColumn* FindColumn(int attr_num);
 
-  Status GetColumnInfo(int16_t attr_number, bool *is_primary, bool *is_hash) const;
+  Status GetColumnInfo(int16_t attr_number, bool *is_primary) const;
 
   int GetPartitionCount() const {
     // TODO:  Assume 1 partition for now until we add logic to expose k2 storage partition counts
@@ -246,7 +227,6 @@ class PgTableDesc {
   PgOid base_table_oid_;  // if is_index_, this is oid of the base table, otherwise, it is oid of this table.
   PgOid index_oid_;       // if is_index_, this is oid of the index, otherwiese 0
   uint32_t schema_version_;
-  size_t hash_column_num_;
   size_t key_column_num_;
   std::vector<PgColumn> columns_;
   std::unordered_map<int, size_t> attr_num_map_; // Attr number to column index map.

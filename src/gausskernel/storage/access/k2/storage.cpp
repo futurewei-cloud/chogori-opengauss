@@ -27,6 +27,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "postgres.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_types.h"
 #include "access/sysattr.h"
 #include "catalog/pg_type.h"
 #include "utils/numeric.h"
@@ -40,33 +41,6 @@ Copyright(c) 2022 Futurewei Cloud
 
 namespace k2pg {
 namespace gate {
-
-// These are types that we can push down filter operations to K2, so when we convert them we want to
-// strip out the Datum headers
-bool isStringType(Oid oid) {
-    return (oid == VARCHAROID || oid == BPCHAROID || oid == TEXTOID || oid == CLOBOID || oid == NAMEOID || oid == CSTRINGOID);
-}
-
-// Type to size association taken from MOT column.cpp. Note that this does not determine whether we can use the type as a key or for pushdown, only that it will fit in a K2 native type
-bool is1ByteIntType(Oid oid) {
-    return (oid == CHAROID || oid == INT1OID);
-}
-
-bool is2ByteIntType(Oid oid) {
-    return (oid == INT2OID);
-}
-
-bool is4ByteIntType(Oid oid) {
-    return (oid == INT4OID || oid == DATEOID);
-}
-
-bool is8ByteIntType(Oid oid) {
-    return (oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID);
-}
-
-bool isPushdownType(Oid oid) {
-    return isStringType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID);
-}
 
 // Helper class to manager palloc'ed objects. All managed objects are freed on destruction.
 // The intent is that "release" is called after any possible error/exception path which releases
