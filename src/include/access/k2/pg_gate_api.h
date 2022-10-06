@@ -34,7 +34,7 @@ Copyright(c) 2022 Futurewei Cloud
 
 // This must be called exactly once to initialize the YPostgreSQL/SKV gateway API before any other
 // functions in this API are called.
-void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, K2PgCallbacks pg_callbacks);
+void PgGate_InitPgGate();
 void PgGate_DestroyPgGate();
 
 // Initialize a session to process statements that come from the same client connection.
@@ -110,7 +110,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid);
 struct K2PGColumnDef {
     const char* attr_name;
     int attr_num;
-    const K2PgTypeEntity *attr_type;
+    int type_oid;
     bool is_key;
     bool is_desc;
     bool is_nulls_first;
@@ -133,7 +133,7 @@ K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
                              K2PgStatement *handle);
 
 K2PgStatus PgGate_AlterTableAddColumn(K2PgStatement handle, const char *name, int order,
-                                   const K2PgTypeEntity *attr_type, bool is_not_null);
+                                   int type_oid, bool is_not_null);
 
 K2PgStatus PgGate_AlterTableRenameColumn(K2PgStatement handle, const char *oldname,
                                       const char *newname);
@@ -158,8 +158,7 @@ K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
 
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              int16_t attr_number,
-                             bool *is_primary,
-                             bool *is_hash);
+                             bool *is_primary);
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle);
 
@@ -322,23 +321,6 @@ K2PgStatus PgGate_EnterSeparateDdlTxnMode();
 K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success);
 
 //--------------------------------------------------------------------------------------------------
-// Expressions.
-
-// Column references.
-K2PgStatus PgGate_NewColumnRef(K2PgStatement stmt, int attr_num, const K2PgTypeEntity *type_entity,
-                            const K2PgTypeAttrs *type_attrs, K2PgExpr *expr_handle);
-
-// Constant expressions.
-K2PgStatus PgGate_NewConstant(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
-                           uint64_t datum, bool is_null, K2PgExpr *expr_handle);
-K2PgStatus PgGate_NewConstantOp(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
-                           uint64_t datum, bool is_null, K2PgExpr *expr_handle, bool is_gt);
-
-// Expressions with operators "=", "+", "between", "in", ...
-K2PgStatus PgGate_NewOperator(K2PgStatement stmt, const char *opname,
-                           const K2PgTypeEntity *type_entity,
-                           K2PgExpr *op_handle);
-K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg);
 
 // Referential Integrity Check Caching.
 // Check if foreign key reference exists in cache.

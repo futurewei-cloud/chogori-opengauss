@@ -506,11 +506,9 @@ bool K2PgAllPrimaryKeysProvided(Oid relid, Bitmapset *attrs)
 	for (AttrNumber attnum = 1; attnum <= natts; attnum++)
 	{
 		bool is_primary = false;
-		bool is_hash    = false;
 		HandleK2PgTableDescStatus(PgGate_GetColumnInfo(k2pg_tabledesc,
 		                                           attnum,
-		                                           &is_primary,
-		                                           &is_hash), k2pg_tabledesc);
+		                                           &is_primary), k2pg_tabledesc);
 
 		if (is_primary)
 		{

@@ -44,8 +44,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2cat_cmds.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
-#include "access/k2/k2_expr.h"
-#include "access/k2/k2_type.h"
 
 #include "access/nbtree.h"
 #include "commands/defrem.h"
@@ -128,12 +126,10 @@ static void CreateTableAddColumn(Form_pg_attribute att,
 								 bool is_nulls_first,
                                  std::vector<K2PGColumnDef>& columns)
 {
-	const K2PgTypeEntity *col_type = K2PgDataTypeFromOidMod(att->attnum,
-															att->atttypid);
     K2PGColumnDef column {
         .attr_name = NameStr(att->attname),
         .attr_num = att->attnum,
-        .attr_type = col_type,
+        .type_oid = att->atttypid,
         .is_key = is_primary,
         .is_desc = is_desc,
         .is_nulls_first = is_nulls_first
@@ -164,7 +160,7 @@ static void CreateTableAddColumns(TupleDesc desc,
 				Form_pg_attribute att = TupleDescAttr(desc, i);
 				if (strcmp(NameStr(att->attname), index_elem->name) == 0)
 				{
-					if (!K2PgDataTypeIsValidForKey(att->atttypid))
+					if (!K2PgAllowForPrimaryKey(att->atttypid))
 						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("PRIMARY KEY containing column of type"
@@ -317,12 +313,11 @@ K2PgCreateIndex(const char *indexName,
 		Form_pg_attribute     att         = TupleDescAttr(indexTupleDesc, i);
 		char                  *attname    = NameStr(att->attname);
 		AttrNumber            attnum      = att->attnum;
-		const K2PgTypeEntity *col_type   = K2PgDataTypeFromOidMod(attnum, att->atttypid);
 		const bool            is_key      = (i < indexInfo->ii_NumIndexKeyAttrs);
 
 		if (is_key)
 		{
-			if (!K2PgDataTypeIsValidForKey(att->atttypid))
+			if (!K2PgAllowForPrimaryKey(att->atttypid))
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("INDEX on column of type '%s' not yet supported",
@@ -336,7 +331,7 @@ K2PgCreateIndex(const char *indexName,
         K2PGColumnDef column {
             .attr_name = attname,
             .attr_num = attnum,
-            .attr_type = col_type,
+            .type_oid = att->atttypid,
             .is_key = is_key,
             .is_desc = is_desc,
             .is_nulls_first = is_nulls_first
@@ -395,10 +390,9 @@ K2PgPrepareAlterTable(AlterTableStmt *stmt, Relation rel, Oid relationId)
 				typeTuple = typenameType(NULL, colDef->typname, &typmod);
 				typeOid = HeapTupleGetOid(typeTuple);
 				order = RelationGetNumberOfAttributes(rel) + col;
-				const K2PgTypeEntity *col_type = K2PgDataTypeFromOidMod(order, typeOid);
 
 				HandleK2PgStatus(PgGate_AlterTableAddColumn(handle, colDef->colname,
-																										order, col_type,
+																										order, typeOid,
 																										colDef->is_not_null));
 				++col;
 				ReleaseSysCache(typeTuple);

@@ -186,12 +186,6 @@ extern bool K2PgIsPgLockingEnabled();
 extern const char* K2PgTypeOidToStr(Oid type_id);
 
 /*
- * Return a string representation of the given PgDataType, or say it is unknown.
- * What is returned is always a static C string constant.
- */
-extern const char* K2PgDataTypeToStr(K2PgDataType k2pg_type);
-
-/*
  * Report an error saying the given type as not supported by K2PG.
  */
 extern void K2PgReportTypeNotSupported(Oid type_id);

@@ -271,13 +271,7 @@ K2PgInitPostgresBackend(
 	 */
 	if (K2PgIsEnabledInPostgresEnvVar())
 	{
-		const K2PgTypeEntity *type_table;
-		int count;
-		K2PgGetTypeTable(&type_table, &count);
-		K2PgCallbacks callbacks;
-		callbacks.FetchUniqueConstraintName = &FetchUniqueConstraintName;
-		callbacks.GetCurrentK2Memctx = &GetCurrentK2Memctx;
-		PgGate_InitPgGate(type_table, count, callbacks);
+		PgGate_InitPgGate();
 		K2PgInstallTxnDdlHook();
 
 		/*
@@ -436,36 +430,6 @@ K2PgTypeOidToStr(Oid type_id) {
 //		case TSM_HANDLEROID: return "TSM_HANDLER";
 		case ANYRANGEOID: return "ANYRANGE";
 		default: return "user_defined_type";
-	}
-}
-
-const char*
-K2PgDataTypeToStr(K2PgDataType k2pg_type) {
-	switch (k2pg_type) {
-		case K2SQL_DATA_TYPE_NOT_SUPPORTED: return "NOT_SUPPORTED";
-		case K2SQL_DATA_TYPE_UNKNOWN_DATA: return "UNKNOWN_DATA";
-		case K2SQL_DATA_TYPE_NULL_VALUE_TYPE: return "NULL_VALUE_TYPE";
-		case K2SQL_DATA_TYPE_INT8: return "INT8";
-		case K2SQL_DATA_TYPE_INT16: return "INT16";
-		case K2SQL_DATA_TYPE_INT32: return "INT32";
-		case K2SQL_DATA_TYPE_INT64: return "INT64";
-		case K2SQL_DATA_TYPE_STRING: return "STRING";
-		case K2SQL_DATA_TYPE_BOOL: return "BOOL";
-		case K2SQL_DATA_TYPE_FLOAT: return "FLOAT";
-		case K2SQL_DATA_TYPE_DOUBLE: return "DOUBLE";
-		case K2SQL_DATA_TYPE_BINARY: return "BINARY";
-		case K2SQL_DATA_TYPE_TIMESTAMP: return "TIMESTAMP";
-		case K2SQL_DATA_TYPE_DECIMAL: return "DECIMAL";
-		case K2SQL_DATA_TYPE_LIST: return "LIST";
-		case K2SQL_DATA_TYPE_MAP: return "MAP";
-		case K2SQL_DATA_TYPE_SET: return "SET";
-		case K2SQL_DATA_TYPE_DATE: return "DATE";
-		case K2SQL_DATA_TYPE_TIME: return "TIME";
-		case K2SQL_DATA_TYPE_UINT8: return "UINT8";
-		case K2SQL_DATA_TYPE_UINT16: return "UINT16";
-		case K2SQL_DATA_TYPE_UINT32: return "UINT32";
-		case K2SQL_DATA_TYPE_UINT64: return "UINT64";
-		default: return "unknown";
 	}
 }
 

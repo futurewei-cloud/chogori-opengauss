@@ -32,6 +32,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/pg_memctx.h"
 #include "access/k2/pg_ids.h"
+#include "access/k2/k2_types.h"
 
 #include "k2pg-internal.h"
 #include "config.h"
@@ -54,13 +55,7 @@ namespace {
 
     class PgGate {
         public:
-        // TODO: remove K2PgTypeEntity to map to use type oid to map to k2 type directly
-        PgGate(const K2PgTypeEntity *k2PgDataTypeArray, int count, K2PgCallbacks callbacks) {
-            // Setup type mapping.
-            for (int idx = 0; idx < count; idx++) {
-                const K2PgTypeEntity *type_entity = &k2PgDataTypeArray[idx];
-                type_map_[type_entity->type_oid] = type_entity;
-            }
+        PgGate() {
             catalog_manager_ = std::make_shared<k2pg::catalog::SqlCatalogManager>();
             catalog_manager_->Start();
         };
@@ -77,20 +72,7 @@ namespace {
               return catalog_manager_;
         };
 
-        const K2PgTypeEntity *FindTypeEntity(int type_oid) {
-              const auto iter = type_map_.find(type_oid);
-              if (iter != type_map_.end()) {
-                  return iter->second;
-              }
-              return nullptr;
-        };
-
         private:
-        K2PgCallbacks pg_callbacks_;
-
-        // Mapping table of K2PG and PostgreSQL datatypes.
-        std::unordered_map<int, const K2PgTypeEntity *> type_map_;
-
         std::shared_ptr<k2pg::catalog::SqlCatalogManager> catalog_manager_;
 
     };
@@ -99,10 +81,10 @@ namespace {
     std::shared_ptr<PgGate> pg_gate;
 } // anonymous namespace
 
-void PgGate_InitPgGate(const K2PgTypeEntity *k2PgDataTypeTable, int count, PgCallbacks pg_callbacks) {
+void PgGate_InitPgGate() {
     assert(pg_gate == nullptr && "PgGate should only be initialized once");
     elog(INFO, "K2 PgGate open");
-    pg_gate = std::make_shared<PgGate>(k2PgDataTypeTable, count, pg_callbacks);
+    pg_gate = std::make_shared<PgGate>();
 }
 
 void PgGate_DestroyPgGate() {
@@ -274,7 +256,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
 }
 
 // Make ColumnSchema from column information
-k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, K2SqlDataType k2pg_type, int type_oid, bool is_key, bool is_desc, bool is_nulls_first) {
+k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, int type_oid, bool is_key, bool is_desc, bool is_nulls_first) {
     using SortingType = k2pg::ColumnSchema::SortingType;
     SortingType sorting_type = SortingType::kNotSpecified;
     if (is_key) {
@@ -284,9 +266,8 @@ k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, K2SqlDataT
             sorting_type = is_nulls_first ? SortingType::kAscending : SortingType::kAscendingNullsLast;
         }
     }
-    std::shared_ptr<k2pg::SQLType> data_type = k2pg::SQLType::Create(static_cast<DataType>( k2pg_type));
     bool is_nullable = !is_key;
-    return k2pg::ColumnSchema(col_name, data_type, type_oid, is_nullable, is_key, order, order, sorting_type);
+    return k2pg::ColumnSchema(col_name, type_oid, is_nullable, is_key, order, sorting_type);
 }
 
 std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key = false) {
@@ -300,7 +281,6 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schem
         // For regular user table, k2pgrowid should be a hash key because k2pgrowid is a random uuid.
         k2pgcols.push_back(makeColumn("k2pgrowid",
                 static_cast<int32_t>(k2pg::PgSystemAttrNum::kPgRowId),
-                static_cast<DataType>(K2SQL_DATA_TYPE_BINARY),
                 InvalidOid,
                 true /* is_key */, false /* is_desc */, false /* is_nulls_first */));
     }
@@ -310,7 +290,7 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schem
             continue;
         }
         num_key_columns++;
-        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.attr_type->type_oid, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.type_oid, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Add data columns
     for (auto& col : columns) {
@@ -318,7 +298,7 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schem
             continue;
         }
 
-        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.attr_type->k2pg_type, col.attr_type->type_oid, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.type_oid, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Get column ids
     for (size_t i=0; i < k2pgcols.size(); i++) {
@@ -359,7 +339,7 @@ K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
 }
 
 K2PgStatus PgGate_AlterTableAddColumn(K2PgStatement handle, const char *name, int order,
-                                   const K2PgTypeEntity *attr_type, bool is_not_null){
+                                   int type_oid, bool is_not_null){
   elog(DEBUG5, "PgGateAPI: PgGate_AlterTableAddColumn %s", name);
   return K2PgStatus::NotSupported;
 }
@@ -417,10 +397,9 @@ K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
 
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              int16_t attr_number,
-                             bool *is_primary,
-                             bool *is_hash) {
+                             bool *is_primary) {
     elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
-    return table_desc->GetColumnInfo(attr_number, is_primary, is_hash);
+    return table_desc->GetColumnInfo(attr_number, is_primary);
 }
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
@@ -974,40 +953,6 @@ K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
 }
 
 //--------------------------------------------------------------------------------------------------
-// Expressions.
-
-// Column references.
-K2PgStatus PgGate_NewColumnRef(K2PgStatement stmt, int attr_num, const K2PgTypeEntity *type_entity,
-                            const K2PgTypeAttrs *type_attrs, K2PgExpr *expr_handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewColumnRef %d", attr_num);
-  return K2PgStatus::NotSupported;
-}
-
-// Constant expressions.
-K2PgStatus PgGate_NewConstant(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
-                           uint64_t datum, bool is_null, K2PgExpr *expr_handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewConstant %ld, %d", datum, is_null);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_NewConstantOp(K2PgStatement stmt, const K2PgTypeEntity *type_entity,
-                           uint64_t datum, bool is_null, K2PgExpr *expr_handle, bool is_gt){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewConstantOp %lu, %d, %d", datum, is_null, is_gt);
-  return K2PgStatus::NotSupported;
-}
-
-// Expressions with operators "=", "+", "between", "in", ...
-K2PgStatus PgGate_NewOperator(K2PgStatement stmt, const char *opname,
-                           const K2PgTypeEntity *type_entity,
-                           K2PgExpr *op_handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewOperator %s", opname);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_OperatorAppendArg(K2PgExpr op_handle, K2PgExpr arg){
-  elog(DEBUG5, "PgGateAPI: PgGate_OperatorAppendArg");
-  return K2PgStatus::NotSupported;
-}
 
 // Referential Integrity Check Caching.
 // Check if foreign key reference exists in cache.
@@ -1097,25 +1042,22 @@ const void* PgGate_GetThreadLocalErrMsg() {
   return PgGetThreadLocalErrMsg();
 }
 
-const K2PgTypeEntity *K2PgFindTypeEntity(int type_oid) {
-    elog(DEBUG5, "PgGateAPI: K2PgFindTypeEntity %d", type_oid);
-    return pg_gate->FindTypeEntity(type_oid);
-}
+bool K2PgAllowForPrimaryKey(int type_oid) {
+    elog(DEBUG5, "PgGateAPI: K2PgAllowForPrimaryKey");
+    skv::http::dto::FieldType skv_type = k2pg::OidToK2Type(type_oid);
+    switch (skv_type) {
+        case skv::http::dto::FieldType::STRING:
+        case skv::http::dto::FieldType::INT16T:
+        case skv::http::dto::FieldType::INT32T:
+        case skv::http::dto::FieldType::INT64T:
+        case skv::http::dto::FieldType::BOOL:
+            return k2pg::isPushdownType(type_oid);
+            break;
+        default:
+            return false;
+    }
 
-K2PgDataType K2PgGetType(const K2PgTypeEntity *type_entity) {
-  elog(DEBUG5, "PgGateAPI: K2PgGetType");
-  if (type_entity) {
-    return type_entity->k2pg_type;
-  }
-  return K2SQL_DATA_TYPE_UNKNOWN_DATA;
-}
-
-bool K2PgAllowForPrimaryKey(const K2PgTypeEntity *type_entity) {
-  elog(DEBUG5, "PgGateAPI: K2PgAllowForPrimaryKey");
-  if (type_entity) {
-    return type_entity->allow_for_primary_key;
-  }
-  return false;
+    return false;
 }
 
 void K2PgAssignTransactionPriorityLowerBound(double newval, void* extra) {
