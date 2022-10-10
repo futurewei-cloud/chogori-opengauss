@@ -36,7 +36,7 @@ namespace k2pg {
 // These are types that we can push down filter operations to K2, so when we convert them we want to
 // strip out the Datum headers
 inline bool isStringType(Oid oid) {
-    return (oid == VARCHAROID || oid == BPCHAROID || oid == TEXTOID || oid == CLOBOID || oid == NAMEOID || oid == CSTRINGOID);
+    return (oid == VARCHAROID || oid == BPCHAROID || oid == TEXTOID || oid == CLOBOID || oid == CSTRINGOID);
 }
 
 // Type to size association taken from MOT column.cpp. Note that this does not determine whether we can use the type as a key or for pushdown, only that it will fit in a K2 native type
@@ -63,7 +63,7 @@ inline bool is8ByteIntType(Oid oid) {
 
 inline bool isPushdownType(Oid oid) {
     return isStringType(oid) || isUnsignedPromotedType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID ||
-        oid == DATEOID || oid == TIMEOID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID);
+        oid == DATEOID || oid == TIMEOID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID || oid == NAMEOID);
 }
 
 inline skv::http::dto::FieldType OidToK2Type(int type_oid) {
