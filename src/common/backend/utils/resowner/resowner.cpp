@@ -249,7 +249,7 @@ ResourceArrayEnlarge(ResourceArray *resarr)
 
 	/* Double the capacity of the array (capacity must stay a power of 2!) */
 	newcap = (oldcap > 0) ? oldcap * 2 : RESARRAY_INIT_SIZE;
-	newitemsarr = (Datum *) MemoryContextAlloc(TopMemoryContext,
+	newitemsarr = (Datum *) MemoryContextAlloc(t_thrd.mem_cxt.cur_transaction_mem_cxt,
 											   newcap * sizeof(Datum));
 	for (i = 0; i < newcap; i++)
 		newitemsarr[i] = resarr->invalidval;
@@ -2053,7 +2053,7 @@ void
 ResourceOwnerForgetK2PgStmt(ResourceOwner owner, K2PgScanHandle* k2pg_stmt)
 {
 	if (!ResourceArrayRemove(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt)))
-		elog(ERROR, "K2PG statement %p is not owned by resource owner %s",
+		elog(WARNING, "K2PG statement %p is not owned by resource owner %s",
 			 k2pg_stmt, owner->name);
 }
 
