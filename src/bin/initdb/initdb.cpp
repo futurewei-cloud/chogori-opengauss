@@ -4454,7 +4454,7 @@ int main(int argc, char* argv[])
     }
 
     /* Create required subdirectories */
-    printf(_("creating subdirectories ... "));
+    printf(_("creating subdirectories ... \n"));
     (void)fflush(stdout);
 
     for (i = 0; (unsigned int)(i) < lengthof(subdirs); i++) {
@@ -4494,45 +4494,69 @@ int main(int argc, char* argv[])
         FREE_AND_RESET_STR(path);
     }
     /* create or check pg_location path */
+    printf(_("mkdir For Pg Location Dir ... \n"));
+    (void)fflush(stdout);
     mkdirForPgLocationDir();
     check_ok();
 
     /* Top level PG_VERSION is checked by bootstrapper, so make it first */
+    printf(_("write version file ... \n"));
+    (void)fflush(stdout);
     write_version_file(NULL);
 
+    printf(_("create pg lock files ... \n"));
+    (void)fflush(stdout);
     create_pg_lockfiles();
 
     /* Select suitable configuration settings */
+    printf(_("set null config and test ... \n"));
+    (void)fflush(stdout);
     set_null_conf();
     test_config_settings();
 
     /* Now create all the text config files */
+    printf(_("set config settings ... \n"));
+    (void)fflush(stdout);
     setup_config();
 
     /* Init undo subsystem meta. */
+    printf(_("Initialize Undo system meta ... \n"));
+    (void)fflush(stdout);
     InitUndoSubsystemMeta();
 
     /* Bootstrap template1 */
+    printf(_("Bootstrap template1 ... \n"));
+    (void)fflush(stdout);
     bootstrap_template1();
 
     /*
      * Make the per-database PG_VERSION for template1 only after init'ing it
      */
+    printf(_("Write version file base/1 ... \n"));
+    (void)fflush(stdout);
     write_version_file("base/1");
 
+    printf(_("Create PG default temp dir ... \n"));
+    (void)fflush(stdout);
     CreatePGDefaultTempDir();
 
     /* Create the stuff we don't need to use bootstrap mode for */
 
+    printf(_("Setup auth ... \n"));
+    (void)fflush(stdout);
     setup_auth();
     get_set_pwd();
 
+    printf(_("Setup depend,load plpgsql, and system views ... \n"));
+    (void)fflush(stdout);
     setup_depend();
     load_plpgsql();
     setup_sysviews();
 #ifdef ENABLE_PRIVATEGAUSS
     setup_privsysviews();
 #endif
+    printf(_("Setup perf views ... \n"));
+    (void)fflush(stdout);
     setup_perfviews();
 
 #ifdef PGXC
@@ -4541,24 +4565,42 @@ int main(int argc, char* argv[])
 #endif
 
     // TODO: should we exclude this step for k2_mode?
+    printf(_("Setup description ... \n"));
+    (void)fflush(stdout);
     setup_description();
 
+    printf(_("Setup collation ... \n"));
+    (void)fflush(stdout);
     setup_collation();
 
     if (!k2_mode) {
+        printf(_("Setup conversion ... \n"));
+        (void)fflush(stdout);
         setup_conversion();
 
+        printf(_("Setup directory ... \n"));
+        (void)fflush(stdout);
         setup_dictionary();
     }
 
+    printf(_("Setup privileges ... \n"));
+    (void)fflush(stdout);
     setup_privileges();
 
+    printf(_("Setup bucketmap len ... \n"));
+    (void)fflush(stdout);
     setup_bucketmap_len();
 
+    printf(_("Setup schema ... \n"));
+    (void)fflush(stdout);
     setup_schema();
 
+    printf(_("Load supported extension ... \n"));
+    (void)fflush(stdout);
     load_supported_extension();
 
+    printf(_("Load update ... \n"));
+    (void)fflush(stdout);
     setup_update();
 
 #ifndef ENABLE_MULTIPLE_NODES
@@ -4566,11 +4608,17 @@ int main(int argc, char* argv[])
 #endif
 
     if (!k2_mode) {
+        printf(_("Vacuum db ... \n"));
+        (void)fflush(stdout);
         vacuum_db();
     }
 
+    printf(_("Make template0 ... \n"));
+    (void)fflush(stdout);
     make_template0();
 
+    printf(_("Make postgres ... \n"));
+    (void)fflush(stdout);
     make_postgres();
 
 #ifdef PGXC
@@ -4582,6 +4630,8 @@ int main(int argc, char* argv[])
     if (authwarning != NULL)
         write_stderr("%s", authwarning);
 
+    printf(_("Start executable ... \n"));
+    (void)fflush(stdout);
     /* Get directory specification used to start this executable */
     rc = strncpy_s(bin_dir, sizeof(bin_dir), argv[0], sizeof(bin_dir) - 1);
     securec_check_c(rc, "\0", "\0");
