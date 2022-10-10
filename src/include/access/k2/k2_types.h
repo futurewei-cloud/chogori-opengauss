@@ -52,12 +52,17 @@ inline bool is4ByteIntType(Oid oid) {
     return (oid == INT4OID || oid == DATEOID);
 }
 
+// These are types that are uint32_t for PG, but for SKV we promote them to INT64 since SKV does not support unsigned types
+inline bool isUnsignedPromotedType(Oid oid) {
+    return (oid == OIDOID || oid == CIDOID || XIDOID);
+}
+
 inline bool is8ByteIntType(Oid oid) {
-    return (oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID);
+    return (oid == TIDOID || oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID);
 }
 
 inline bool isPushdownType(Oid oid) {
-    return isStringType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID ||
+    return isStringType(oid) || isUnsignedPromotedType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID ||
         oid == DATEOID || oid == TIMEOID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID);
 }
 
@@ -70,7 +75,7 @@ inline skv::http::dto::FieldType OidToK2Type(int type_oid) {
     else if (is4ByteIntType(type_oid)) {
         return FieldType::INT32T;
     }
-    else if (is8ByteIntType(type_oid)) {
+    else if (is8ByteIntType(type_oid) || isUnsignedPromotedType(type_oid)) {
         return FieldType::INT64T;
     }
     else if (type_oid == FLOAT4OID) {
