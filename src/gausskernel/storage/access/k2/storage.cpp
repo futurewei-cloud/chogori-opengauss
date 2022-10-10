@@ -56,7 +56,7 @@ public:
     }
 
     char* alloc(size_t size) {
-        char* p = (char*)palloc(size);
+        char* p = (char*)palloc0(size);
         objects.push_back(p);
         return p;
     }
@@ -78,7 +78,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kMaxTransactionId:
         case PgSystemAttrNum::kMaxCommandId:
         case PgSystemAttrNum::kTableOid: {
-            std::optional<int32_t> value = record.deserializeNext<int32_t>();
+            std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (!value.has_value()) {
                 throw std::runtime_error("System attribute in skvrecord was null");
             }
@@ -200,6 +200,13 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (value.has_value()) {
                 values[datum_offset] = (Datum)(*value);
+                isnulls[datum_offset] = false;
+            }
+        }
+        else if (isUnsignedPromotedType(id)) {
+            std::optional<int64_t> value = record.deserializeNext<int64_t>();
+            if (value.has_value()) {
+                values[datum_offset] = (Datum)(uint32_t)(*value);
                 isnulls[datum_offset] = false;
             }
         }
@@ -488,6 +495,10 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
         int32_t byte4 = (int32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
         return makeValueLiteral<int32_t>(std::move(byte4));
     }
+    else if (isUnsignedPromotedType(constant.type_id)) {
+        int64_t byte8 = (int64_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
+        return makeValueLiteral<int64_t>(std::move(byte8));
+    }
     else if (is8ByteIntType(constant.type_id)) {
         int64_t byte8 = (int64_t)constant.datum;
         return makeValueLiteral<int64_t>(std::move(byte8));
@@ -597,6 +608,10 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
         int32_t byte4 = (int32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
         builder.serializeNext<int32_t>(byte4);
     }
+    else if (isUnsignedPromotedType(constant.type_id)) {
+        int64_t uint = (int64_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
+        builder.serializeNext<int64_t>(uint);
+    }
     else if (is8ByteIntType(constant.type_id)) {
         int64_t byte8 = (int64_t)constant.datum;
         builder.serializeNext<int64_t>(byte8);
@@ -695,8 +710,8 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
 
     // Last, serialize key fields into the builder
     try {
-        builder->serializeNext<int32_t>(base_table_oid);
-        builder->serializeNext<int32_t>(index_id);
+        builder->serializeNext<int64_t>((int64_t)base_table_oid);
+        builder->serializeNext<int64_t>((int64_t)index_id);
 
         for (size_t i = K2_FIELD_OFFSET; i < builder->getSchema()->partitionKeyFields.size(); ++i) {
             auto it = attr_map.find(i);
@@ -724,10 +739,10 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
 K2PgStatus serializeKeysFromSKVRecord(skv::http::dto::SKVRecord& source, skv::http::dto::SKVRecordBuilder& builder) {
     try {
         source.seekField(0);
-        std::optional<int32_t> table_id = source.deserializeNext<int32_t>();
-        builder.serializeNext<int32_t>(*table_id);
-        std::optional<int32_t> index_id = source.deserializeNext<int32_t>();
-        builder.serializeNext<int32_t>(*index_id);
+        std::optional<int64_t> table_id = source.deserializeNext<int64_t>();
+        builder.serializeNext<int64_t>(*table_id);
+        std::optional<int64_t> index_id = source.deserializeNext<int64_t>();
+        builder.serializeNext<int64_t>(*index_id);
 
         for (size_t i=K2_FIELD_OFFSET; i < source.schema->partitionKeyFields.size(); ++i) {
             source.visitNextField([&builder] (const auto& field, auto&& value) mutable {
@@ -755,7 +770,7 @@ K2PgStatus serializeKeysFromSKVRecord(skv::http::dto::SKVRecord& source, skv::ht
     return K2PgStatus::OK;
 }
 
-K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, int32_t table_id, int32_t index_id,
+K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder, uint32_t table_id, uint32_t index_id,
                                       const std::vector<K2PgAttributeDef>& attrs, const std::unordered_map<int, uint32_t>& attr_num_to_index) {
     std::unordered_map<int, K2PgConstant> attr_map;
     for (size_t i=0; i < attrs.size(); ++i) {
@@ -766,8 +781,8 @@ K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,
     }
 
     try {
-        builder.serializeNext<int32_t>(table_id);
-        builder.serializeNext<int32_t>(index_id);
+        builder.serializeNext<int64_t>((int64_t)table_id);
+        builder.serializeNext<int64_t>((int64_t)index_id);
 
         for (size_t i = K2_FIELD_OFFSET; i < builder.getSchema()->fields.size(); ++i) {
             auto it = attr_map.find(i);

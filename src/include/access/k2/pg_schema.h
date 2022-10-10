@@ -36,7 +36,7 @@ Copyright(c) 2022 Futurewei Cloud
 namespace k2pg {
     typedef int32_t ColumnId;
     // Postgres type OID
-    typedef int PgTypeOid;
+    typedef uint32_t PgTypeOid;
     constexpr ColumnId kFirstColumnId = 0;
 
     enum IndexPermissions {

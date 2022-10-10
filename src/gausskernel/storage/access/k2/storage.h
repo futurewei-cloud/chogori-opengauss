@@ -73,7 +73,7 @@ namespace gate {
     K2PgStatus getSKVBuilder(K2PgOid database_oid, K2PgOid table_oid, std::unique_ptr<skv::http::dto::SKVRecordBuilder>& builder);
 
     // Helper function to serialize all attrs into the passed in SKV builder
-    K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,  int32_t table_id, int32_t index_id,
+    K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,  uint32_t table_id, uint32_t index_id,
                                           const std::vector<K2PgAttributeDef>& attrs, const std::unordered_map<int, uint32_t>& attr_num_to_index);
 
     // Serialize a full SKVRecord from the pg columns, the passed in SKVRecord record is an out parameter

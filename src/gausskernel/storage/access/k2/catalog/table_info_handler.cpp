@@ -1063,7 +1063,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::DeriveTableColumnMetaRecords(c
         // ColumnName
         builder.serializeNext<sh::String>(col_schema.name());
         // ColumnTypeOid
-        builder.serializeNext<int16_t>(col_schema.type_oid());
+        builder.serializeNext<int64_t>((int64_t)col_schema.type_oid());
         // IsNullable
         builder.serializeNext<bool>(col_schema.is_nullable());
         // IsPrimary
@@ -1094,7 +1094,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::DeriveIndexColumnMetaRecords(c
         // ColumnName
         builder.serializeNext<sh::String>(index_column.column_name);
         // ColumnTypeOid
-        builder.serializeNext<int16_t>(index_column.type_oid);
+        builder.serializeNext<int64_t>((int64_t)index_column.type_oid);
         // IsNullable
         builder.serializeNext<bool>(index_column.is_nullable);
         // IsRange
@@ -1300,7 +1300,7 @@ std::shared_ptr<TableInfo> TableInfoHandler::BuildTableInfo(const std::string& d
         // ColumnName
         std::string col_name = column.deserializeNext<sh::String>().value();
         // ColumnType Oid
-        int16_t col_type_oid = column.deserializeNext<int16_t>().value();
+        uint32_t col_type_oid = (uint32_t)column.deserializeNext<int64_t>().value();
         // IsNullable
         bool is_nullable = column.deserializeNext<bool>().value();
         // IsPrimary
@@ -1377,7 +1377,7 @@ IndexInfo TableInfoHandler::BuildIndexInfo(const std::string& collection_name, s
         // ColumnName
         std::string col_name = column.deserializeNext<sh::String>().value();
         // ColumnType OID
-        int16_t col_type_oid = column.deserializeNext<int16_t>().value();
+        uint32_t col_type_oid = (uint32_t)column.deserializeNext<int64_t>().value();
         // IsNullable
         bool is_nullable = column.deserializeNext<bool>().value();
         // IsRange

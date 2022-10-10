@@ -43,7 +43,7 @@ class ColumnDesc {
   void Init(int index,
             int id,
             std::string name,
-            int type_oid,
+            uint32_t type_oid,
             bool is_primary,
             int32_t attr_num,
             ColumnSchema::SortingType sorting_type) {
@@ -80,7 +80,7 @@ class ColumnDesc {
     return attr_num_;
   }
 
-  int type_oid() const {
+  uint32_t type_oid() const {
     return type_oid_;
   }
 
@@ -91,7 +91,7 @@ class ColumnDesc {
  private:
   int index_ = -1;
   int id_ = -1;
-  int type_oid_ = -1;
+  uint32_t type_oid_ = -1;
   std::string name_;
   bool is_primary_ = false;
   int32_t attr_num_ = -1;
@@ -139,7 +139,7 @@ class PgColumn {
   }
 
   // Pg type oid for this column
-  int type_oid() const {
+  uint32_t type_oid() const {
     return desc_.type_oid();
   }
 

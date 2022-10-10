@@ -851,10 +851,10 @@ K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConst
     skv::http::dto::SKVRecordBuilder end(handle->collectionName, schema);
 
     try {
-        start.serializeNext<int32_t>(base_table_oid);
-        end.serializeNext<int32_t>(base_table_oid);
-        start.serializeNext<int32_t>(index_id);
-        end.serializeNext<int32_t>(index_id);
+        start.serializeNext<int64_t>((int64_t)base_table_oid);
+        end.serializeNext<int64_t>((int64_t)base_table_oid);
+        start.serializeNext<int64_t>((int64_t)index_id);
+        end.serializeNext<int64_t>((int64_t)index_id);
 
         if (!whole_table_scan) {
             BuildRangeRecords(range_conds, where_conds.expressionChildren, start, end);
