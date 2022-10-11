@@ -48,7 +48,6 @@ typedef struct CamScanDescData
     // Data needed by PgGate for Exec call
     std::vector<K2PgConstraintDef> constraints;
     std::vector<int> targets_attrnum;
-    bool whole_table_scan = false;
 
 	ResourceOwner stmt_owner;
 	bool is_exec_done;

@@ -39,7 +39,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "session.h"
 #include "access/k2/pg_session.h"
 #include "access/k2/k2_util.h"
-#include "storage.h"
+#include "access/k2/storage.h"
 #include "access/k2/k2pg_util.h"
 
 #include "utils/elog.h"
@@ -50,7 +50,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "catalog/sql_catalog_manager.h"
 
 using namespace k2pg::gate;
-
 namespace {
 
     class PgGate {
@@ -113,7 +112,7 @@ K2PgStatus PgGate_InitSession(const char *database_name) {
 // - There K2PG objects are bound to Postgres operations. All of these objects' allocated
 //   memory will be held by K2PgMemCtx, whose handle belongs to Postgres MemoryContext. Once all
 //   Postgres operations are done, associated K2PG memory context (K2PgMemCtx) will be
-//   destroyed toghether with Postgres memory context.
+//   destroyed together with Postgres memory context.
 K2PgMemctx PgGate_CreateMemctx() {
     elog(LOG, "PgGateAPI: PgGate_CreateMemctx");
     // Postgres will create PG Memctx when it first use the Memctx to allocate K2PG object.
@@ -270,7 +269,7 @@ k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, int type_o
     return k2pg::ColumnSchema(col_name, type_oid, is_nullable, is_key, order, sorting_type);
 }
 
-std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key = false) {
+std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key = false) {
     std::vector<k2pg::ColumnSchema> k2pgcols;
     std::vector<k2pg::ColumnId> colIds;
     int num_key_columns = 0;
@@ -322,8 +321,8 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               bool if_not_exist,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
-    elog(LOG, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
-    auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
+    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
+    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns);
     if (!status.IsOK()) {
         return status;
     }
@@ -430,8 +429,8 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               const bool skip_index_backfill,
                               bool if_not_exist,
                               const std::vector<K2PGColumnDef>& columns){
-    elog(LOG, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
-    auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
+    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
+    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns);
     if (!status.IsOK()) {
         return status;
     }
@@ -748,12 +747,13 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
 // SELECT ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
-                         const K2PgSelectIndexParams& index_params,
+                         K2PgSelectIndexParams idxp,
                          K2PgScanHandle **handle){
-    elog(LOG, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
-    // TODO add to memctx
+    elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
     *handle = new K2PgScanHandle();
-    (*handle)->indexParams = index_params;
+    GetCurrentK2Memctx()->Cache([ptr=*handle] () { delete ptr;});
+    (*handle)->indexParams = std::move(idxp);
+    (*handle)->maxParallelReads = k2pg::TXMgr.getConfig().get<uint32_t>("pggate.max_parallel_reads", 5);
 
     std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
     if (pg_table == nullptr) {
@@ -765,6 +765,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
         };
         return status;
     }
+
     (*handle)->primaryTable = pg_table;
 
     (*handle)->collectionName = pg_table->collection_name();
@@ -776,11 +777,11 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
     }
     (*handle)->primarySchema = primarySchema;
 
-    if (index_params.index_oid == kInvalidOid || index_params.index_oid == table_oid) {
+    if ((*handle)->indexParams.index_oid == kInvalidOid || (*handle)->indexParams.index_oid == table_oid) {
         return K2PgStatus::OK;
     }
 
-    pg_table = k2pg::pg_session->LoadTable(database_oid, index_params.index_oid);
+    pg_table = k2pg::pg_session->LoadTable(database_oid, (*handle)->indexParams.index_oid);
     if (pg_table == nullptr) {
         K2PgStatus status {
             .pg_code = ERRCODE_INTERNAL_ERROR,
@@ -799,13 +800,15 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
     }
     (*handle)->secondarySchema = secondarySchema;
 
-    (*handle)->maxParallelReads = k2pg::TXMgr.getConfig().get<uint32_t>("pggate.max_parallel_reads", 5);
-
     return K2PgStatus::OK;
 }
 
-K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
-                             bool whole_table_scan, bool forward_scan, const K2PgSelectLimitParams& limit_params) {
+K2PgStatus PgGate_ExecSelect(
+                K2PgScanHandle *handle,
+                const std::vector<K2PgConstraintDef>& constraints,
+                const std::vector<int>& targets_attrnum,
+                bool forward_scan,
+                const K2PgSelectLimitParams& limit_params) {
     using namespace skv::http::dto::expression;
     Expression range_conds{}, where_conds{};
     range_conds.op = Operation::AND;
@@ -856,9 +859,7 @@ K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConst
         start.serializeNext<int64_t>((int64_t)index_id);
         end.serializeNext<int64_t>((int64_t)index_id);
 
-        if (!whole_table_scan) {
-            BuildRangeRecords(range_conds, where_conds.expressionChildren, start, end);
-        }
+        BuildRangeRecords(range_conds, where_conds.expressionChildren, start, end);
     }
     catch (const std::exception& err) {
         K2PgStatus status {

@@ -258,7 +258,7 @@ static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
 	{
-		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, camScan->whole_table_scan, is_forward_scan, camScan->exec_params),
+		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, is_forward_scan, camScan->exec_params),
 														camScan->handle,
 														camScan->stmt_owner);
 		camScan->is_exec_done = true;
@@ -310,7 +310,7 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
 	{
-		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, camScan->whole_table_scan, is_forward_scan, camScan->exec_params),
+		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, is_forward_scan, camScan->exec_params),
 														camScan->handle,
 														camScan->stmt_owner);
 		camScan->is_exec_done = true;
@@ -1631,7 +1631,7 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
         .limit_offset = 0,
         .limit_use_default = false
     };
-	HandleK2PgStatus(PgGate_ExecSelect(k2pg_stmt, std::move(constraints), std::move(targets), false /* whole_table */, true /* forward */, limit_params));
+	HandleK2PgStatus(PgGate_ExecSelect(k2pg_stmt, std::move(constraints), std::move(targets), true /* forward */, limit_params));
 
 	HeapTuple tuple    = NULL;
 	bool      has_data = false;

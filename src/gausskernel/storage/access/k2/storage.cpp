@@ -33,7 +33,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "utils/numeric.h"
 
 #include "access/k2/k2_util.h"
-#include "storage.h"
+#include "access/k2/storage.h"
 #include "session.h"
 
 #include <skvhttp/dto/Expression.h>

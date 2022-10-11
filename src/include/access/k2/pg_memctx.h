@@ -29,7 +29,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include <unordered_map>
 
 #include "access/k2/status.h"
-#include "access/k2/pg_statement.h"
 #include "access/k2/pg_tabledesc.h"
 
 namespace k2pg {
@@ -49,7 +48,7 @@ class PgMemctx {
 
   // Constructor and destructor.
   PgMemctx();
-  virtual ~PgMemctx();
+  ~PgMemctx();
 
   // API: Create(), Destroy(), and Reset()
   // - Because Postgres process own K2SQL memory context, only Postgres processes should call
@@ -71,8 +70,11 @@ class PgMemctx {
   // keeps all the allocated memory for the child contexts.
   static Status Reset(PgMemctx *handle);
 
-  // Cache the statement in the memory context to be destroyed later on.
-  void Cache(const std::shared_ptr<PgStatement> &stmt);
+  // cache the given deleter function
+  template<typename Func>
+  void Cache(Func&& deleterFunc) {
+      _deleters.push_back(std::move(deleterFunc));
+  }
 
   // Cache the table descriptor in the memory context to be destroyed later on.
   void Cache(size_t hash_id, const std::shared_ptr<PgTableDesc> &table_desc);
@@ -88,13 +90,12 @@ class PgMemctx {
   //   For now we destroy the K2SQL objects in the current context also as we should. However,
   //   if the objects in nested context might still have referenced to the objects of the outer
   //   memctx, we can delay the PgStatement objects' destruction.
-  void Clear();
-
-  // All statements that are allocated with this memory context.
-  std::vector<std::shared_ptr<PgStatement>> stmts_;
+  void _Clear();
 
   // All table descriptors that are allocated with this memory context.
   std::unordered_map<size_t, std::shared_ptr<PgTableDesc>> tabledesc_map_;
+
+  std::vector<std::function<void(void)>> _deleters;
 };
 
 }  // namespace k2pg
