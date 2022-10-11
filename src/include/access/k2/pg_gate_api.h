@@ -110,7 +110,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid);
 struct K2PGColumnDef {
     const char* attr_name;
     int attr_num;
-    int type_oid;
+    Oid type_oid;
     bool is_key;
     bool is_desc;
     bool is_nulls_first;

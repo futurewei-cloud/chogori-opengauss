@@ -66,7 +66,7 @@ inline bool isPushdownType(Oid oid) {
         oid == DATEOID || oid == TIMEOID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID || oid == NAMEOID);
 }
 
-inline skv::http::dto::FieldType OidToK2Type(int type_oid) {
+inline skv::http::dto::FieldType OidToK2Type(Oid type_oid) {
     using namespace skv::http::dto;
 
     if (is1ByteIntType(type_oid) || is2ByteIntType(type_oid)) {
