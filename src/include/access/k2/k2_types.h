@@ -45,20 +45,23 @@ inline bool is1ByteIntType(Oid oid) {
 }
 
 inline bool is2ByteIntType(Oid oid) {
-    return (oid == INT2OID);
+    return (oid == INT2OID || oid == SMGROID);
 }
 
 inline bool is4ByteIntType(Oid oid) {
-    return (oid == INT4OID || oid == DATEOID);
+    return (oid == INT4OID || oid == DATEOID || oid == ANYOID || oid == OPAQUEOID || oid == ANYELEMENTOID || oid == ANYNONARRAYOID || oid == ANYENUMOID);
 }
 
 // These are types that are uint32_t for PG, but for SKV we promote them to INT64 since SKV does not support unsigned types
 inline bool isUnsignedPromotedType(Oid oid) {
-    return (oid == OIDOID || oid == CIDOID || oid == XIDOID);
+    return (oid == OIDOID || oid == CIDOID || oid == XIDOID || oid == REGPROCOID || oid == REGPROCEDUREOID || oid == REGOPEROID || oid == REGOPERATOROID ||
+            oid == REGCLASSOID || oid == REGTYPEOID || oid == REGCONFIGOID || oid == REGDICTIONARYOID ||
+            oid == TRIGGEROID || oid == LANGUAGE_HANDLEROID || oid == FDW_HANDLEROID);
 }
 
 inline bool is8ByteIntType(Oid oid) {
-    return (oid == TIDOID || oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID);
+    return (oid == TIDOID || oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID ||
+            oid == VOIDOID || oid == INTERNALOID);
 }
 
 inline bool isPushdownType(Oid oid) {
