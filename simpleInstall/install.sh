@@ -8,6 +8,8 @@
 # Description  : the scripy used to install the single cluster on one machine
 #########################################
 
+set -x
+
 function usage()
 {
     echo "
@@ -212,7 +214,7 @@ function set_environment() {
 
 function single_install() {
     info "[step 6]: init datanode"
-    gs_initdb -w $password -D $app/data/single_node --nodename "sgnode" --locale="en_US.UTF-8"
+    gs_initdb -w $password -D $app/data/single_node --debug --nodename "sgnode" --locale="en_US.UTF-8"
     if [ X$port != X$default_port  ]
     then
         sed -i "/^#port =/c\port = $port" $app/data/single_node/postgresql.conf

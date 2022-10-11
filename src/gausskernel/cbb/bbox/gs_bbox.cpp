@@ -403,17 +403,10 @@ void assign_bbox_coredump(const bool newval, void* extra)
     if (t_thrd.proc_cxt.MyProcPid != PostmasterPid)
         return;
 
-    if (newval && !FencedUDFMasterMode) {
-        (void)install_signal(SIGABRT, bbox_handler);
-        (void)install_signal(SIGBUS, bbox_handler);
-        (void)install_signal(SIGILL, bbox_handler);
-        (void)install_signal(SIGSEGV, bbox_handler);
-    } else {
-        (void)install_signal(SIGABRT, coredump_handler);
-        (void)install_signal(SIGBUS, coredump_handler);
-        (void)install_signal(SIGILL, coredump_handler);
-        (void)install_signal(SIGSEGV, coredump_handler);
-    }
+    (void)install_signal(SIGABRT, coredump_handler);
+    (void)install_signal(SIGBUS, coredump_handler);
+    (void)install_signal(SIGILL, coredump_handler);
+    (void)install_signal(SIGSEGV, coredump_handler);
 }
 
 /*
@@ -495,4 +488,3 @@ int CheckFilenameValid(const char* inputEnvValue)
     }
     return RET_OK;
 }
-

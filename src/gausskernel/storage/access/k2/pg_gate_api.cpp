@@ -115,40 +115,40 @@ K2PgStatus PgGate_InitSession(const char *database_name) {
 //   Postgres operations are done, associated K2PG memory context (K2PgMemCtx) will be
 //   destroyed toghether with Postgres memory context.
 K2PgMemctx PgGate_CreateMemctx() {
-    elog(DEBUG5, "PgGateAPI: PgGate_CreateMemctx");
+    elog(LOG, "PgGateAPI: PgGate_CreateMemctx");
     // Postgres will create PG Memctx when it first use the Memctx to allocate K2PG object.
     return k2pg::PgMemctx::Create();
 }
 
 K2PgStatus PgGate_DestroyMemctx(K2PgMemctx memctx) {
-    elog(DEBUG5, "PgGateAPI: PgGate_DestroyMemctx");
+    elog(LOG, "PgGateAPI: PgGate_DestroyMemctx");
     // Postgres will destroy PG Memctx by releasing the pointer.
     return k2pg::PgMemctx::Destroy(memctx);
 }
 
 K2PgStatus PgGate_ResetMemctx(K2PgMemctx memctx) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ResetMemctx");
+    elog(LOG, "PgGateAPI: PgGate_ResetMemctx");
     // Postgres reset PG Memctx when clearing a context content without clearing its nested context.
     return k2pg::PgMemctx::Reset(memctx);
 }
 
 // Invalidate the sessions table cache.
 K2PgStatus PgGate_InvalidateCache() {
-    elog(DEBUG5, "PgGateAPI: PgGate_InvalidateCache");
+    elog(LOG, "PgGateAPI: PgGate_InvalidateCache");
     k2pg::pg_session->InvalidateCache();
     return K2PgStatus::OK;
 }
 
 // Check if initdb has been already run.
 K2PgStatus PgGate_IsInitDbDone(bool* initdb_done) {
-    elog(DEBUG5, "PgGateAPI: PgGate_IsInitDbDone");
+    elog(LOG, "PgGateAPI: PgGate_IsInitDbDone");
     return pg_gate->GetCatalogClient()->IsInitDbDone(initdb_done);
 }
 
 // Sets catalog_version to the local tserver's catalog version stored in shared
 // memory, or an error if the shared memory has not been initialized (e.g. in initdb).
 K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
-    elog(DEBUG5, "PgGateAPI: PgGate_GetSharedCatalogVersion");
+    elog(LOG, "PgGateAPI: PgGate_GetSharedCatalogVersion");
     return pg_gate->GetCatalogClient()->GetCatalogVersion(catalog_version);
 }
 
@@ -158,19 +158,19 @@ K2PgStatus PgGate_GetSharedCatalogVersion(uint64_t* catalog_version) {
 
 // K2 InitPrimaryCluster
 K2PgStatus PgGate_InitPrimaryCluster() {
-    elog(DEBUG5, "PgGateAPI: PgGate_InitPrimaryCluster");
+    elog(LOG, "PgGateAPI: PgGate_InitPrimaryCluster");
     return pg_gate->GetCatalogClient()->InitPrimaryCluster();
 }
 
 K2PgStatus PgGate_FinishInitDB() {
-    elog(DEBUG5, "PgGateAPI: PgGate_FinishInitDB()");
+    elog(LOG, "PgGateAPI: PgGate_FinishInitDB()");
     return pg_gate->GetCatalogClient()->FinishInitDB();
 }
 
 // DATABASE ----------------------------------------------------------------------------------------
 // Connect database. Switch the connected database to the given "database_name".
 K2PgStatus PgGate_ConnectDatabase(const char *database_name) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ConnectDatabase %s", database_name);
+    elog(LOG, "PgGateAPI: PgGate_ConnectDatabase %s", database_name);
     return k2pg::pg_session->ConnectDatabase(database_name);
 }
 
@@ -191,7 +191,7 @@ K2PgStatus PgGate_ExecCreateDatabase(const char *database_name,
 // Drop database.
 K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
                                    K2PgOid database_oid) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
+    elog(LOG, "PgGateAPI: PgGate_ExecDropDatabase %s, %d", database_name, database_oid);
     return pg_gate->GetCatalogClient()->DeleteDatabase(database_name,
         k2pg::PgObjectId::GetDatabaseUuid(database_oid));
 }
@@ -200,17 +200,17 @@ K2PgStatus PgGate_ExecDropDatabase(const char *database_name,
 K2PgStatus PgGate_NewAlterDatabase(const char *database_name,
                                K2PgOid database_oid,
                                K2PgStatement *handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_NewAlterDatabase %s, %d", database_name, database_oid);
+  elog(LOG, "PgGateAPI: PgGate_NewAlterDatabase %s, %d", database_name, database_oid);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterDatabaseRenameDatabase(K2PgStatement handle, const char *new_name) {
-  elog(DEBUG5, "PgGateAPI: PgGate_AlterDatabaseRenameDatabase %s", new_name);
+  elog(LOG, "PgGateAPI: PgGate_AlterDatabaseRenameDatabase %s", new_name);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecAlterDatabase(K2PgStatement handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecAlterDatabase");
+  elog(LOG, "PgGateAPI: PgGate_ExecAlterDatabase");
   return K2PgStatus::NotSupported;
 }
 
@@ -220,25 +220,25 @@ K2PgStatus PgGate_ReserveOids(K2PgOid database_oid,
                            uint32_t count,
                            K2PgOid *begin_oid,
                            K2PgOid *end_oid) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ReserveOids %d, %d, %d", database_oid, next_oid, count);
+    elog(LOG, "PgGateAPI: PgGate_ReserveOids %d, %d, %d", database_oid, next_oid, count);
     return pg_gate->GetCatalogClient()->ReservePgOids(database_oid, next_oid, count, begin_oid, end_oid);
 }
 
 K2PgStatus PgGate_GetCatalogMasterVersion(uint64_t *version) {
-    elog(DEBUG5, "PgGateAPI: PgGate_GetCatalogMasterVersion");
+    elog(LOG, "PgGateAPI: PgGate_GetCatalogMasterVersion");
     return pg_gate->GetCatalogClient()->GetCatalogVersion(version);
 }
 
 void PgGate_InvalidateTableCache(
     const K2PgOid database_oid,
     const K2PgOid table_oid) {
-    elog(DEBUG5, "PgGateAPI: PgGate_InvalidateTableCache %d, %d", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_InvalidateTableCache %d, %d", database_oid, table_oid);
     const k2pg::PgObjectId table_object_id(database_oid, table_oid);
     k2pg::pg_session->InvalidateTableCache(table_object_id);
 }
 
 K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
-    elog(DEBUG5, "PgGateAPI: PgGate_InvalidateTableCacheByTableId %s", table_uuid);
+    elog(LOG, "PgGateAPI: PgGate_InvalidateTableCacheByTableId %s", table_uuid);
     if (table_uuid == NULL) {
         K2PgStatus status {
             .pg_code = ERRCODE_FDW_ERROR,
@@ -322,7 +322,7 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               bool if_not_exist,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
-    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
+    elog(LOG, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
     auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
     if (!status.IsOK()) {
         return status;
@@ -334,35 +334,35 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
 K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,
                              K2PgOid table_oid,
                              K2PgStatement *handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewAlterTable %d, %d", database_oid, table_oid);
+  elog(LOG, "PgGateAPI: PgGate_NewAlterTable %d, %d", database_oid, table_oid);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableAddColumn(K2PgStatement handle, const char *name, int order,
                                    int type_oid, bool is_not_null){
-  elog(DEBUG5, "PgGateAPI: PgGate_AlterTableAddColumn %s", name);
+  elog(LOG, "PgGateAPI: PgGate_AlterTableAddColumn %s", name);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableRenameColumn(K2PgStatement handle, const char *oldname,
                                       const char *newname){
-  elog(DEBUG5, "PgGateAPI: PgGate_AlterTableRenameColumn %s, %s", oldname, newname);
+  elog(LOG, "PgGateAPI: PgGate_AlterTableRenameColumn %s, %s", oldname, newname);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableDropColumn(K2PgStatement handle, const char *name){
-  elog(DEBUG5, "PgGateAPI: PgGate_AlterTableDropColumn %s", name);
+  elog(LOG, "PgGateAPI: PgGate_AlterTableDropColumn %s", name);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AlterTableRenameTable(K2PgStatement handle, const char *db_name,
                                      const char *newname){
-  elog(DEBUG5, "PgGateAPI: PgGate_AlterTableRenameTable %s, %s", db_name, newname);
+  elog(LOG, "PgGateAPI: PgGate_AlterTableRenameTable %s, %s", db_name, newname);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecAlterTable(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecAlterTable");
+  elog(LOG, "PgGateAPI: PgGate_ExecAlterTable");
   return K2PgStatus::NotSupported;
 }
 
@@ -370,19 +370,19 @@ K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
                             K2PgOid table_oid,
                             bool if_exist,
                             K2PgStatement *handle) {
-  elog(DEBUG5, "PgGateAPI: PgGate_NewDropTable %d, %d", database_oid, table_oid);
+  elog(LOG, "PgGateAPI: PgGate_NewDropTable %d, %d", database_oid, table_oid);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecDropTable");
+  elog(LOG, "PgGateAPI: PgGate_ExecDropTable");
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
-    elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
     *handle = k2pg::pg_session->LoadTable(database_oid, table_oid).get();
     if (*handle == nullptr) {
         return K2PgStatus {
@@ -398,19 +398,19 @@ K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              int16_t attr_number,
                              bool *is_primary) {
-    elog(DEBUG5, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
+    elog(LOG, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
     return table_desc->GetColumnInfo(attr_number, is_primary);
 }
 
 K2PgStatus PgGate_SetIsSysCatalogVersionChange(K2PgStatement handle){
-    elog(DEBUG5, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
+    elog(LOG, "PgGateAPI: PgGate_SetIsSysCatalogVersionChange");
     // TODO: check if we don't need this
     handle->SetSysCatalogVersionChange();
     return pg_gate->GetCatalogClient()->IncrementCatalogVersion();
 }
 
 K2PgStatus PgGate_SetCatalogCacheVersion(K2PgStatement handle, uint64_t catalog_cache_version){
-    elog(DEBUG5, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
+    elog(LOG, "PgGateAPI: PgGate_SetCatalogCacheVersion %ld", catalog_cache_version);
     handle->SetCatalogCacheVersion(catalog_cache_version);
     return K2PgStatus::OK;
 }
@@ -430,7 +430,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               const bool skip_index_backfill,
                               bool if_not_exist,
                               const std::vector<K2PGColumnDef>& columns){
-    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
+    elog(LOG, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
     auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
     if (!status.IsOK()) {
         return status;
@@ -444,12 +444,12 @@ K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
                             K2PgOid index_oid,
                             bool if_exist,
                             K2PgStatement *handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_NewDropIndex %d, %d", database_oid, index_oid);
+  elog(LOG, "PgGateAPI: PgGate_NewDropIndex %d, %d", database_oid, index_oid);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExecDropIndex");
+  elog(LOG, "PgGateAPI: PgGate_ExecDropIndex");
   return K2PgStatus::NotSupported;
 }
 
@@ -458,7 +458,7 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
 //--------------------------------------------------------------------------------------------------
 K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
-    elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch %d", nattrs);
+    elog(LOG, "PgGateAPI: PgGate_DmlFetch %d", nattrs);
 
     *has_data = false;
 
@@ -536,14 +536,14 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *val
 
 // Utility method that checks stmt type and calls either exec insert, update, or delete internally.
 K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count){
-  elog(DEBUG5, "PgGateAPI: PgGate_DmlExecWriteOp");
+  elog(LOG, "PgGateAPI: PgGate_DmlExecWriteOp");
   return K2PgStatus::NotSupported;
 }
 
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
-    elog(DEBUG5, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
+    elog(LOG, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
 
     skv::http::dto::SKVRecord fullRecord;
     K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, fullRecord);
@@ -585,7 +585,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              bool upsert,
                              bool increment_catalog,
                              const std::vector<K2PgAttributeDef>& columns) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
     auto catalog = pg_gate->GetCatalogClient();
 
     skv::http::dto::SKVRecord record;
@@ -614,7 +614,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
                              bool increment_catalog,
                              int* rows_affected,
                              const std::vector<K2PgAttributeDef>& columns) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ExecUpdate %u, %u", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_ExecUpdate %u, %u", database_oid, table_oid);
 
     auto catalog = pg_gate->GetCatalogClient();
     *rows_affected = 0;
@@ -695,7 +695,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
                              bool increment_catalog,
                              int* rows_affected,
                              const std::vector<K2PgAttributeDef>& columns) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
 
     auto catalog = pg_gate->GetCatalogClient();
     *rows_affected = 0;
@@ -750,7 +750,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
                          const K2PgSelectIndexParams& index_params,
                          K2PgScanHandle **handle){
-    elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
     // TODO add to memctx
     *handle = new K2PgScanHandle();
     (*handle)->indexParams = index_params;
@@ -908,47 +908,47 @@ K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConst
 // Transaction control -----------------------------------------------------------------------------
 
 K2PgStatus PgGate_BeginTransaction(){
-  elog(DEBUG5, "PgGateAPI: PgGate_BeginTransaction");
+  elog(LOG, "PgGateAPI: PgGate_BeginTransaction");
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_RestartTransaction(){
-  elog(DEBUG5, "PgGateAPI: PgGate_RestartTransaction");
+  elog(LOG, "PgGateAPI: PgGate_RestartTransaction");
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_CommitTransaction(){
-  elog(DEBUG5, "PgGateAPI: PgGate_CommitTransaction");
+  elog(LOG, "PgGateAPI: PgGate_CommitTransaction");
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_AbortTransaction(){
-  elog(DEBUG5, "PgGateAPI: PgGate_AbortTransaction");
+  elog(LOG, "PgGateAPI: PgGate_AbortTransaction");
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetTransactionIsolationLevel(int isolation){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionIsolationLevel %d", isolation);
+  elog(LOG, "PgGateAPI: PgGate_SetTransactionIsolationLevel %d", isolation);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetTransactionReadOnly(bool read_only){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionReadOnly %d", read_only);
+  elog(LOG, "PgGateAPI: PgGate_SetTransactionReadOnly %d", read_only);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_SetTransactionDeferrable(bool deferrable){
-  elog(DEBUG5, "PgGateAPI: PgGate_SetTransactionReadOnly %d", deferrable);
+  elog(LOG, "PgGateAPI: PgGate_SetTransactionReadOnly %d", deferrable);
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_EnterSeparateDdlTxnMode(){
-  elog(DEBUG5, "PgGateAPI: PgGate_EnterSeparateDdlTxnMode");
+  elog(LOG, "PgGateAPI: PgGate_EnterSeparateDdlTxnMode");
   return K2PgStatus::NotSupported;
 }
 
 K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
-  elog(DEBUG5, "PgGateAPI: PgGate_ExitSeparateDdlTxnMode");
+  elog(LOG, "PgGateAPI: PgGate_ExitSeparateDdlTxnMode");
   return K2PgStatus::NotSupported;
 }
 
@@ -957,19 +957,19 @@ K2PgStatus PgGate_ExitSeparateDdlTxnMode(bool success){
 // Referential Integrity Check Caching.
 // Check if foreign key reference exists in cache.
 bool PgGate_ForeignKeyReferenceExists(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size) {
-    elog(DEBUG5, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
+    elog(LOG, "PgGateAPI: PgGate_ForeignKeyReferenceExists %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
     return k2pg::pg_session->ForeignKeyReferenceExists(table_oid, std::string(k2pgctid, k2pgctid_size));
 }
 
 // Add an entry to foreign key reference cache.
 K2PgStatus PgGate_CacheForeignKeyReference(K2PgOid table_oid, const char* k2pgctid, int64_t k2pgctid_size){
-    elog(DEBUG5, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
+    elog(LOG, "PgGateAPI: PgGate_CacheForeignKeyReference %d, %p, %ld", table_oid, k2pgctid, k2pgctid_size);
     return k2pg::pg_session->CacheForeignKeyReference(table_oid, std::string(k2pgctid, k2pgctid_size));
 }
 
 // Delete an entry from foreign key reference cache.
 K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t k2pgctid){
-    elog(DEBUG5, "PgGateAPI: PgGate_DeleteFromForeignKeyReferenceCache %d, %lu", table_oid, k2pgctid);
+    elog(LOG, "PgGateAPI: PgGate_DeleteFromForeignKeyReferenceCache %d, %lu", table_oid, k2pgctid);
     k2pg::UntoastedDatum data = k2pg::UntoastedDatum(k2pgctid);
     int64_t bytes = VARSIZE(data.untoasted); // includes header len VARHDRSZ
     char *value = (char*)data.untoasted;
@@ -977,7 +977,7 @@ K2PgStatus PgGate_DeleteFromForeignKeyReferenceCache(K2PgOid table_oid, uint64_t
 }
 
 void PgGate_ClearForeignKeyReferenceCache() {
-    elog(DEBUG5, "PgGateAPI: PgGate_ClearForeignKeyReferenceCache");
+    elog(LOG, "PgGateAPI: PgGate_ClearForeignKeyReferenceCache");
     k2pg::pg_session->InvalidateForeignKeyReferenceCache();
 }
 
@@ -987,7 +987,7 @@ bool PgGate_IsK2PgEnabled() {
 
 // Sets the specified timeout in the rpc service.
 void PgGate_SetTimeout(int timeout_ms, void* extra) {
-  elog(DEBUG5, "PgGateAPI: PgGate_SetTimeout %d", timeout_ms);
+  elog(LOG, "PgGateAPI: PgGate_SetTimeout %d", timeout_ms);
   if (timeout_ms <= 0) {
     return;
   }
@@ -998,47 +998,47 @@ void PgGate_SetTimeout(int timeout_ms, void* extra) {
 // Thread-Local variables.
 
 void* PgGate_GetThreadLocalCurrentMemoryContext() {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetThreadLocalCurrentMemoryContext");
+  elog(LOG, "PgGateAPI: PgGate_GetThreadLocalCurrentMemoryContext");
   return PgGetThreadLocalCurrentMemoryContext();
 }
 
 void* PgGate_SetThreadLocalCurrentMemoryContext(void *memctx) {
-  elog(DEBUG5, "PgGateAPI: PgGate_SetThreadLocalCurrentMemoryContext");
+  elog(LOG, "PgGateAPI: PgGate_SetThreadLocalCurrentMemoryContext");
   return PgSetThreadLocalCurrentMemoryContext(memctx);
 }
 
 void PgGate_ResetCurrentMemCtxThreadLocalVars() {
-  elog(DEBUG5, "PgGateAPI: PgGate_ResetCurrentMemCtxThreadLocalVars");
+  elog(LOG, "PgGateAPI: PgGate_ResetCurrentMemCtxThreadLocalVars");
   PgResetCurrentMemCtxThreadLocalVars();
 }
 
 void* PgGate_GetThreadLocalStrTokPtr() {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetThreadLocalStrTokPtr");
+  elog(LOG, "PgGateAPI: PgGate_GetThreadLocalStrTokPtr");
   return PgGetThreadLocalStrTokPtr();
 }
 
 void PgGate_SetThreadLocalStrTokPtr(char *new_pg_strtok_ptr) {
-  elog(DEBUG5, "PgGateAPI: PgGate_SetThreadLocalStrTokPtr %s", new_pg_strtok_ptr);
+  elog(LOG, "PgGateAPI: PgGate_SetThreadLocalStrTokPtr %s", new_pg_strtok_ptr);
   PgSetThreadLocalStrTokPtr(new_pg_strtok_ptr);
 }
 
 void* PgGate_SetThreadLocalJumpBuffer(void* new_buffer) {
-  elog(DEBUG5, "PgGateAPI: PgGate_SetThreadLocalJumpBuffer");
+  elog(LOG, "PgGateAPI: PgGate_SetThreadLocalJumpBuffer");
   return PgSetThreadLocalJumpBuffer(new_buffer);
 }
 
 void* PgGate_GetThreadLocalJumpBuffer() {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetThreadLocalJumpBuffer");
+  elog(LOG, "PgGateAPI: PgGate_GetThreadLocalJumpBuffer");
   return PgGetThreadLocalJumpBuffer();
 }
 
 void PgGate_SetThreadLocalErrMsg(const void* new_msg) {
-  elog(DEBUG5, "PgGateAPI: PgGate_SetThreadLocalErrMsg %s", static_cast<const char*>(new_msg));
+  elog(LOG, "PgGateAPI: PgGate_SetThreadLocalErrMsg %s", static_cast<const char*>(new_msg));
   PgSetThreadLocalErrMsg(new_msg);
 }
 
 const void* PgGate_GetThreadLocalErrMsg() {
-  elog(DEBUG5, "PgGateAPI: PgGate_GetThreadLocalErrMsg");
+  elog(LOG, "PgGateAPI: PgGate_GetThreadLocalErrMsg");
   return PgGetThreadLocalErrMsg();
 }
 
@@ -1061,11 +1061,11 @@ bool K2PgAllowForPrimaryKey(int type_oid) {
 }
 
 void K2PgAssignTransactionPriorityLowerBound(double newval, void* extra) {
-  elog(DEBUG5, "PgGateAPI: K2PgAssignTransactionPriorityLowerBound %f", newval);
+  elog(LOG, "PgGateAPI: K2PgAssignTransactionPriorityLowerBound %f", newval);
 }
 
 void K2PgAssignTransactionPriorityUpperBound(double newval, void* extra) {
-  elog(DEBUG5, "PgGateAPI: K2PgAssignTransactionPriorityUpperBound %f", newval);
+  elog(LOG, "PgGateAPI: K2PgAssignTransactionPriorityUpperBound %f", newval);
 }
 
 // the following APIs are called by pg_dump.c only
