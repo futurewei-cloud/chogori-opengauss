@@ -54,7 +54,7 @@ inline bool is4ByteIntType(Oid oid) {
 
 // These are types that are uint32_t for PG, but for SKV we promote them to INT64 since SKV does not support unsigned types
 inline bool isUnsignedPromotedType(Oid oid) {
-    return (oid == OIDOID || oid == CIDOID || XIDOID);
+    return (oid == OIDOID || oid == CIDOID || oid == XIDOID);
 }
 
 inline bool is8ByteIntType(Oid oid) {
