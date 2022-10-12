@@ -175,6 +175,20 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
                 isnulls[datum_offset] = false;
             }
         }
+        else if (id == NAMEOID) {
+            // NAMEOID is a special case that is dynamically allocated, but it is fixed size so it doesn't have a header
+             std::optional<std::string> value = record.deserializeNext<std::string>();
+            if (value.has_value()) {
+                if (value->size() > NAMEDATALEN) {
+                    throw std::runtime_error("SKV value is too large for NAMEOID type");
+                }
+                char* datum = allocManager.alloc(NAMEDATALEN);
+                memcpy(datum, value->data(), value->size());
+
+                values[datum_offset] = CStringGetDatum(datum);
+                isnulls[datum_offset] = false;
+            }
+        }
         else if (id == BOOLOID) {
             std::optional<bool> value = record.deserializeNext<bool>();
             if (value.has_value()) {
@@ -483,6 +497,11 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
         bool byte = (bool)(((uintptr_t)(constant.datum)) & 0x000000ff);
         return makeValueLiteral<bool>(std::move(byte));
     }
+    else if (constant.type_id == NAMEOID) {
+        // NAMEOID is dynamically allocated but fixed length
+        char* bytes = DatumGetCString(constant.datum);
+        return makeValueLiteral<std::string>(std::string(bytes));
+    }
     else if (is1ByteIntType(constant.type_id)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
         return makeValueLiteral<int16_t>(std::move(byte));
@@ -595,6 +614,11 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
     else if (constant.type_id == BOOLOID) {
         bool byte = (bool)(((uintptr_t)(constant.datum)) & 0x000000ff);
         builder.serializeNext<bool>(byte);
+    }
+    else if (constant.type_id == NAMEOID) {
+        // NAMEOID is dynamically allocated but fixed length
+        char* bytes = DatumGetCString(constant.datum);
+        return builder.serializeNext<std::string>(std::string(bytes));
     }
     else if (is1ByteIntType(constant.type_id)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
