@@ -270,7 +270,7 @@ k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, int type_o
     return k2pg::ColumnSchema(col_name, type_oid, is_nullable, is_key, order, sorting_type);
 }
 
-std::tuple<k2pg::Status, bool, k2pg::Schema> makeSChema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key = false) {
+std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key) {
     std::vector<k2pg::ColumnSchema> k2pgcols;
     std::vector<k2pg::ColumnId> colIds;
     int num_key_columns = 0;
@@ -323,7 +323,7 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
     elog(LOG, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
-    auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
+    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns, add_primary_key);
     if (!status.IsOK()) {
         return status;
     }
@@ -431,7 +431,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               bool if_not_exist,
                               const std::vector<K2PGColumnDef>& columns){
     elog(LOG, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
-    auto [status, is_pg_catalog_table, schema] = makeSChema(schema_name, columns);
+    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns, false /* add_primary_key */);
     if (!status.IsOK()) {
         return status;
     }
