@@ -198,9 +198,12 @@ struct K2PgConstant {
 enum K2PgConstraintType {
     K2PG_CONSTRAINT_UNKNOWN,
     K2PG_CONSTRAINT_EQ,
+    K2PG_CONSTRAINT_LT,
+    K2PG_CONSTRAINT_LTE,
+    K2PG_CONSTRAINT_GT,
+    K2PG_CONSTRAINT_GTE,
     K2PG_CONSTRAINT_BETWEEN,
     K2PG_CONSTRAINT_IN
-    // TODO Add constraints needed by user scan
 };
 
 struct K2PgConstraintDef {
