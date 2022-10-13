@@ -145,12 +145,9 @@ K2PgStatus PgGate_AlterTableRenameTable(K2PgStatement handle, const char *db_nam
 
 K2PgStatus PgGate_ExecAlterTable(K2PgStatement handle);
 
-K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
+K2PgStatus PgGate_ExecDropTable(K2PgOid database_oid,
                             K2PgOid table_oid,
-                            bool if_exist,
-                            K2PgStatement *handle);
-
-K2PgStatus PgGate_ExecDropTable(K2PgStatement handle);
+                            bool if_exist);
 
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
