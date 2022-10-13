@@ -371,12 +371,16 @@ K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
                             bool if_exist,
                             K2PgStatement *handle) {
   elog(LOG, "PgGateAPI: PgGate_NewDropTable %d, %d", database_oid, table_oid);
-  return K2PgStatus::NotSupported;
+  K2PgStatus status = pg_gate->GetCatalogClient()->DeleteTable(database_oid, table_oid);
+  if (if_exist && status.k2_code == 404) {
+      return K2PgStatus::OK;
+  }
+  return status;
 }
 
 K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
   elog(LOG, "PgGateAPI: PgGate_ExecDropTable");
-  return K2PgStatus::NotSupported;
+  return K2PgStatus::OK;
 }
 
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
