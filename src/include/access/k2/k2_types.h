@@ -36,7 +36,7 @@ namespace k2pg {
 // These are types that we can push down filter operations to K2, so when we convert them we want to
 // strip out the Datum headers
 inline bool isStringType(Oid oid) {
-    return (oid == VARCHAROID || oid == BPCHAROID || oid == TEXTOID || oid == CLOBOID || oid == NAMEOID || oid == CSTRINGOID);
+    return (oid == VARCHAROID || oid == BPCHAROID || oid == TEXTOID || oid == CLOBOID || oid == CSTRINGOID);
 }
 
 // Type to size association taken from MOT column.cpp. Note that this does not determine whether we can use the type as a key or for pushdown, only that it will fit in a K2 native type
@@ -45,28 +45,31 @@ inline bool is1ByteIntType(Oid oid) {
 }
 
 inline bool is2ByteIntType(Oid oid) {
-    return (oid == INT2OID);
+    return (oid == INT2OID || oid == SMGROID);
 }
 
 inline bool is4ByteIntType(Oid oid) {
-    return (oid == INT4OID || oid == DATEOID);
+    return (oid == INT4OID || oid == DATEOID || oid == ANYOID || oid == OPAQUEOID || oid == ANYELEMENTOID || oid == ANYNONARRAYOID || oid == ANYENUMOID);
 }
 
 // These are types that are uint32_t for PG, but for SKV we promote them to INT64 since SKV does not support unsigned types
 inline bool isUnsignedPromotedType(Oid oid) {
-    return (oid == OIDOID || oid == CIDOID || XIDOID);
+    return (oid == OIDOID || oid == CIDOID || oid == XIDOID || oid == REGPROCOID || oid == REGPROCEDUREOID || oid == REGOPEROID || oid == REGOPERATOROID ||
+            oid == REGCLASSOID || oid == REGTYPEOID || oid == REGCONFIGOID || oid == REGDICTIONARYOID ||
+            oid == TRIGGEROID || oid == LANGUAGE_HANDLEROID || oid == FDW_HANDLEROID);
 }
 
 inline bool is8ByteIntType(Oid oid) {
-    return (oid == TIDOID || oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID);
+    return (oid == TIDOID || oid == INT8OID || oid == TIMESTAMPOID || oid == TIMESTAMPTZOID || oid == TIMEOID || oid == INTERVALOID || oid == TINTERVALOID || oid == TIMETZOID ||
+            oid == VOIDOID || oid == INTERNALOID);
 }
 
 inline bool isPushdownType(Oid oid) {
     return isStringType(oid) || isUnsignedPromotedType(oid) || (oid == CHAROID || oid == INT1OID || oid == INT2OID || oid == INT4OID ||
-        oid == DATEOID || oid == TIMEOID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID);
+        oid == DATEOID || oid == TIMEOID || oid == INT8OID || oid == FLOAT4OID || oid == FLOAT8OID || oid == BOOLOID || oid == NAMEOID);
 }
 
-inline skv::http::dto::FieldType OidToK2Type(int type_oid) {
+inline skv::http::dto::FieldType OidToK2Type(Oid type_oid) {
     using namespace skv::http::dto;
 
     if (is1ByteIntType(type_oid) || is2ByteIntType(type_oid)) {

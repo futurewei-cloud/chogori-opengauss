@@ -175,6 +175,20 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
                 isnulls[datum_offset] = false;
             }
         }
+        else if (id == NAMEOID) {
+            // NAMEOID is a special case that is dynamically allocated, but it is fixed size so it doesn't have a header
+             std::optional<std::string> value = record.deserializeNext<std::string>();
+            if (value.has_value()) {
+                if (value->size() > NAMEDATALEN) {
+                    throw std::runtime_error("SKV value is too large for NAMEOID type");
+                }
+                char* datum = allocManager.alloc(NAMEDATALEN);
+                memcpy(datum, value->data(), value->size());
+
+                values[datum_offset] = CStringGetDatum(datum);
+                isnulls[datum_offset] = false;
+            }
+        }
         else if (id == BOOLOID) {
             std::optional<bool> value = record.deserializeNext<bool>();
             if (value.has_value()) {
@@ -483,6 +497,11 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
         bool byte = (bool)(((uintptr_t)(constant.datum)) & 0x000000ff);
         return makeValueLiteral<bool>(std::move(byte));
     }
+    else if (constant.type_id == NAMEOID) {
+        // NAMEOID is dynamically allocated but fixed length
+        char* bytes = DatumGetCString(constant.datum);
+        return makeValueLiteral<std::string>(std::string(bytes));
+    }
     else if (is1ByteIntType(constant.type_id)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
         return makeValueLiteral<int16_t>(std::move(byte));
@@ -534,9 +553,18 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
         case K2PgConstraintType::K2PG_CONSTRAINT_EQ: //  equal =
             opr_expr.op = expression::Operation::EQ;
             break;
-        // TODO support for between and in
-        case K2PgConstraintType::K2PG_CONSTRAINT_BETWEEN:
-        case K2PgConstraintType::K2PG_CONSTRAINT_IN:
+        case K2PgConstraintType::K2PG_CONSTRAINT_LT:
+            opr_expr.op = expression::Operation::LT;
+            break;
+        case K2PgConstraintType::K2PG_CONSTRAINT_LTE:
+            opr_expr.op = expression::Operation::LTE;
+            break;
+        case K2PgConstraintType::K2PG_CONSTRAINT_GT:
+            opr_expr.op = expression::Operation::GT;
+            break;
+        case K2PgConstraintType::K2PG_CONSTRAINT_GTE:
+            opr_expr.op = expression::Operation::GTE;
+            break;
         default:
             K2LOG_W(log::k2pg, "Ignoring scan constraint of type: {}", constraint.constraint);
             return opr_expr;
@@ -595,6 +623,11 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
     else if (constant.type_id == BOOLOID) {
         bool byte = (bool)(((uintptr_t)(constant.datum)) & 0x000000ff);
         builder.serializeNext<bool>(byte);
+    }
+    else if (constant.type_id == NAMEOID) {
+        // NAMEOID is dynamically allocated but fixed length
+        char* bytes = DatumGetCString(constant.datum);
+        return builder.serializeNext<std::string>(std::string(bytes));
     }
     else if (is1ByteIntType(constant.type_id)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
@@ -809,8 +842,8 @@ K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,
 
 K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_oid,
                                            const std::vector<K2PgAttributeDef>& columns,
-                                           skv::http::dto::SKVRecord& record) {
-    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+                                           skv::http::dto::SKVRecord& record,
+                                           std::shared_ptr<k2pg::PgTableDesc> pg_table) {
     std::unordered_map<int, uint32_t> attr_to_offset;
     for (const auto& column : columns) {
         k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);

@@ -269,7 +269,7 @@ k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, int type_o
     return k2pg::ColumnSchema(col_name, type_oid, is_nullable, is_key, order, sorting_type);
 }
 
-std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key = false) {
+std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key) {
     std::vector<k2pg::ColumnSchema> k2pgcols;
     std::vector<k2pg::ColumnId> colIds;
     int num_key_columns = 0;
@@ -321,8 +321,8 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               bool if_not_exist,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
-    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
-    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns);
+    elog(LOG, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
+    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns, add_primary_key);
     if (!status.IsOK()) {
         return status;
     }
@@ -365,17 +365,15 @@ K2PgStatus PgGate_ExecAlterTable(K2PgStatement handle){
   return K2PgStatus::NotSupported;
 }
 
-K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
-                            K2PgOid table_oid,
-                            bool if_exist,
-                            K2PgStatement *handle) {
-  elog(LOG, "PgGateAPI: PgGate_NewDropTable %d, %d", database_oid, table_oid);
-  return K2PgStatus::NotSupported;
-}
-
-K2PgStatus PgGate_ExecDropTable(K2PgStatement handle){
-  elog(LOG, "PgGateAPI: PgGate_ExecDropTable");
-  return K2PgStatus::NotSupported;
+K2PgStatus PgGate_ExecDropTable(K2PgOid database_oid,
+                                K2PgOid table_oid,
+                                bool if_exist){
+  elog(LOG, "PgGateAPI: PgGate_ExecDropTable %d, %d", database_oid, table_oid);
+  K2PgStatus status = pg_gate->GetCatalogClient()->DeleteTable(database_oid, table_oid);
+  if (if_exist && status.k2_code == 404) {
+      return K2PgStatus::OK;
+  }
+  return status;
 }
 
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
@@ -429,8 +427,8 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               const bool skip_index_backfill,
                               bool if_not_exist,
                               const std::vector<K2PGColumnDef>& columns){
-    elog(DEBUG5, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
-    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns);
+    elog(LOG, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
+    auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns, false /* add_primary_key */);
     if (!status.IsOK()) {
         return status;
     }
@@ -533,19 +531,14 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *val
     return status;
 }
 
-// Utility method that checks stmt type and calls either exec insert, update, or delete internally.
-K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count){
-  elog(LOG, "PgGateAPI: PgGate_DmlExecWriteOp");
-  return K2PgStatus::NotSupported;
-}
-
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
-K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
+K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_oid, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
     elog(LOG, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
 
     skv::http::dto::SKVRecord fullRecord;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, fullRecord);
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(db_oid, table_oid);
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_oid, attrs, fullRecord, pg_table);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
@@ -583,12 +576,40 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
                              bool increment_catalog,
-                             const std::vector<K2PgAttributeDef>& columns) {
+                             std::vector<K2PgAttributeDef>& columns) {
     elog(LOG, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
     auto catalog = pg_gate->GetCatalogClient();
 
     skv::http::dto::SKVRecord record;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(database_oid, table_oid, columns, record);
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+    // check if the table has k2pgrowid system column
+    if (pg_table->FindColumn(k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgRowId)) != NULL) {
+        // check if k2pgrowid has already been included in passed in columns
+        bool kPgRowIdProvided = false;
+        for (const auto& column: columns) {
+            if (column.attr_num == k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgRowId)) {
+                kPgRowIdProvided = true;
+                break;
+            }
+        }
+        if (!kPgRowIdProvided) {
+            // generate a row_id to populate the kPgRowId column
+            std::string row_id = k2pg::pg_session->GenerateNewRowid();
+            char* datum = (char*)(palloc0(row_id.size() + VARHDRSZ));
+            memcpy(VARDATA(datum), row_id.data(), row_id.size());
+            SET_VARSIZE(datum, row_id.size() + VARHDRSZ);
+            K2PgAttributeDef kPgRowIdColumn {
+                .attr_num = k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgRowId),
+                .value = {
+                    .type_id = BYTEAOID,
+                    .datum = PointerGetDatum(datum),
+                    .is_null = false
+                }
+            };
+            columns.push_back(std::move(kPgRowIdColumn));
+        }
+    }
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(database_oid, table_oid, columns, record, pg_table);
 
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
@@ -700,7 +721,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
     *rows_affected = 0;
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
 
-    // Get a builder with the keys serialzed. called function handles tupleId attribute if needed
+    // Get a builder with the keys serialized. called function handles tupleId attribute if needed
     K2PgStatus status = makeSKVBuilderWithKeysSerialized(database_oid, table_oid, columns, builder);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
@@ -800,6 +821,13 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
     }
     (*handle)->secondarySchema = secondarySchema;
 
+    if (index_params.index_only_scan) {
+        (*handle)->primaryTable = (*handle)->secondaryTable;
+        (*handle)->secondaryTable = nullptr;
+        (*handle)->primarySchema = (*handle)->secondarySchema;
+        (*handle)->secondarySchema = nullptr;
+    }
+
     return K2PgStatus::OK;
 }
 
@@ -833,17 +861,61 @@ K2PgStatus PgGate_ExecSelect(
 
     std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
     for (const K2PgConstraintDef& constraint: constraints) {
-        Expression expr = buildScanExpr(handle, constraint, attr_to_offset);
-        if (expr.op == Operation::UNKNOWN) {
-            // Unsupported pg type or operation, it will be processed by pg and not pushed down
-            continue;
-        }
 
-        uint32_t offset = attr_to_offset[constraint.attr_num];
-        if (offset < schema->partitionKeyFields.size()) {
-            range_conds.expressionChildren.push_back(std::move(expr));
-        } else {
-            where_conds.expressionChildren.push_back(std::move(expr));
+        if (constraint.constraint == K2PG_CONSTRAINT_BETWEEN) {
+            // Special case for BETWEEN since SKV does not have a 1:1 match
+            K2PgConstraintDef gteConstraint = constraint;
+            gteConstraint.constraint = K2PG_CONSTRAINT_GTE;
+            gteConstraint.constants.pop_back();
+            Expression gteExpr = buildScanExpr(handle, gteConstraint, attr_to_offset);
+            K2PgConstraintDef lteConstraint = constraint;
+            lteConstraint.constraint = K2PG_CONSTRAINT_LTE;
+            lteConstraint.constants[0] = lteConstraint.constants[1];
+            gteConstraint.constants.pop_back();
+            Expression lteExpr = buildScanExpr(handle, lteConstraint, attr_to_offset);
+
+            uint32_t offset = attr_to_offset[constraint.attr_num];
+            if (offset < schema->partitionKeyFields.size()) {
+                range_conds.expressionChildren.push_back(std::move(gteExpr));
+                range_conds.expressionChildren.push_back(std::move(lteExpr));
+            } else {
+                where_conds.expressionChildren.push_back(std::move(gteExpr));
+                where_conds.expressionChildren.push_back(std::move(lteExpr));
+            }
+        }
+        else if (constraint.constraint == K2PG_CONSTRAINT_IN) {
+            // Special case for IN since SKV does not have a 1:1 match
+            std::vector<Expression> expr_to_add;
+            for (const K2PgConstant& constant : constraint.constants) {
+                K2PgConstraintDef eqConstraint {
+                    .attr_num = constraint.attr_num,
+                    .constraint = K2PG_CONSTRAINT_EQ,
+                    .constants = std::vector<K2PgConstant>{constant}
+                };
+                Expression expr = buildScanExpr(handle, eqConstraint, attr_to_offset);
+                expr_to_add.push_back(std::move(expr));
+            }
+
+            Expression or_expr{};
+            or_expr.op = Operation::OR;
+            or_expr.expressionChildren = std::move(expr_to_add);
+            // Expressions with OR must always be where clause not range
+            where_conds.expressionChildren.push_back(std::move(or_expr));
+        }
+        else {
+            // Normal case of 1 constant expression that has 1:1 map to SKV expression
+            Expression expr = buildScanExpr(handle, constraint, attr_to_offset);
+            if (expr.op == Operation::UNKNOWN) {
+                // Unsupported pg type or operation, it will be processed by pg and not pushed down
+                continue;
+            }
+
+            uint32_t offset = attr_to_offset[constraint.attr_num];
+            if (offset < schema->partitionKeyFields.size()) {
+                range_conds.expressionChildren.push_back(std::move(expr));
+            } else {
+                where_conds.expressionChildren.push_back(std::move(expr));
+            }
         }
     }
 
@@ -893,6 +965,10 @@ K2PgStatus PgGate_ExecSelect(
     int limit = -1;
     if (!limit_params.limit_use_default && limit_params.limit_count > 0) {
         limit = limit_params.limit_count + limit_params.limit_offset;
+    }
+
+    if (!where_conds.expressionChildren.size()) {
+        where_conds = Expression();
     }
 
     auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();

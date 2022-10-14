@@ -110,7 +110,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid);
 struct K2PGColumnDef {
     const char* attr_name;
     int attr_num;
-    int type_oid;
+    Oid type_oid;
     bool is_key;
     bool is_desc;
     bool is_nulls_first;
@@ -145,12 +145,9 @@ K2PgStatus PgGate_AlterTableRenameTable(K2PgStatement handle, const char *db_nam
 
 K2PgStatus PgGate_ExecAlterTable(K2PgStatement handle);
 
-K2PgStatus PgGate_NewDropTable(K2PgOid database_oid,
+K2PgStatus PgGate_ExecDropTable(K2PgOid database_oid,
                             K2PgOid table_oid,
-                            bool if_exist,
-                            K2PgStatement *handle);
-
-K2PgStatus PgGate_ExecDropTable(K2PgStatement handle);
+                            bool if_exist);
 
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
@@ -198,9 +195,12 @@ struct K2PgConstant {
 enum K2PgConstraintType {
     K2PG_CONSTRAINT_UNKNOWN,
     K2PG_CONSTRAINT_EQ,
+    K2PG_CONSTRAINT_LT,
+    K2PG_CONSTRAINT_LTE,
+    K2PG_CONSTRAINT_GT,
+    K2PG_CONSTRAINT_GTE,
     K2PG_CONSTRAINT_BETWEEN,
     K2PG_CONSTRAINT_IN
-    // TODO Add constraints needed by user scan
 };
 
 struct K2PgConstraintDef {
@@ -221,11 +221,6 @@ class K2PgScanHandle;
 K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t natts, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data);
 
-// Utility method that checks stmt type and calls either exec insert, update, or delete internally.
-// TODO now only used by DDL commands that we do not support right now (e.g. Drop table). It will need
-// to be updated when we add this support.
-K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count);
-
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_oid, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid);
@@ -238,7 +233,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
                              bool increment_catalog,
-                             const std::vector<K2PgAttributeDef>& columns);
+                             std::vector<K2PgAttributeDef>& columns);
 
 // UPDATE ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,

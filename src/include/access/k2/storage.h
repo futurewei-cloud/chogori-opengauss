@@ -79,7 +79,7 @@ namespace gate {
     // Serialize a full SKVRecord from the pg columns, the passed in SKVRecord record is an out parameter
     K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_oid,
                                                const std::vector<K2PgAttributeDef>& columns,
-                                               skv::http::dto::SKVRecord& record);
+                                               skv::http::dto::SKVRecord& record, std::shared_ptr<k2pg::PgTableDesc> pg_table);
 
     // builder is an out parameter that is serialized with just the key fields for the record. columns may or may not contain a virtual tupleID attribute,
     // and columns may or may not contain attributes that are not part of the key fields

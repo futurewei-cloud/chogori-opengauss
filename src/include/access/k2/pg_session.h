@@ -94,6 +94,11 @@ public:
         fk_reference_cache_.clear();
     }
 
+    // Generate a new random and unique rowid. It is a v4 UUID.
+    std::string GenerateNewRowid() {
+        return rowid_generator_.Next(true /* binary_id */);
+    }
+
 private:
     std::shared_ptr<k2pg::catalog::SqlCatalogClient> catalog_client_;
 
@@ -108,6 +113,9 @@ private:
     std::string client_id_;
 
     std::atomic<int64_t> stmt_id_;
+
+    // Rowid generator.
+    ObjectIdGenerator rowid_generator_;
 };
 
 }  // namespace k2pg

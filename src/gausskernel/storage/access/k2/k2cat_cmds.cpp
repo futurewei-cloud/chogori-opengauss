@@ -269,22 +269,10 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 void
 K2PgDropTable(Oid relationId)
 {
-	K2PgStatement	handle = NULL;
-
 	/* Drop the table */
-	{
-		bool not_found = false;
-		HandleK2PgStatusIgnoreNotFound(PgGate_NewDropTable(u_sess->proc_cxt.MyDatabaseId,
-																									 relationId,
-																									 false, /* if_exists */
-																									 &handle),
-																 &not_found);
-		const bool valid_handle = !not_found;
-		if (valid_handle)
-		{
-			HandleK2PgStatusIgnoreNotFound(PgGate_ExecDropTable(handle), &not_found);
-		}
-	}
+    HandleK2PgStatus(PgGate_ExecDropTable(u_sess->proc_cxt.MyDatabaseId,
+                                          relationId,
+                                          false /* if_exists */));
 }
 
 void
