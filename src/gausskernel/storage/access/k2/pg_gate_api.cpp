@@ -722,7 +722,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
     *rows_affected = 0;
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
 
-    // Get a builder with the keys serialzed. called function handles tupleId attribute if needed
+    // Get a builder with the keys serialized. called function handles tupleId attribute if needed
     K2PgStatus status = makeSKVBuilderWithKeysSerialized(database_oid, table_oid, columns, builder);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
@@ -820,6 +820,13 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
     }
     (*handle)->secondarySchema = secondarySchema;
 
+    if (index_params.index_only_scan) {
+        (*handle)->primaryTable = (*handle)->secondaryTable;
+        (*handle)->secondaryTable = nullptr;
+        (*handle)->primarySchema = (*handle)->secondarySchema;
+        (*handle)->secondarySchema = nullptr;
+    }
+
     (*handle)->maxParallelReads = k2pg::TXMgr.getConfig().get<uint32_t>("pggate.max_parallel_reads", 5);
 
     return K2PgStatus::OK;
@@ -851,17 +858,61 @@ K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConst
 
     std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
     for (const K2PgConstraintDef& constraint: constraints) {
-        Expression expr = buildScanExpr(handle, constraint, attr_to_offset);
-        if (expr.op == Operation::UNKNOWN) {
-            // Unsupported pg type or operation, it will be processed by pg and not pushed down
-            continue;
-        }
 
-        uint32_t offset = attr_to_offset[constraint.attr_num];
-        if (offset < schema->partitionKeyFields.size()) {
-            range_conds.expressionChildren.push_back(std::move(expr));
-        } else {
-            where_conds.expressionChildren.push_back(std::move(expr));
+        if (constraint.constraint == K2PG_CONSTRAINT_BETWEEN) {
+            // Special case for BETWEEN since SKV does not have a 1:1 match
+            K2PgConstraintDef gteConstraint = constraint;
+            gteConstraint.constraint = K2PG_CONSTRAINT_GTE;
+            gteConstraint.constants.pop_back();
+            Expression gteExpr = buildScanExpr(handle, gteConstraint, attr_to_offset);
+            K2PgConstraintDef lteConstraint = constraint;
+            lteConstraint.constraint = K2PG_CONSTRAINT_LTE;
+            lteConstraint.constants[0] = lteConstraint.constants[1];
+            gteConstraint.constants.pop_back();
+            Expression lteExpr = buildScanExpr(handle, lteConstraint, attr_to_offset);
+
+            uint32_t offset = attr_to_offset[constraint.attr_num];
+            if (offset < schema->partitionKeyFields.size()) {
+                range_conds.expressionChildren.push_back(std::move(gteExpr));
+                range_conds.expressionChildren.push_back(std::move(lteExpr));
+            } else {
+                where_conds.expressionChildren.push_back(std::move(gteExpr));
+                where_conds.expressionChildren.push_back(std::move(lteExpr));
+            }
+        }
+        else if (constraint.constraint == K2PG_CONSTRAINT_IN) {
+            // Special case for IN since SKV does not have a 1:1 match
+            std::vector<Expression> expr_to_add;
+            for (const K2PgConstant& constant : constraint.constants) {
+                K2PgConstraintDef eqConstraint {
+                    .attr_num = constraint.attr_num,
+                    .constraint = K2PG_CONSTRAINT_EQ,
+                    .constants = std::vector<K2PgConstant>{constant}
+                };
+                Expression expr = buildScanExpr(handle, eqConstraint, attr_to_offset);
+                expr_to_add.push_back(std::move(expr));
+            }
+
+            Expression or_expr{};
+            or_expr.op = Operation::OR;
+            or_expr.expressionChildren = std::move(expr_to_add);
+            // Expressions with OR must always be where clause not range
+            where_conds.expressionChildren.push_back(std::move(or_expr));
+        }
+        else {
+            // Normal case of 1 constant expression that has 1:1 map to SKV expression
+            Expression expr = buildScanExpr(handle, constraint, attr_to_offset);
+            if (expr.op == Operation::UNKNOWN) {
+                // Unsupported pg type or operation, it will be processed by pg and not pushed down
+                continue;
+            }
+
+            uint32_t offset = attr_to_offset[constraint.attr_num];
+            if (offset < schema->partitionKeyFields.size()) {
+                range_conds.expressionChildren.push_back(std::move(expr));
+            } else {
+                where_conds.expressionChildren.push_back(std::move(expr));
+            }
         }
     }
 
@@ -913,6 +964,10 @@ K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConst
     int limit = -1;
     if (!limit_params.limit_use_default && limit_params.limit_count > 0) {
         limit = limit_params.limit_count + limit_params.limit_offset;
+    }
+
+    if (!where_conds.expressionChildren.size()) {
+        where_conds = Expression();
     }
 
     auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();

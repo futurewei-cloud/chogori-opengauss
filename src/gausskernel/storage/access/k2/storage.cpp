@@ -553,9 +553,18 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
         case K2PgConstraintType::K2PG_CONSTRAINT_EQ: //  equal =
             opr_expr.op = expression::Operation::EQ;
             break;
-        // TODO support for between and in
-        case K2PgConstraintType::K2PG_CONSTRAINT_BETWEEN:
-        case K2PgConstraintType::K2PG_CONSTRAINT_IN:
+        case K2PgConstraintType::K2PG_CONSTRAINT_LT:
+            opr_expr.op = expression::Operation::LT;
+            break;
+        case K2PgConstraintType::K2PG_CONSTRAINT_LTE:
+            opr_expr.op = expression::Operation::LTE;
+            break;
+        case K2PgConstraintType::K2PG_CONSTRAINT_GT:
+            opr_expr.op = expression::Operation::GT;
+            break;
+        case K2PgConstraintType::K2PG_CONSTRAINT_GTE:
+            opr_expr.op = expression::Operation::GTE;
+            break;
         default:
             K2LOG_W(log::k2pg, "Ignoring scan constraint of type: {}", constraint.constraint);
             return opr_expr;
