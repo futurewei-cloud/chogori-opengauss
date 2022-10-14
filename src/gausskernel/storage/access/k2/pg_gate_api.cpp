@@ -770,7 +770,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
                          K2PgSelectIndexParams idxp,
                          K2PgScanHandle **handle){
-    elog(DEBUG5, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_NewSelect %d, %d", database_oid, table_oid);
     *handle = new K2PgScanHandle();
     GetCurrentK2Memctx()->Cache([ptr=*handle] () { delete ptr;});
     (*handle)->indexParams = std::move(idxp);
@@ -1120,7 +1120,7 @@ const void* PgGate_GetThreadLocalErrMsg() {
 }
 
 bool K2PgAllowForPrimaryKey(int type_oid) {
-    elog(DEBUG5, "PgGateAPI: K2PgAllowForPrimaryKey");
+    elog(LOG, "PgGateAPI: K2PgAllowForPrimaryKey");
     skv::http::dto::FieldType skv_type = k2pg::OidToK2Type(type_oid);
     switch (skv_type) {
         case skv::http::dto::FieldType::STRING:
