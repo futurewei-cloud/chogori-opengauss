@@ -270,11 +270,9 @@ void
 K2PgDropTable(Oid relationId)
 {
 	/* Drop the table */
-    bool not_found = false;
-    HandleK2PgStatusIgnoreNotFound(PgGate_ExecDropTable(u_sess->proc_cxt.MyDatabaseId,
-            relationId,
-            false /* if_exists */),
-        &not_found);
+    HandleK2PgStatus(PgGate_ExecDropTable(u_sess->proc_cxt.MyDatabaseId,
+                                          relationId,
+                                          false /* if_exists */));
 }
 
 void
