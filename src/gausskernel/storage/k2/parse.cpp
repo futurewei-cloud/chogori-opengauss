@@ -546,7 +546,7 @@ bool is_foreign_expr(PlannerInfo *root,
 }
 
 
-void parse_conditions(List *exprs, ParamListInfo paramLI, std::vector<K2PgConstraintDef>& result) {
+void parse_conditions(List *exprs, ParamListInfo paramLI, foreign_expr_cxt *expr_cxt) {
   	elog(DEBUG4, "FDW: parsing %d remote expressions", list_length(exprs));
 	ListCell   *lc;
 	foreach(lc, exprs)
@@ -565,36 +565,7 @@ void parse_conditions(List *exprs, ParamListInfo paramLI, std::vector<K2PgConstr
 		ref_values.paramLI = paramLI;
 		parse_expr(expr, &ref_values);
 		if (list_length(ref_values.column_refs) == 1 && list_length(ref_values.const_values) == 1) {
-         K2PgConstraintDef constraint;
-
-
-         // K2PgEpxr and FDWOprCond separate column refs and constant literals without keeping the
-         // structure of the expression, so we need to switch the direction of the comparison if the
-         // column reference was not first in the original expression.
-         switch (get_oprrest(opr_cond->opno)) {
-             case F_EQSEL:  //  equal =
-                 opr_name = "=";
-                 break;
-             case F_SCALARLTSEL:  // Less than <
-                 opr_name = opr_cond->column_ref_first ? "<" : ">";
-                 break;
-             case F_SCALARLESEL:  // Less Equal <=
-                 opr_name = opr_cond->column_ref_first ? "<=" : ">=";
-                 break;
-             case F_SCALARGTSEL:  // Greater than >
-                 opr_name = opr_cond->column_ref_first ? ">" : "<";
-                 break;
-             case F_SCALARGESEL:  // Greater Euqal >=
-                 opr_name = opr_cond->column_ref_first ? ">=" : "<=";
-                 break;
-             default:
-                 elog(DEBUG4, "FDW: unsupported OpExpr type: %d", opr_cond->opno);
-                 return opr_expr;
-         }
-
-
-
-                        FDWOprCond *opr_cond = (FDWOprCond *)palloc0(sizeof(FDWOprCond));
+			FDWOprCond *opr_cond = (FDWOprCond *)palloc0(sizeof(FDWOprCond));
 			opr_cond->opno = ref_values.opno;
 			// found a binary condition
 			ListCell   *rlc;
@@ -609,10 +580,6 @@ void parse_conditions(List *exprs, ParamListInfo paramLI, std::vector<K2PgConstr
             opr_cond->column_ref_first = ref_values.column_ref_first;
 
 			expr_cxt->opr_conds = lappend(expr_cxt->opr_conds, opr_cond);
-
-
-
-         result.push_back(std::move(constraint));
 		}
 	}
 }

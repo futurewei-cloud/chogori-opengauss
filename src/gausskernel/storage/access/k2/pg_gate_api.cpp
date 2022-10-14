@@ -821,7 +821,7 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
     }
     (*handle)->secondarySchema = secondarySchema;
 
-    if (index_params.index_only_scan) {
+    if ((*handle)->indexParams.index_only_scan) {
         (*handle)->primaryTable = (*handle)->secondaryTable;
         (*handle)->secondaryTable = nullptr;
         (*handle)->primarySchema = (*handle)->secondarySchema;
