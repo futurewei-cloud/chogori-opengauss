@@ -34,6 +34,7 @@ PgMemctx::PgMemctx() {
 }
 
 PgMemctx::~PgMemctx() {
+    _Clear();
 }
 
 namespace {
@@ -83,26 +84,24 @@ Status PgMemctx::Reset(PgMemctx *handle) {
         };
         return status;
     }
-    handle->Clear();
+    handle->_Clear();
   }
   return Status::OK;
 }
 
-void PgMemctx::Clear() {
+void PgMemctx::_Clear() {
   // The safest option is to retain all K2SQL statement objects.
   // - Clear the table descriptors from cache. We can just reload them when requested.
-  // - Clear the "stmts_" for now. However, if this causes issue, keep "stmts_" vector around.
   //
   // PgGate and its contexts are between Postgres and K2SQL lower layers, and because these
-  // layers might be still operating on the raw pointer or reference to "stmts_" after Postgres's
+  // layers might be still operating on the raw pointer or reference after Postgres's
   // cancellation, there's a chance we might have an unexpected issue.
   tabledesc_map_.clear();
-  stmts_.clear();
-}
-
-void PgMemctx::Cache(const std::shared_ptr<PgStatement> &stmt) {
-  // Hold the stmt until the context is released.
-  stmts_.push_back(stmt);
+  // invoke all deleters
+  for (auto& func: _deleters) {
+    func();
+  }
+  _deleters.clear();
 }
 
 void PgMemctx::Cache(size_t hash_id, const std::shared_ptr<PgTableDesc> &table_desc) {

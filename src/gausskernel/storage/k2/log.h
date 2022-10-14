@@ -20,28 +20,8 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-#pragma once
+#include <k2/logging/Log.h>
 
-namespace k2fdw {
-
-void k2GetForeignRelSize(PlannerInfo *root,
-                        RelOptInfo *baserel,
-                        Oid foreigntableid);
-
-void k2GetForeignPaths(PlannerInfo *root,
-                        RelOptInfo *baserel,
-                        Oid foreigntableid);
-
-ForeignScan * k2GetForeignPlan(PlannerInfo *root,
-                        RelOptInfo *baserel,
-                        Oid foreigntableid,
-                        ForeignPath *best_path,
-                        List *tlist,
-                        List *scan_clauses);
-
-void k2BeginForeignScan(ForeignScanState *node, int eflags);
-void k2EndForeignScan(ForeignScanState *node);
-
-TupleTableSlot * k2IterateForeignScan(ForeignScanState *node);
-
-} // ns
+namespace k2fdw::log {
+inline thread_local k2::logging::Logger fdw("k2::fdw");
+}

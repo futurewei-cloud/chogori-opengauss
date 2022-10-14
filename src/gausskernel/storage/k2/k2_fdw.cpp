@@ -62,13 +62,13 @@ Datum k2_fdw_handler(PG_FUNCTION_ARGS)
     routine->BeginForeignScan = k2BeginForeignScan ;
     routine->IterateForeignScan = k2IterateForeignScan ;
     routine->ReScanForeignScan = NULL;
-    routine->EndForeignScan = NULL;
+    routine->EndForeignScan = k2EndForeignScan;
 
     /* Functions for updating foreign tables */
     routine->AddForeignUpdateTargets = NULL;
     routine->PlanForeignModify = NULL;
     routine->BeginForeignModify = NULL;
-    routine->ExecForeignInsert = k2ExecForeignInsert;
+    routine->ExecForeignInsert = NULL;
     routine->ExecForeignUpdate = NULL;
     routine->ExecForeignDelete = NULL;
     routine->EndForeignModify = NULL;
@@ -82,7 +82,7 @@ Datum k2_fdw_handler(PG_FUNCTION_ARGS)
     routine->AnalyzeForeignTable = NULL;
     routine->AcquireSampleRows = NULL;
 
-    routine->ValidateTableDef = k2ValidateTableDef;
+    routine->ValidateTableDef = NULL;
     routine->PartitionTblProcess = NULL;
     routine->BuildRuntimePredicate = NULL;
     routine->GetFdwType = NULL;

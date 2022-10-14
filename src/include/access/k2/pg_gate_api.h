@@ -204,8 +204,8 @@ enum K2PgConstraintType {
 };
 
 struct K2PgConstraintDef {
-    int attr_num;
-    K2PgConstraintType constraint;
+    int attr_num{0};
+    K2PgConstraintType constraint{K2PgConstraintType::K2PG_CONSTRAINT_UNKNOWN};
     std::vector<K2PgConstant> constants; // Only 1 element for EQ etc, 2 for BETWEEN, many for IN
 };
 
@@ -265,15 +265,15 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
 //       use_secondary_index = false
 //
 struct K2PgSelectIndexParams {
-  K2PgOid index_oid;
-  bool index_only_scan;
-  bool use_secondary_index;
+  K2PgOid index_oid{0};
+  bool index_only_scan{false};
+  bool use_secondary_index{false};
 };
 
 // SELECT ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
                          K2PgOid table_oid,
-                         const K2PgSelectIndexParams& index_params,
+                         K2PgSelectIndexParams index_params,
                          K2PgScanHandle **handle);
 
 struct K2PgSelectLimitParams {
@@ -295,14 +295,18 @@ struct K2PgSelectLimitParams {
 };
 
 // NOTE ON KEY CONSTRAINTS
-// Scan type is speficied as part of index_params in NewSelect
+// Scan type is specified as part of index_params in NewSelect
 // - For Sequential Scan, the target columns of the bind are those in the main table.
 // - For Primary Scan, the target columns of the bind are those in the main table.
 // - For Index Scan, the target columns of the bind are those in the index table.
 //   The index-scan will use the bind to find base-k2pgctid which is then use to read data from
 //   the main-table, and therefore the bind-arguments are not associated with columns in main table.
-K2PgStatus PgGate_ExecSelect(K2PgScanHandle *handle, const std::vector<K2PgConstraintDef>& constraints, const std::vector<int>& targets_attrnum,
-                             bool whole_table_scan, bool forward_scan, const K2PgSelectLimitParams& limit_params);
+K2PgStatus PgGate_ExecSelect(
+    K2PgScanHandle *handle,
+    const std::vector<K2PgConstraintDef>& constraints,
+    const std::vector<int>& targets_attrnum,
+    bool forward_scan,
+    const K2PgSelectLimitParams& limit_params);
 
 // Transaction control -----------------------------------------------------------------------------
 K2PgStatus PgGate_BeginTransaction();
