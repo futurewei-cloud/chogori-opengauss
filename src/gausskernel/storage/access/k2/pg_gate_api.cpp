@@ -534,19 +534,14 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *val
     return status;
 }
 
-// Utility method that checks stmt type and calls either exec insert, update, or delete internally.
-K2PgStatus PgGate_DmlExecWriteOp(K2PgStatement handle, int32_t *rows_affected_count){
-  elog(LOG, "PgGateAPI: PgGate_DmlExecWriteOp");
-  return K2PgStatus::NotSupported;
-}
-
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
-K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_id, const std::vector<K2PgAttributeDef>& attrs,
+K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_oid, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
     elog(LOG, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
 
     skv::http::dto::SKVRecord fullRecord;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_id, attrs, fullRecord);
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(db_oid, table_oid);
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(db_oid, table_oid, attrs, fullRecord, pg_table);
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
     }
@@ -584,12 +579,40 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
                              bool increment_catalog,
-                             const std::vector<K2PgAttributeDef>& columns) {
+                             std::vector<K2PgAttributeDef>& columns) {
     elog(LOG, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
     auto catalog = pg_gate->GetCatalogClient();
 
     skv::http::dto::SKVRecord record;
-    K2PgStatus status = makeSKVRecordFromK2PgAttributes(database_oid, table_oid, columns, record);
+    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+    // check if the table has k2pgrowid system column
+    if (pg_table->FindColumn(k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgRowId)) != NULL) {
+        // check if k2pgrowid has already been included in passed in columns
+        bool kPgRowIdProvided = false;
+        for (const auto& column: columns) {
+            if (column.attr_num == k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgRowId)) {
+                kPgRowIdProvided = true;
+                break;
+            }
+        }
+        if (!kPgRowIdProvided) {
+            // generate a row_id to populate the kPgRowId column
+            std::string row_id = k2pg::pg_session->GenerateNewRowid();
+            char* datum = (char*)(palloc0(row_id.size() + VARHDRSZ));
+            memcpy(VARDATA(datum), row_id.data(), row_id.size());
+            SET_VARSIZE(datum, row_id.size() + VARHDRSZ);
+            K2PgAttributeDef kPgRowIdColumn {
+                .attr_num = k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgRowId),
+                .value = {
+                    .type_id = BYTEAOID,
+                    .datum = PointerGetDatum(datum),
+                    .is_null = false
+                }
+            };
+            columns.push_back(std::move(kPgRowIdColumn));
+        }
+    }
+    K2PgStatus status = makeSKVRecordFromK2PgAttributes(database_oid, table_oid, columns, record, pg_table);
 
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;

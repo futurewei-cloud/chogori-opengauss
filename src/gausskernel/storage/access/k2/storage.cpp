@@ -833,8 +833,8 @@ K2PgStatus serializePgAttributesToSKV(skv::http::dto::SKVRecordBuilder& builder,
 
 K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_oid,
                                            const std::vector<K2PgAttributeDef>& columns,
-                                           skv::http::dto::SKVRecord& record) {
-    std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(database_oid, table_oid);
+                                           skv::http::dto::SKVRecord& record,
+                                           std::shared_ptr<k2pg::PgTableDesc> pg_table) {
     std::unordered_map<int, uint32_t> attr_to_offset;
     for (const auto& column : columns) {
         k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
