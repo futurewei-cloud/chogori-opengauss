@@ -126,6 +126,9 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
             syscols->k2pgbasectid = (uint8_t*)PointerGetDatum(datum);
         }
             break;
+        case PgSystemAttrNum::kPgRowId:
+            // PG does not want to read rowid back
+            break;
         default:
             throw std::runtime_error("Unexpected system attribute id");
     }
@@ -253,7 +256,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         K2PgStatus status {
             .pg_code = ERRCODE_INTERNAL_ERROR,
             .k2_code = 0,
-            .msg = "Deserialization error when convertin skvrecord to datums",
+            .msg = "Deserialization error when converting skvrecord to datums",
             .detail = err.what()
         };
 
