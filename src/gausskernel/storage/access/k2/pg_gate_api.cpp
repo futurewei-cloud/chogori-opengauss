@@ -598,7 +598,7 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
         if (!kPgRowIdProvided) {
             // generate a row_id to populate the kPgRowId column
             std::string row_id = k2pg::pg_session->GenerateNewRowid();
-            char* datum = (char*)(palloc(row_id.size() + VARHDRSZ));
+            char* datum = (char*)(palloc0(row_id.size() + VARHDRSZ));
             memcpy(VARDATA(datum), row_id.data(), row_id.size());
             SET_VARSIZE(datum, row_id.size() + VARHDRSZ);
             K2PgAttributeDef kPgRowIdColumn {
