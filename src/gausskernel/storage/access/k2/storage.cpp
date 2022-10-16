@@ -79,8 +79,10 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kMaxCommandId:
         case PgSystemAttrNum::kTableOid: {
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
-            if (!value.has_value()) {
-                throw std::runtime_error("System attribute in skvrecord was null");
+            // ObjectId is optional so it is not an error if it is null
+            if (!value.has_value() && attr_enum != PgSystemAttrNum::kObjectId) {
+                K2LOG_W(log::k2pg, "system attr is null: {}", attr_num);
+                break;
             }
             switch (attr_enum) {
                 case PgSystemAttrNum::kObjectId:
@@ -109,7 +111,8 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kSelfItemPointer: {
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (!value.has_value()) {
-                throw std::runtime_error("System attribute in skvrecord was null");
+                K2LOG_W(log::k2pg, "system attr is null: {}", attr_num);
+                break;
             }
             syscols->ctid = *value;
         }
@@ -117,7 +120,8 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kPgIdxBaseTupleId: {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (!value.has_value()) {
-                throw std::runtime_error("System attribute in skvrecord was null");
+                K2LOG_W(log::k2pg, "system attr is null: {}", attr_num);
+                break;
             }
 
             char *datum = allocManager.alloc(value->size() + VARHDRSZ);
@@ -126,9 +130,11 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
             syscols->k2pgbasectid = (uint8_t*)PointerGetDatum(datum);
         }
             break;
-        case PgSystemAttrNum::kPgRowId:
+        case PgSystemAttrNum::kPgRowId: {
             // PG does not want to read rowid back
+            std::optional<std::string> value = record.deserializeNext<std::string>();
             break;
+        }
         default:
             throw std::runtime_error("Unexpected system attribute id");
     }
