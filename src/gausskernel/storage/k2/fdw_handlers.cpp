@@ -340,15 +340,10 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
         k2pg_state->targets_attrnum.push_back(target->resno);
     }
 
-    // TODO process the push-down clauses
-    foreach (lc, foreignScan->fdw_exprs) {
-        RestrictInfo *rinfo = (RestrictInfo *)lfirst(lc);
-        K2LOG_D(log::fdw, "applying scan_clause: {}", nodeToString(rinfo));
-        K2PgConstraintDef constraint;
-        // k2pg_state->constraints.push_back(std::move(constraint));
-    }
+    // parse push-down clauses
+    ParamListInfo paramLI = node->ss.ps.state->es_param_list_info;
+    parse_conditions(foreignScan->fdw_exprs, paramLI, k2pg_state->constraints);
 
-    /* Kept query-plan control to pass it to PgGate during preparation */
     K2PgSelectIndexParams index_params;
 
     switch (nodeTag(node)) {

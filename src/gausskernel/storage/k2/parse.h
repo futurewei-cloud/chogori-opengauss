@@ -27,6 +27,9 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/transam.h"
 #include "postgres.h"
 
+#include "access/k2/pg_gate_api.h"
+
+
 namespace k2fdw {
 
 constexpr uint32_t FistBootstrapObjectId = 10000;  // TODO True for OG?
@@ -126,7 +129,7 @@ bool is_foreign_expr(PlannerInfo *root,
 		RelOptInfo *baserel,
 		Expr *expr);
 
-void parse_conditions(List *exprs, ParamListInfo paramLI, foreign_expr_cxt *expr_cxt);
+void parse_conditions(List *exprs, ParamListInfo paramLI, std::vector<K2PgConstraintDef> &result);
 
 void parse_expr(Expr *node, FDWExprRefValues *ref_values);
 

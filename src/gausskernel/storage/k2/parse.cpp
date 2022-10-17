@@ -73,8 +73,8 @@ bool is_builtin(Oid objectId) {
  * currently considered here.
  */
 bool foreign_expr_walker(Node *node,
-			foreign_glob_cxt *glob_cxt,
-			foreign_loc_cxt *outer_cxt)
+            foreign_glob_cxt *glob_cxt,
+            foreign_loc_cxt *outer_cxt)
  {
    bool      check_type = true;
    foreign_loc_cxt inner_cxt;
@@ -435,7 +435,7 @@ bool foreign_expr_walker(Node *node,
          break;
       case T_Aggref:
          {
-	   return false;
+         return false;
          }
          break;
       default:
@@ -505,8 +505,8 @@ bool foreign_expr_walker(Node *node,
 
 
 bool is_foreign_expr(PlannerInfo *root,
-		RelOptInfo *baserel,
-		Expr *expr)
+        RelOptInfo *baserel,
+        Expr *expr)
   {
    foreign_glob_cxt glob_cxt;
    foreign_loc_cxt loc_cxt;
@@ -546,42 +546,62 @@ bool is_foreign_expr(PlannerInfo *root,
 }
 
 
-void parse_conditions(List *exprs, ParamListInfo paramLI, foreign_expr_cxt *expr_cxt) {
-  	elog(DEBUG4, "FDW: parsing %d remote expressions", list_length(exprs));
-	ListCell   *lc;
-	foreach(lc, exprs)
-	{
-		Expr	   *expr = (Expr *) lfirst(lc);
+void parse_conditions(List *exprs, ParamListInfo paramLI, std::vector<K2PgConstraintDef> &result) {
+    elog(DEBUG4, "FDW: parsing %d remote expressions", list_length(exprs));
+    ListCell   *lc;
+    foreach(lc, exprs)
+    {
+        result.clear();
+        Expr       *expr = (Expr *) lfirst(lc);
 
-		/* Extract clause from RestrictInfo, if required */
-		if (IsA(expr, RestrictInfo)) {
-			expr = ((RestrictInfo *) expr)->clause;
-		}
-		elog(DEBUG4, "FDW: parsing expression: %s", nodeToString(expr));
-		// parse a single clause
-		FDWExprRefValues ref_values;
-		ref_values.column_refs = NIL;
-		ref_values.const_values = NIL;
-		ref_values.paramLI = paramLI;
-		parse_expr(expr, &ref_values);
-		if (list_length(ref_values.column_refs) == 1 && list_length(ref_values.const_values) == 1) {
-			FDWOprCond *opr_cond = (FDWOprCond *)palloc0(sizeof(FDWOprCond));
-			opr_cond->opno = ref_values.opno;
-			// found a binary condition
-			ListCell   *rlc;
-			foreach(rlc, ref_values.column_refs) {
-				opr_cond->ref = (FDWColumnRef *)lfirst(rlc);
-			}
+        /* Extract clause from RestrictInfo, if required */
+        if (IsA(expr, RestrictInfo)) {
+            expr = ((RestrictInfo *) expr)->clause;
+        }
+        elog(DEBUG4, "FDW: parsing expression: %s", nodeToString(expr));
+        // parse a single clause
+        FDWExprRefValues ref_values;
+        ref_values.column_refs = NIL;
+        ref_values.const_values = NIL;
+        ref_values.paramLI = paramLI;
+        parse_expr(expr, &ref_values);
+        if (list_length(ref_values.column_refs) == 1 && list_length(ref_values.const_values) == 1) {
+            K2PgConstraintDef cdef;
+            switch (get_oprrest(ref_values.opno)) {
+               case F_EQSEL: {
+                   cdef.constraint = K2PgConstraintType::K2PG_CONSTRAINT_EQ;
+                   break;
+               }
+               case F_SCALARLTSEL: {
+                   cdef.constraint = K2PgConstraintType::K2PG_CONSTRAINT_LT;
+                   break;
+               }
+               case F_SCALARGTSEL: {
+                   cdef.constraint = K2PgConstraintType::K2PG_CONSTRAINT_GT;
+                   break;
+               }
+               default:
+                   cdef.constraint = K2PgConstraintType::K2PG_CONSTRAINT_UNKNOWN;
+                   break;
+            }
 
-			foreach(rlc, ref_values.const_values) {
-				opr_cond->val = (FDWConstValue *)lfirst(rlc);
-			}
+            // found a binary condition
+            ListCell   *rlc;
+            // just the one
+            foreach(rlc, ref_values.column_refs) {
+                cdef.attr_num = ((FDWColumnRef *)lfirst(rlc))->attr_num;
+            }
 
-            opr_cond->column_ref_first = ref_values.column_ref_first;
+            // just the one
+            foreach(rlc, ref_values.const_values) {
+                FDWConstValue* cval = (FDWConstValue *)lfirst(rlc);
+                K2PgConstant constant {.type_id=cval->atttypid, .datum=cval->value, .is_null=cval->is_null};
+                cdef.constants.push_back(std::move(constant));
+            }
 
-			expr_cxt->opr_conds = lappend(expr_cxt->opr_conds, opr_cond);
-		}
-	}
+            result.push_back(std::move(cdef));
+        }
+    }
 }
 
 
@@ -611,33 +631,33 @@ void parse_expr(Expr *node, FDWExprRefValues *ref_values) {
 
 void parse_op_expr(OpExpr *node, FDWExprRefValues *ref_values) {
     if (list_length(node->args) != 2) {
-		elog(DEBUG4, "FDW: we only handle binary opclause, actual args length: %d for node %s", list_length(node->args), nodeToString(node));
-		return;
-	} else {
-		elog(DEBUG4, "FDW: handing binary opclause for node %s", nodeToString(node));
-	}
+        elog(DEBUG4, "FDW: we only handle binary opclause, actual args length: %d for node %s", list_length(node->args), nodeToString(node));
+        return;
+    } else {
+        elog(DEBUG4, "FDW: handing binary opclause for node %s", nodeToString(node));
+    }
 
-	ListCell *lc;
+    ListCell *lc;
     bool checkOrder;
-	switch (get_oprrest(node->opno))
-	{
-		case F_EQSEL: //  equal =
-		case F_SCALARLTSEL: // Less than <
+    switch (get_oprrest(node->opno))
+    {
+        case F_EQSEL: //  equal =
+        case F_SCALARLTSEL: // Less than <
           // TODO not supported by OG?
           //case F_SCALARLESEL: // Less Equal <=
-		case F_SCALARGTSEL: // Greater than >
+        case F_SCALARGTSEL: // Greater than >
           //case F_SCALARGESEL: // Greater Equal >=
-			elog(DEBUG4, "FDW: parsing OpExpr: %d", get_oprrest(node->opno));
+            elog(DEBUG4, "FDW: parsing OpExpr: %d", get_oprrest(node->opno));
 
             // Creating the FDWExprRefValues loses the tree structure of the original expression
             // so we need to keep track if the column reference or the constant was first
             checkOrder = true;
 
-			ref_values->opno = node->opno;
-			foreach(lc, node->args)
-			{
-				Expr *arg = (Expr *) lfirst(lc);
-				parse_expr(arg, ref_values);
+            ref_values->opno = node->opno;
+            foreach(lc, node->args)
+            {
+                Expr *arg = (Expr *) lfirst(lc);
+                parse_expr(arg, ref_values);
 
                 if (checkOrder && list_length(ref_values->column_refs) == 1) {
                     ref_values->column_ref_first = true;
@@ -645,90 +665,90 @@ void parse_op_expr(OpExpr *node, FDWExprRefValues *ref_values) {
                     ref_values->column_ref_first = false;
                 }
                 checkOrder = false;
-			}
+            }
 
-			break;
-		default:
-			elog(DEBUG4, "FDW: unsupported OpExpr type: %d", get_oprrest(node->opno));
-			break;
-	}
+            break;
+        default:
+            elog(DEBUG4, "FDW: unsupported OpExpr type: %d", get_oprrest(node->opno));
+            break;
+    }
 }
 
 void parse_var(Var *node, FDWExprRefValues *ref_values) {
-	elog(DEBUG4, "FDW: parsing Var %s", nodeToString(node));
-	// the condition is at the current level
-	if (node->varlevelsup == 0) {
-		FDWColumnRef *col_ref = (FDWColumnRef *)palloc0(sizeof(FDWColumnRef));
-		col_ref->attno = node->varno;
-		col_ref->attr_num = node->varattno;
-		col_ref->attr_typid = node->vartype;
-		col_ref->atttypmod = node->vartypmod;
-		ref_values->column_refs = lappend(ref_values->column_refs, col_ref);
-	}
+    elog(DEBUG4, "FDW: parsing Var %s", nodeToString(node));
+    // the condition is at the current level
+    if (node->varlevelsup == 0) {
+        FDWColumnRef *col_ref = (FDWColumnRef *)palloc0(sizeof(FDWColumnRef));
+        col_ref->attno = node->varno;
+        col_ref->attr_num = node->varattno;
+        col_ref->attr_typid = node->vartype;
+        col_ref->atttypmod = node->vartypmod;
+        ref_values->column_refs = lappend(ref_values->column_refs, col_ref);
+    }
 }
 
 void parse_const(Const *node, FDWExprRefValues *ref_values) {
-	elog(DEBUG4, "FDW: parsing Const %s", nodeToString(node));
-	FDWConstValue *val = (FDWConstValue *)palloc0(sizeof(FDWConstValue));
-	val->atttypid = node->consttype;
-	val->is_null = node->constisnull;
+    elog(DEBUG4, "FDW: parsing Const %s", nodeToString(node));
+    FDWConstValue *val = (FDWConstValue *)palloc0(sizeof(FDWConstValue));
+    val->atttypid = node->consttype;
+    val->is_null = node->constisnull;
 
-	val->value = 0;
-	if (node->constisnull || node->constbyval)
-		val->value = node->constvalue;
-	else
-		val->value = PointerGetDatum(node->constvalue);
+    val->value = 0;
+    if (node->constisnull || node->constbyval)
+        val->value = node->constvalue;
+    else
+        val->value = PointerGetDatum(node->constvalue);
 
-	ref_values->const_values = lappend(ref_values->const_values, val);
+    ref_values->const_values = lappend(ref_values->const_values, val);
 }
 
 void parse_param(Param *node, FDWExprRefValues *ref_values) {
-	elog(DEBUG4, "FDW: parsing Param %s", nodeToString(node));
-	ParamExternData *prm = NULL;
+    elog(DEBUG4, "FDW: parsing Param %s", nodeToString(node));
+    ParamExternData *prm = NULL;
    // TODO
-	// ParamExternData prmdata;
-	//if (ref_values->paramLI->paramFetch != NULL)
-	//	prm = ref_values->paramLI->paramFetch(ref_values->paramLI, node->paramid,
-	//			true, &prmdata);
-	//else
-		prm = &ref_values->paramLI->params[node->paramid - 1];
+    // ParamExternData prmdata;
+    //if (ref_values->paramLI->paramFetch != NULL)
+    //    prm = ref_values->paramLI->paramFetch(ref_values->paramLI, node->paramid,
+    //            true, &prmdata);
+    //else
+        prm = &ref_values->paramLI->params[node->paramid - 1];
 
-	if (!OidIsValid(prm->ptype) ||
-		prm->ptype != node->paramtype ||
-		!(prm->pflags & PARAM_FLAG_CONST))
-	{
-		/* Planner should ensure this does not happen */
-		elog(ERROR, "Invalid parameter: %s", nodeToString(node));
-	}
+    if (!OidIsValid(prm->ptype) ||
+        prm->ptype != node->paramtype ||
+        !(prm->pflags & PARAM_FLAG_CONST))
+    {
+        /* Planner should ensure this does not happen */
+        elog(ERROR, "Invalid parameter: %s", nodeToString(node));
+    }
 
-	FDWConstValue *val = (FDWConstValue *)palloc0(sizeof(FDWConstValue));
-	val->atttypid = prm->ptype;
-	val->is_null = prm->isnull;
-	int16		typLen = 0;
-	bool		typByVal = false;
-	val->value = 0;
+    FDWConstValue *val = (FDWConstValue *)palloc0(sizeof(FDWConstValue));
+    val->atttypid = prm->ptype;
+    val->is_null = prm->isnull;
+    int16        typLen = 0;
+    bool        typByVal = false;
+    val->value = 0;
 
-	get_typlenbyval(node->paramtype, &typLen, &typByVal);
-	if (prm->isnull || typByVal)
-		val->value = prm->value;
-	else
-		val->value = datumCopy(prm->value, typByVal, typLen);
+    get_typlenbyval(node->paramtype, &typLen, &typByVal);
+    if (prm->isnull || typByVal)
+        val->value = prm->value;
+    else
+        val->value = datumCopy(prm->value, typByVal, typLen);
 
-	ref_values->const_values = lappend(ref_values->const_values, val);
+    ref_values->const_values = lappend(ref_values->const_values, val);
 }
 
 // search for the column in the equal conditions, the performance is fine for small number of equal conditions
 List *findOprCondition(foreign_expr_cxt context, int attr_num) {
-	List * result = NIL;
-	ListCell *lc = NULL;
-	foreach (lc, context.opr_conds) {
-		FDWOprCond *first = (FDWOprCond *) lfirst(lc);
-		if (first->ref->attr_num == attr_num) {
-			result = lappend(result, first);
-		}
-	}
+    List * result = NIL;
+    ListCell *lc = NULL;
+    foreach (lc, context.opr_conds) {
+        FDWOprCond *first = (FDWOprCond *) lfirst(lc);
+        if (first->ref->attr_num == attr_num) {
+            result = lappend(result, first);
+        }
+    }
 
-	return result;
+    return result;
 }
 
 } // ns
