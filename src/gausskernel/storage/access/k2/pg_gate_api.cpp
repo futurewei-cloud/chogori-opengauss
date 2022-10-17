@@ -977,6 +977,7 @@ K2PgStatus PgGate_ExecSelect(
         where_conds = Expression();
     }
 
+    projection = std::vector<std::string>{};
     auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();
     if (!status.is2xxOK()) {
         return k2pg::K2StatusToK2PgStatus(std::move(status));
