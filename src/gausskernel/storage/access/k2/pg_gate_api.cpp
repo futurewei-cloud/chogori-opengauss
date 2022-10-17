@@ -379,7 +379,7 @@ K2PgStatus PgGate_ExecDropTable(K2PgOid database_oid,
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
-    elog(LOG, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
+    //elog(LOG, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
     *handle = k2pg::pg_session->LoadTable(database_oid, table_oid).get();
     if (*handle == nullptr) {
         return K2PgStatus {
@@ -958,6 +958,12 @@ K2PgStatus PgGate_ExecSelect(
             if (projected.find(schema->fields[offset].name) == projected.end()) {
                 projection.push_back(schema->fields[offset].name);
                 projected.insert(schema->fields[offset].name);
+            }
+        }
+
+        for (int i = 0; i < schema->fields.size(); ++i) {
+            if (schema->fields[i].name == "oid") {
+                projection.push_back("oid");
             }
         }
     }
