@@ -24,20 +24,12 @@
 #define MaxTransactionIdAttributeNumber (-5)
 #define MaxCommandIdAttributeNumber (-6)
 #define TableOidAttributeNumber (-7)
-#ifdef PGXC
-
-#define XC_NodeIdAttributeNumber (-8)
-#define BucketIdAttributeNumber (-9)
-#define FirstLowInvalidHeapAttributeNumber (-10)
-
-#define K2PgTupleIdAttributeNumber				(-10)
-#define K2PgFirstLowInvalidAttributeNumber		(-11)
-
-#else
 #define FirstLowInvalidHeapAttributeNumber (-8)
-
 #define K2PgTupleIdAttributeNumber				(-8)
 #define K2PgFirstLowInvalidAttributeNumber		(-9)
+#ifdef PGXC
+#define XC_NodeIdAttributeNumber (-10)
+#define BucketIdAttributeNumber (-11)
 #endif
 
 /*
