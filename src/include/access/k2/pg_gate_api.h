@@ -187,9 +187,9 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle);
 // DML statements (select, insert, update, delete, truncate)
 //--------------------------------------------------------------------------------------------------
 struct K2PgConstant {
-    Oid type_id;
-    Datum datum;
-    bool is_null;
+    Oid type_id{0};
+    Datum datum{0};
+    bool is_null{true};
 };
 
 enum K2PgConstraintType {
