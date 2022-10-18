@@ -3,19 +3,8 @@
         "host": "172.17.0.1",
         "port": 30000
     },
-    "k2.txn_op_timeout_ms": 3600000,
-    "k2.sync_finalize_txn": true,
     "create_collections": {
         "PG_DEFAULT_CLUSTER": {
-            "range_ends": [""]
-        },
-        "template1": {
-            "range_ends": [""]
-        },
-        "template0": {
-            "range_ends": [""]
-        },
-        "postgres": {
             "range_ends": [""]
         }
     }
