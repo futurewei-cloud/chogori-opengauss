@@ -81,6 +81,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (!value.has_value()) {
                 throw std::runtime_error("System attribute in skvrecord was null");
+                break;
             }
             switch (attr_enum) {
                 case PgSystemAttrNum::kObjectId:
@@ -110,6 +111,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (!value.has_value()) {
                 throw std::runtime_error("System attribute in skvrecord was null");
+                break;
             }
             syscols->ctid = *value;
         }
@@ -118,6 +120,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (!value.has_value()) {
                 throw std::runtime_error("System attribute in skvrecord was null");
+                break;
             }
 
             char *datum = allocManager.alloc(value->size() + VARHDRSZ);
@@ -126,6 +129,11 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
             syscols->k2pgbasectid = (uint8_t*)PointerGetDatum(datum);
         }
             break;
+        case PgSystemAttrNum::kPgRowId: {
+            // PG does not want to read rowid back
+            std::optional<std::string> value = record.deserializeNext<std::string>();
+            break;
+        }
         default:
             throw std::runtime_error("Unexpected system attribute id");
     }
@@ -253,7 +261,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         K2PgStatus status {
             .pg_code = ERRCODE_INTERNAL_ERROR,
             .k2_code = 0,
-            .msg = "Deserialization error when convertin skvrecord to datums",
+            .msg = "Deserialization error when converting skvrecord to datums",
             .detail = err.what()
         };
 
