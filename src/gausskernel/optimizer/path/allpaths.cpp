@@ -53,6 +53,7 @@
 #include "utils/lsyscache.h"
 #include "utils/selfuncs.h"
 #include "pgxc/pgxc.h"
+#include "access/k2/k2pg_aux.h"
 
 /* Hook for plugins to get control in set_rel_pathlist() */
 THR_LOCAL set_rel_pathlist_hook_type set_rel_pathlist_hook = NULL;
@@ -244,6 +245,23 @@ RelOptInfo* make_one_rel(PlannerInfo* root, List* joinlist)
         }
 #endif
     }
+
+	if (IsK2PgEnabled())
+	{
+		for (rti = 1; rti < root->simple_rel_array_size; rti++)
+		{
+			RelOptInfo *relation = root->simple_rel_array[rti];
+
+			if (relation != NULL && relation->rtekind == RTE_RELATION)
+			{
+				RangeTblEntry *rte = root->simple_rte_array[rti];
+				if (IsK2PgRelationById(rte->relid)) {
+					// Set the K2PG FDW routine because we will use the foreign scan API below.
+					relation->fdwroutine = (FdwRoutine *)(&k2_fdw_handler);
+				}
+			}
+		}
+	}
 
     /*
      * Generate access paths for the base rels.
@@ -477,8 +495,8 @@ static void set_base_rel_pathlists(PlannerInfo* root)
                  */
                  if ((!IsLocatorReplicated(path->locator_type) ||
                        !ng_is_same_group(distribution, target_distribution))  &&
-                     (!rel->subplan || 
-                       !(is_single_baseresult_plan(rel->subplan) || 
+                     (!rel->subplan ||
+                       !(is_single_baseresult_plan(rel->subplan) ||
                        is_execute_on_coordinator(rel->subplan))) &&
                      !PATH_REQ_UPPER(path)) {
                     Cost rescan_startup_cost;
@@ -614,8 +632,16 @@ void set_rel_size(PlannerInfo* root, RelOptInfo* rel, Index rti, RangeTblEntry* 
                     /* Foreign table */
                     set_foreign_size(root, rel, rte);
                 } else {
-                    /* Plain relation */
-                    set_plain_rel_size(root, rel, rte);
+					/* Plain relation */
+					if (IsK2PgRelationById(rte->relid))
+					{
+						set_foreign_size(root, rel, rte);
+					}
+					else
+					{
+						/* Use regular scan for initdb tables. */
+						set_plain_rel_size(root, rel, rte);
+					}
                 }
                 break;
             case RTE_SUBQUERY:
@@ -816,7 +842,7 @@ static void set_plain_rel_size(PlannerInfo* root, RelOptInfo* rel, RangeTblEntry
 
         Assert(rel->pruning_result);
 
-     
+
         if (rel->pruning_result->expr != NULL) {
             rel->partItrs = 1;
         } else {
@@ -930,7 +956,7 @@ static void bitmap_path_walker(Path* path)
         return;
 }
 
-/* check for redistribute func pg_get_redis_rel_start_ctid and pg_get_redis_rel_end_ctid, 
+/* check for redistribute func pg_get_redis_rel_start_ctid and pg_get_redis_rel_end_ctid,
  *  * they can only execute on cscan's filter, return true if has them in this node */
 static bool is_cscan_filter_func_for_redis(Node* node)
 {
@@ -1818,7 +1844,7 @@ static void set_append_rel_pathlist(PlannerInfo* root, RelOptInfo* rel, Index rt
  * parameterized MergeAppends to feed such joins.  (See notes in
  * optimizer/README for why that might not ever happen, though.)
  */
-static void generate_mergeappend_paths(PlannerInfo* root, RelOptInfo* rel, 
+static void generate_mergeappend_paths(PlannerInfo* root, RelOptInfo* rel,
     List* live_childrels, List* all_child_pathkeys)
 {
     ListCell* lcp = NULL;
@@ -2124,7 +2150,7 @@ static Node* trans_lateral_vars_mutator(Node *node, trans_lateral_vars_t *latera
     {
         Var *var = (Var *)node;
         List *target_list = lateral_vars->target_list;
-        
+
         /* Inner Var, need to convert to subquery form */
         if (var->varno == lateral_vars->rti)
         {
@@ -3171,19 +3197,19 @@ static bool window_function_is_pushdown_safe(Query* subquery, Query* topquery, b
     foreach(lc, subquery->windowClause) {
         Bitmapset *localrefs = NULL;
         WindowClause *wc = (WindowClause *) lfirst(lc);
-    
+
         foreach(lc2, wc->partitionClause) {
             SortGroupClause *sortcl = (SortGroupClause *) lfirst(lc2);
             localrefs = bms_add_member(localrefs, (int)(sortcl->tleSortGroupRef));
         }
-    
+
         if (lc == list_head(subquery->windowClause)) {
             sgrefs = localrefs;
         } else {
             sgrefs = bms_intersect(sgrefs, localrefs);
             bms_free(localrefs);
         }
-    
+
         if (bms_is_empty(sgrefs)) {
             return false;
         }
@@ -3191,11 +3217,11 @@ static bool window_function_is_pushdown_safe(Query* subquery, Query* topquery, b
 
     foreach(lc, subquery->targetList) {
         TargetEntry *tle = (TargetEntry *) lfirst(lc);
-    
+
         if (tle->resjunk) {
             continue;
         }
-    
+
         if (!bms_is_member((int)(tle->ressortgroupref), sgrefs)) {
             unsafeColumns[tle->resno] = true;
         }
@@ -4242,7 +4268,7 @@ static void print_path(PlannerInfo* root, Path* path, int indent)
 
     if (join) {
         JoinPath* jp = (JoinPath*)path;
-        
+
         print_tab(indent);
         printf("  clauses: ");
         print_restrictclauses(root, jp->joinrestrictinfo);
@@ -4299,4 +4325,3 @@ void debug_print_rel(PlannerInfo* root, RelOptInfo* rel)
 }
 
 #endif /* OPTIMIZER_DEBUG */
-
