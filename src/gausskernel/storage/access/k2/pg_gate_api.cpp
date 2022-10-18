@@ -280,8 +280,9 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schem
         // For regular user table, k2pgrowid should be a hash key because k2pgrowid is a random uuid.
         k2pgcols.push_back(makeColumn("k2pgrowid",
                 static_cast<int32_t>(k2pg::PgSystemAttrNum::kPgRowId),
-                InvalidOid,
+                BYTEAOID,
                 true /* is_key */, false /* is_desc */, false /* is_nulls_first */));
+        num_key_columns++;
     }
     // Add key columns at the beginning
     for (auto& col : columns) {
@@ -844,19 +845,9 @@ K2PgStatus PgGate_ExecSelect(
     std::shared_ptr<k2pg::PgTableDesc> pg_table = handle->secondaryTable ? handle->secondaryTable : handle->primaryTable;
 
     std::unordered_map<int, uint32_t> attr_to_offset;
-    for (const auto& column : constraints) {
-        k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
-        if (pg_column == NULL) {
-            K2PgStatus status {
-                .pg_code = ERRCODE_INTERNAL_ERROR,
-                .k2_code = 404,
-                .msg = "Cannot find column with attr_num",
-                .detail = "Load table failed"
-            };
-            return status;
-        }
+    for (const auto& column : pg_table->columns()) {
         // we have two extra fields, i.e., table_id and index_id, in skv key
-        attr_to_offset[column.attr_num] = pg_column->index() + 2;
+        attr_to_offset[column.attr_num()] = column.index() + 2;
     }
 
     std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
@@ -954,16 +945,27 @@ K2PgStatus PgGate_ExecSelect(
         }
 
         for (int target_attr : targets_attrnum) {
-            uint32_t offset = attr_to_offset[target_attr];
+            // Virtual column, not a valid target for k2 query
+            if (target_attr == (int)k2pg::PgSystemAttrNum::kPgTupleId) {
+                continue;
+            }
+
+            auto offset_it = attr_to_offset.find(target_attr);
+            if (offset_it == attr_to_offset.end()) {
+                K2PgStatus status {
+                    .pg_code = ERRCODE_INTERNAL_ERROR,
+                    .k2_code = 0,
+                    .msg = "Unknown target_attr in target list",
+                    .detail = ""
+                };
+
+                return status;
+            }
+
+            uint32_t offset = offset_it->second;
             if (projected.find(schema->fields[offset].name) == projected.end()) {
                 projection.push_back(schema->fields[offset].name);
                 projected.insert(schema->fields[offset].name);
-            }
-        }
-
-        for (int i = 0; i < schema->fields.size(); ++i) {
-            if (schema->fields[i].name == "oid") {
-                projection.push_back("oid");
             }
         }
     }
@@ -977,7 +979,6 @@ K2PgStatus PgGate_ExecSelect(
         where_conds = Expression();
     }
 
-    projection = std::vector<std::string>{};
     auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();
     if (!status.is2xxOK()) {
         return k2pg::K2StatusToK2PgStatus(std::move(status));

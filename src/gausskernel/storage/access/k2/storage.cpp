@@ -79,9 +79,8 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kMaxCommandId:
         case PgSystemAttrNum::kTableOid: {
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
-            // ObjectId is optional so it is not an error if it is null
             if (!value.has_value()) {
-                K2LOG_W(log::k2pg, "system attr is null: {}, schema {}", attr_num, *(record.schema));
+                throw std::runtime_error("System attribute in skvrecord was null");
                 break;
             }
             switch (attr_enum) {
@@ -111,7 +110,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kSelfItemPointer: {
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (!value.has_value()) {
-                K2LOG_W(log::k2pg, "system attr is null: {}", attr_num);
+                throw std::runtime_error("System attribute in skvrecord was null");
                 break;
             }
             syscols->ctid = *value;
@@ -120,7 +119,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kPgIdxBaseTupleId: {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (!value.has_value()) {
-                K2LOG_W(log::k2pg, "system attr is null: {}", attr_num);
+                throw std::runtime_error("System attribute in skvrecord was null");
                 break;
             }
 
