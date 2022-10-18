@@ -380,7 +380,7 @@ K2PgStatus PgGate_ExecDropTable(K2PgOid database_oid,
 K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
                             K2PgOid table_oid,
                             K2PgTableDesc *handle) {
-    //elog(LOG, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
+    elog(LOG, "PgGateAPI: PgGate_GetTableDesc %d, %d", database_oid, table_oid);
     *handle = k2pg::pg_session->LoadTable(database_oid, table_oid).get();
     if (*handle == nullptr) {
         return K2PgStatus {
