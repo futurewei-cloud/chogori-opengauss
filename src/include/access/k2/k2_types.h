@@ -56,7 +56,7 @@ inline bool is4ByteIntType(Oid oid) {
 inline bool isUnsignedPromotedType(Oid oid) {
     return (oid == OIDOID || oid == CIDOID || oid == XIDOID || oid == REGPROCOID || oid == REGPROCEDUREOID || oid == REGOPEROID || oid == REGOPERATOROID ||
             oid == REGCLASSOID || oid == REGTYPEOID || oid == REGCONFIGOID || oid == REGDICTIONARYOID ||
-            oid == TRIGGEROID || oid == LANGUAGE_HANDLEROID || oid == FDW_HANDLEROID);
+            oid == TRIGGEROID || oid == LANGUAGE_HANDLEROID || oid == FDW_HANDLEROID || oid == SHORTXIDOID);
 }
 
 inline bool is8ByteIntType(Oid oid) {
