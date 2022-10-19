@@ -638,7 +638,9 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     elog(LOG, "PgGateAPI: PgGate_ExecUpdate %u, %u", database_oid, table_oid);
 
     auto catalog = pg_gate->GetCatalogClient();
-    *rows_affected = 0;
+    if (rows_affected) {
+        *rows_affected = 0;
+    }
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
 
     // Get a builder with the keys serialzed. called function handles tupleId attribute if needed
@@ -696,7 +698,7 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
-    } else {
+    } else if (rows_affected) {
         *rows_affected = 1;
     }
 
@@ -719,7 +721,9 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
     elog(LOG, "PgGateAPI: PgGate_ExecDelete %d, %d", database_oid, table_oid);
 
     auto catalog = pg_gate->GetCatalogClient();
-    *rows_affected = 0;
+    if (rows_affected) {
+        *rows_affected = 0;
+    }
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
 
     // Get a builder with the keys serialized. called function handles tupleId attribute if needed
@@ -752,7 +756,7 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
     status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
-    } else {
+    } else if (rows_affected) {
         *rows_affected = 1;
     }
 
