@@ -35,7 +35,6 @@ SqlCatalogManager::~SqlCatalogManager() {
 sh::Status SqlCatalogManager::Start() {
     K2LOG_I(log::catalog, "Starting Catalog Manager...");
     K2ASSERT(log::catalog, !initted_.load(std::memory_order_acquire), "Already started");
-
     // load cluster info
     auto [status, clusterInfo] = cluster_info_handler_.GetClusterInfo(cluster_id_);
     if (!status.is2xxOK()) {
@@ -362,11 +361,19 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
             num_index += result.num_index;
         }
         CommitTransaction();
+        // TODO(ahsank): Normally bootstrap process commits txn so the above commit
+        // function is no op, but initial database creation by K2 doesn't commit so
+        // Adding commit until that's fixed
+        TXMgr.endTxn(sh::dto::EndAction::Commit).get();
         K2LOG_D(log::catalog, "Finished copying {} tables and {} indexes from source database {} to {}",
                 tableIds.size(), num_index, source_database_info->database_id, new_ns->database_id);
     }
 
     CommitTransaction();
+    // TODO(ahsank): Normally bootstrap process commits txn so the above commit
+    // function is no op, but initial database creation by K2 doesn't commit so
+    // Adding commit until that's fixed
+    TXMgr.endTxn(sh::dto::EndAction::Commit).get();
     K2LOG_D(log::catalog, "Created database {}", new_ns->database_id);
     return std::make_pair(sh::Statuses::S200_OK, new_ns);
 }
@@ -802,7 +809,7 @@ sh::Response<ReservePgOidsResponse> SqlCatalogManager::ReservePgOid(const std::s
     // won't override each other and won't lose the correctness of PgNextOid
     databaseInfo.next_pg_oid = end_oid;
     K2LOG_D(log::catalog, "Updating nextPgOid on SKV to {} for database {}", end_oid, databaseId);
-    if (auto status = database_info_handler_.UpsertDatabase(databaseInfo); status.is2xxOK()) {
+    if (auto status = database_info_handler_.UpsertDatabase(databaseInfo); !status.is2xxOK()) {
         AbortTransaction();
         K2LOG_E(log::catalog, "Failed to update nextPgOid on SKV due to {}", status);
         return std::make_tuple(status, response);
