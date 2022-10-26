@@ -120,6 +120,7 @@
 #endif
 
 #include "client_logic/client_logic.h"
+#include "access/k2/k2pg_aux.h"
 
 static void AddNewRelationTuple(Relation pg_class_desc, Relation new_rel_desc, Oid new_rel_oid, Oid new_type_oid,
     Oid reloftype, Oid relowner, char relkind, char relpersistence, Datum relacl, Datum reloptions,
@@ -128,7 +129,7 @@ static oidvector* BuildIntervalTablespace(const IntervalPartitionDefState* inter
 static void deletePartitionTuple(Oid part_id);
 static void addNewPartitionTuplesForPartition(Relation pg_partition_rel,
     Oid relid, Oid reltablespace,
-    Oid bucketOid, PartitionState* partTableState, Oid ownerid, 
+    Oid bucketOid, PartitionState* partTableState, Oid ownerid,
     Datum reloptions, const TupleDesc tupledesc, char strategy, StorageType storage_type, LOCKMODE partLockMode);
 static void addNewPartitionTupleForTable(Relation pg_partition_rel, const char* relname, const Oid reloid,
     const Oid reltablespaceid, const TupleDesc reltupledesc, const PartitionState* partTableState, Oid ownerid,
@@ -509,7 +510,7 @@ Relation heap_create(const char* relname, Oid relnamespace, Oid reltablespace, O
             }
             break;
     }
-    
+
     /*
      * Never allow a pg_class entry to explicitly specify the database's
      * default tablespace in reltablespace; force it to zero instead. This
@@ -530,7 +531,7 @@ Relation heap_create(const char* relname, Oid relnamespace, Oid reltablespace, O
         if (u_sess->proc_cxt.IsBinaryUpgrade) {
             if (!partitioned_relation && storage_type == SEGMENT_PAGE) {
                 isbucket = BUCKET_OID_IS_VALID(bucketOid) && !newcbi;
-                relfilenode = seg_alloc_segment(ConvertToRelfilenodeTblspcOid(reltablespace), 
+                relfilenode = seg_alloc_segment(ConvertToRelfilenodeTblspcOid(reltablespace),
                                                 u_sess->proc_cxt.MyDatabaseId, isbucket, relfilenode);
             }
         } else {
@@ -539,7 +540,7 @@ Relation heap_create(const char* relname, Oid relnamespace, Oid reltablespace, O
     } else if (storage_type == SEGMENT_PAGE && !partitioned_relation) {
         Assert(reltablespace != GLOBALTABLESPACE_OID);
         isbucket = BUCKET_OID_IS_VALID(bucketOid) && !newcbi;
-        relfilenode = (Oid)seg_alloc_segment(ConvertToRelfilenodeTblspcOid(reltablespace), 
+        relfilenode = (Oid)seg_alloc_segment(ConvertToRelfilenodeTblspcOid(reltablespace),
                                              u_sess->proc_cxt.MyDatabaseId, isbucket, InvalidBlockNumber);
         ereport(LOG, (errmsg("Segment Relation %s(%u) set relfilenode %u xid %lu", relname, relid, relfilenode,
             GetCurrentTransactionIdIfAny())));
@@ -566,13 +567,20 @@ Relation heap_create(const char* relname, Oid relnamespace, Oid reltablespace, O
         storage_type
     );
 
+    /*
+     * No need to create local storage for K2PG Tables as K2 will handle it.
+     * Temporary tables in K2PG mode use local storage.
+    */
+    if (IsK2PgEnabled())
+        create_storage = relpersistence == RELPERSISTENCE_TEMP;
+
     if (partitioned_relation) {
         rel->rd_rel->parttype = PARTTYPE_PARTITIONED_RELATION;
     }
     rel->rd_rel->relrowmovement = rowMovement;
 
     /*
-     * Save newcbi as a context indicator to 
+     * Save newcbi as a context indicator to
      * avoid missing information in later index building process.
      */
     rel->newcbi = newcbi;
@@ -876,7 +884,7 @@ void InsertPgAttributeTuple(Relation pg_attribute_rel, Form_pg_attribute new_att
     tup = heap_form_tuple(RelationGetDescr(pg_attribute_rel), values, nulls);
 
     /* finally insert the new tuple, update the indexes, and clean up */
-    (void)simple_heap_insert(pg_attribute_rel, tup);
+    CatalogTupleInsert(pg_attribute_rel, tup);
 
     if (indstate != NULL)
         CatalogIndexInsert(indstate, tup);
@@ -1103,7 +1111,7 @@ void InsertPgClassTuple(
     } else {
         nulls[Anum_pg_class_relbucket - 1] = true;
     }
-    
+
     if (bucketcol != NULL)
         values[Anum_pg_class_relbucketkey - 1] = PointerGetDatum(bucketcol);
     else
@@ -1118,7 +1126,7 @@ void InsertPgClassTuple(
     HeapTupleSetOid(tup, new_rel_oid);
 
     /* finally insert the new tuple, update the indexes, and clean up */
-    (void)simple_heap_insert(pg_class_desc, tup);
+    CatalogTupleInsert(pg_class_desc, tup);
 
     CatalogUpdateIndexes(pg_class_desc, tup);
 
@@ -1168,7 +1176,7 @@ static void AddNewRelationTuple(Relation pg_class_desc, Relation new_rel_desc, O
             new_rel_reltup->relallvisible = 0;
             break;
     }
-    
+
     /* Initialize relfrozenxid */
     if (relkind == RELKIND_RELATION || relkind == RELKIND_TOASTVALUE || relkind == RELKIND_MATVIEW) {
         /*
@@ -1224,7 +1232,7 @@ static void CheckDistColsUnique(DistributeBy *distribBy, int distribKeyNum, int2
     if (distribBy == NULL) {
         return;
     }
-    
+
     /* Check whether include identical column in distribute key */
     for (int i = 0; i < distribKeyNum - 1; i++) {
         for (int j = i + 1; j < distribKeyNum; j++) {
@@ -1269,7 +1277,7 @@ static void CheckListDistEntry(List* entry, int distkeynum, bool isDefault)
     if (boundaryLength != distkeynum && !isDefault) {
         ereport(ERROR,
             (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-                errmsg("Distribution boundary length (%d) does not equal to the number of distribute keys (%d).", 
+                errmsg("Distribution boundary length (%d) does not equal to the number of distribute keys (%d).",
                 boundaryLength, distkeynum)));
     }
 }
@@ -1343,13 +1351,13 @@ static int ConstCmp(const void* a, const void* b)
     return partitonKeyCompare((Const**)rea->sliceBoundaryValue, (Const**)reb->sliceBoundaryValue, rea->sliceNum);
 }
 
-static void IsDuplicateBoundariesExist(SliceConstInfo* sliceConstInfo, int totalBoundariesNum, int distkeynum) 
+static void IsDuplicateBoundariesExist(SliceConstInfo* sliceConstInfo, int totalBoundariesNum, int distkeynum)
 {
     /* sort all the boundaries values */
     qsort(sliceConstInfo, totalBoundariesNum, sizeof(SliceConstInfo), ConstCmp);
     /* if duplicate boundaries exist,report and exit */
     for (int i = 0; i < totalBoundariesNum - 1; i++) {
-        int cmp = partitonKeyCompare(sliceConstInfo[i].sliceBoundaryValue, 
+        int cmp = partitonKeyCompare(sliceConstInfo[i].sliceBoundaryValue,
             sliceConstInfo[i + 1].sliceBoundaryValue, distkeynum);
         if (cmp == 0) {
             if (strcmp(sliceConstInfo[i].sliceName, sliceConstInfo[i + 1].sliceName) == 0) {
@@ -1370,7 +1378,7 @@ static void IsDuplicateBoundariesExist(SliceConstInfo* sliceConstInfo, int total
     }
 }
 
-static int GetTotalBoundariesNum(List* sliceList) 
+static int GetTotalBoundariesNum(List* sliceList)
 {
     int result = 0;
     ListSliceDefState* slicedef = NULL;
@@ -1534,7 +1542,7 @@ static void CheckDistBoundaries(DistributeBy *distributeby, TupleDesc desc)
 
     posList = GetDistColsPos(distributeby, desc);
     if (distributeby->disttype == DISTTYPE_RANGE) {
-        /* 
+        /*
          * 1. check length of every slice boundaries
          * 2. check whether range slice boundaries ascending
          */
@@ -1594,7 +1602,7 @@ static void CheckDistDatanodeValidity(DistributeBy* distributeby, Oid* nodeoids,
     if (distributeby == NULL || distributeby->distState == NULL) {
         return;
     }
-    
+
     /*
      * Checks: 1. specified dn exists; 2. specified dn is contained in specifed node group.
      */
@@ -1628,7 +1636,7 @@ static void CheckDistDatanodeValidity(DistributeBy* distributeby, Oid* nodeoids,
     return;
 }
 
-static void CheckSliceRefNodeGroup(DistributeBy *distributeby, char* groupName) 
+static void CheckSliceRefNodeGroup(DistributeBy *distributeby, char* groupName)
 {
     Oid groupOid, baseGroupOid;
 
@@ -1645,7 +1653,7 @@ static void CheckSliceRefNodeGroup(DistributeBy *distributeby, char* groupName)
         char *baseGroupName = get_pgxc_groupname(baseGroupOid);
         ereport(ERROR,
                 (errcode(ERRCODE_INVALID_ATTRIBUTE),
-                    errmsg("table's node group (%s) is not the same with referenced table's node group(%s)", 
+                    errmsg("table's node group (%s) is not the same with referenced table's node group(%s)",
                         groupName, baseGroupName)));
     }
 
@@ -1678,7 +1686,7 @@ static void CheckSliceReferenceValidity(Oid relid, DistributeBy *distributeby, T
 
     baseType = baseLocInfo->locatorType;
     reftype = distributeby->disttype;
-    if (!((baseType == LOCATOR_TYPE_RANGE && reftype == DISTTYPE_RANGE) || 
+    if (!((baseType == LOCATOR_TYPE_RANGE && reftype == DISTTYPE_RANGE) ||
         (baseType == LOCATOR_TYPE_LIST && reftype == DISTTYPE_LIST))) {
         FreeRelationLocInfo(baseLocInfo);
         ereport(ERROR,
@@ -1817,7 +1825,7 @@ void AddRelationDistribution(const char *relname, Oid relid, DistributeBy* distr
     (void)BucketMapCacheGetBucketmap(group_name, &bucketCnt);
     if (bucketmaplen != 0 && bucketmaplen != bucketCnt) {
         bucketCnt = bucketmaplen;
-        if (!is_pgxc_group_bucketcnt_exists(get_pgxc_groupoid(group_name, false), bucketmaplen, &group_name, 
+        if (!is_pgxc_group_bucketcnt_exists(get_pgxc_groupoid(group_name, false), bucketmaplen, &group_name,
             &group_oid)) {
             ereport(ERROR,
                 (errcode(ERRCODE_INVALID_OPERATION),
@@ -1847,7 +1855,7 @@ void AddRelationDistribution(const char *relname, Oid relid, DistributeBy* distr
          * implement it later using ((uint32)random()) % ((uint32)numnodes),
          * and route the startpos to other CNs.
          */
-        
+
         /* write slice information to pgxc_slice, keep startpos to 0 at present. */
         PgxcSliceCreate(relname, relid, distributeby, descriptor, nodeoids, (uint32)numnodes, 0);
     }
@@ -1934,7 +1942,7 @@ static void CheckDistributeKeyAndType(Oid relid, DistributeBy *distributeby,
                             GetDistributeTypeName(distributeby->disttype))));
             }
         }
-        
+
         attnum[i++] = localAttrNum;
     }
 }
@@ -2065,8 +2073,8 @@ static int bid_cmp(const void* p1, const void* p2)
     return 0;
 }
 
-HashBucketInfo* GetRelationBucketInfo(DistributeBy* distributeby, 
-                                      TupleDesc tupledsc, 
+HashBucketInfo* GetRelationBucketInfo(DistributeBy* distributeby,
+                                      TupleDesc tupledsc,
                                       bool* createbucket,
                                       bool hashbucket)
 {
@@ -2655,7 +2663,7 @@ Oid heap_create_with_catalog(const char *relname, Oid relnamespace, Oid reltable
      */
     if (IsUnderPostmaster && !u_sess->attr.attr_common.IsInplaceUpgrade &&
         (relkind == RELKIND_RELATION || relkind == RELKIND_VIEW || relkind == RELKIND_FOREIGN_TABLE ||
-        relkind == RELKIND_COMPOSITE_TYPE || relkind == RELKIND_MATVIEW || relkind == RELKIND_STREAM || 
+        relkind == RELKIND_COMPOSITE_TYPE || relkind == RELKIND_MATVIEW || relkind == RELKIND_STREAM ||
         relkind == RELKIND_CONTQUERY))
         new_array_oid = AssignTypeArrayOid();
 
@@ -3460,7 +3468,7 @@ void heap_drop_with_catalog(Oid relid)
      * Schedule unlinking of the relation's physical files at commit.
      */
     if (rel->rd_rel->relkind != RELKIND_VIEW && rel->rd_rel->relkind != RELKIND_COMPOSITE_TYPE &&
-        rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE && rel->rd_rel->relkind != RELKIND_STREAM && 
+        rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE && rel->rd_rel->relkind != RELKIND_STREAM &&
         rel->rd_rel->relkind != RELKIND_CONTQUERY) {
         RelationDropStorage(rel);
     }
@@ -3559,7 +3567,7 @@ void StoreAttrDefault(Relation rel, AttrNumber attnum, Node* expr, char generate
     adrel = heap_open(AttrDefaultRelationId, RowExclusiveLock);
 
     tuple = heap_form_tuple(adrel->rd_att, values, u_sess->catalog_cxt.nulls);
-    attrdefOid = simple_heap_insert(adrel, tuple);
+    attrdefOid = CatalogTupleInsert(adrel, tuple);
 
     CatalogUpdateIndexes(adrel, tuple);
 
@@ -4254,7 +4262,7 @@ Node *cookDefault(ParseState *pstate, Node *raw_default, Oid atttypid, int32 att
     /*
      * Make sure default expr does not refer to rownum.
      */
-#ifndef ENABLE_MULTIPLE_NODES	 
+#ifndef ENABLE_MULTIPLE_NODES
     ExcludeRownumExpr(pstate, expr);
 #endif
     /*
@@ -4462,7 +4470,7 @@ static void RelationTruncateIndexes(Relation heapRelation, LOCKMODE lockmode)
          * Now truncate the actual file (and discard buffers).
          */
         RelationTruncate(currentIndex, 0);
-        
+
         /* truncate psort relation */
         if (unlikely(currentIndex->rd_rel->relam == PSORT_AM_OID)) {
             Relation psort_rel = heap_open(currentIndex->rd_rel->relcudescrelid, lockmode);
@@ -5188,7 +5196,7 @@ Partition heapCreatePartition(const char* part_name, bool for_partitioned_table,
                     partFileNode, GetCurrentTransactionIdIfAny())));
             } else {
                 partFileNode = part_id;
-            } 
+            }
         }
         if (u_sess->proc_cxt.IsBinaryUpgrade) {
             createStorage = true;
@@ -5212,7 +5220,7 @@ Partition heapCreatePartition(const char* part_name, bool for_partitioned_table,
         for_partitioned_table ? HEAP_DISK : storage_type);
 
     /*
-     * Save newcbi as a context indicator to 
+     * Save newcbi as a context indicator to
      * avoid missing information in later index building process.
      */
     new_part_desc->newcbi = newcbi;
@@ -5242,7 +5250,7 @@ Partition heapCreatePartition(const char* part_name, bool for_partitioned_table,
     }
 
     return new_part_desc;
-    
+
 }
 
 /*
@@ -5883,13 +5891,13 @@ Oid HeapAddListPartition(Relation pgPartRel, Oid partTableOid, Oid partTablespac
     } else  {
         newListPartitionOid = GetNewRelFileNode(newPartitionTableSpaceOid,
                                                 pgPartRel, RELPERSISTENCE_PERMANENT);
-    } 
+    }
     LockPartitionOid(partTableOid, (uint32)newListPartitionOid, AccessExclusiveLock);
 
     newListPartition = heapCreatePartition(newListPartDef->partitionName,
-        false,                                                    
-        newPartitionTableSpaceOid,                                
-        newListPartitionOid,                                      
+        false,
+        newPartitionTableSpaceOid,
+        newListPartitionOid,
         partrelfileOid,
         bucketOid,
         ownerid,
@@ -5910,7 +5918,7 @@ Oid HeapAddListPartition(Relation pgPartRel, Oid partTableOid, Oid partTablespac
 
     relation = relation_open(partTableOid, NoLock);
     PartitionCloseSmgr(newListPartition);
-    
+
     partitionClose(relation, newListPartition, NoLock);
     relation_close(relation, NoLock);
     return newListPartitionOid;
@@ -6146,7 +6154,7 @@ Oid HeapAddHashPartition(Relation pgPartRel, Oid partTableOid, Oid partTablespac
         partrelfileOid = binary_upgrade_get_next_part_pg_partition_rfoid();
     } else  {
         newHashPartitionOid = GetNewRelFileNode(newPartitionTableSpaceOid, pgPartRel, RELPERSISTENCE_PERMANENT);
-    } 
+    }
     LockPartitionOid(partTableOid, (uint32)newHashPartitionOid, AccessExclusiveLock);
 
     newHashPartition = heapCreatePartition(newHashPartDef->partitionName,

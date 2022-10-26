@@ -37,6 +37,7 @@
 #include "utils/rel.h"
 #include "utils/rel_gs.h"
 #include "utils/syscache.h"
+#include "access/k2/k2pg_aux.h"
 
 /* ----------------------------------------------------------------
  *		TypeShellMake
@@ -136,7 +137,7 @@ Oid TypeShellMake(const char* typname, Oid typeNamespace, Oid ownerId)
     /*
      * insert the tuple in the relation and get the tuple's oid.
      */
-    typoid = simple_heap_insert(pg_type_desc, tup);
+    typoid = CatalogTupleInsert(pg_type_desc, tup);
 
     CatalogUpdateIndexes(pg_type_desc, tup);
 
@@ -409,7 +410,7 @@ Oid TypeCreate(Oid newTypeOid, const char* typname, Oid typeNamespace, Oid relat
         }
         /* else allow system to assign oid */
 
-        typeObjectId = simple_heap_insert(pg_type_desc, tup);
+        typeObjectId = CatalogTupleInsert(pg_type_desc, tup);
     }
 
     /* Update indexes */

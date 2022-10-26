@@ -2788,6 +2788,14 @@ Oid heap_insert(Relation relation, HeapTuple tup, CommandId cid, int options, Bu
     if (tup != NULL) {
         Assert(TUPLE_IS_HEAP_TUPLE(tup));
     }
+
+    if (IsK2PgRelation(relation))
+    {
+	    ereport(ERROR,
+		    (errcode(ERRCODE_INTERNAL_ERROR), errmsg(
+		    "Operation not allowed in K2PG mode %s",
+				      __func__)));
+    }
     /*
      * Fill in tuple header fields, assign an OID, and toast the tuple if
      * necessary.
@@ -3726,6 +3734,13 @@ int heap_multi_insert(Relation relation, Relation parent, HeapTuple* tuples, int
     bool need_tuple_data = RelationIsLogicallyLogged(relation);
     bool need_cids = RelationIsAccessibleInLogicalDecoding(relation);
 
+    if (IsK2PgRelation(relation))
+    {
+	    ereport(ERROR,
+		    (errcode(ERRCODE_INTERNAL_ERROR),
+			    errmsg("Operation not allowed in K2PG mode")));
+    }
+
     /* 1. heap bcm-based data replication feature is enable
      * 2. caller doesn't forbid the feature
      * 3. normal process but not initing cluster
@@ -4168,6 +4183,13 @@ TM_Result heap_delete(Relation relation, ItemPointer tid, CommandId cid,
 
     /* Don't allow any write/lock operator in stream. */
     Assert(!StreamThreadAmI());
+
+    if (IsK2PgRelation(relation))
+    {
+        elog(WARNING, "Ignoring unsupported tuple delete for rel %s",
+		    RelationGetRelationName(relation));
+        return TM_Ok;
+    }
 
     /*
      * Forbid this during a parallel operation, lest it allocate a combocid.

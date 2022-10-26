@@ -737,13 +737,10 @@ void InsertOneTuple(Oid objectid)
     if (objectid != (Oid)0)
         HeapTupleSetOid(tuple, objectid);
 
-    if (IsK2PgEnabled())
-		K2PgExecuteInsert(t_thrd.bootstrap_cxt.boot_reldesc, tupDesc, tuple);
+    CatalogTupleInsert(t_thrd.bootstrap_cxt.boot_reldesc, tuple);
 
     pfree(tupDesc); /* just free's tupDesc, not the attrtypes */
 
-    if (!IsK2PgEnabled())
-        (void)simple_heap_insert(t_thrd.bootstrap_cxt.boot_reldesc, tuple);
     tableam_tops_free_tuple(tuple);
     ereport(DEBUG4, (errmsg("row inserted")));
 
