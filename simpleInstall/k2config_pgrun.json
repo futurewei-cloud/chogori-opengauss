@@ -10,16 +10,13 @@
             "range_ends": [""]
         },
         "template1": {
-            "range_ends": [""],
-            "endpoints": ["tcp+k2rpc://127.0.0.1:10001"]
+            "range_ends": [""]
         },
         "template0": {
-            "range_ends": [""],
-            "endpoints": ["tcp+k2rpc://127.0.0.1:10002"]
+            "range_ends": [""]
         },
         "postgres": {
-            "range_ends": [""],
-            "endpoints": ["tcp+k2rpc://127.0.0.1:10003"]
+            "range_ends": [""]
         }
     }
 }
