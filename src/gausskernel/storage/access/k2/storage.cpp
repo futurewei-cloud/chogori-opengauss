@@ -695,7 +695,7 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
 
     // Check if we have the virtual tupleID column and if so deserialize the datum into a SKVRecord
     for (auto& attribute : columns) {
-        if (attribute.attr_num == K2PgTupleIdAttributeNumber) {
+        if (attribute.attr_num == K2PgTupleIdAttributeNumber && !attribute.value.is_null) {
             std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
             K2PgStatus status = getSKVBuilder(database_oid, table_oid, builder);
             if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {

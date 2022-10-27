@@ -249,6 +249,11 @@ Boot_CreateStmt:
 					 */
 					mapped_relation = ($4 || shared_relation);
 
+					if (IsK2PgEnabled())
+					{
+						K2PgCreateSysCatalogTable($2, $3, tupdesc, shared_relation, $13);
+					}
+
 					if ($4)
 					{
 						if (t_thrd.bootstrap_cxt.boot_reldesc)
@@ -315,11 +320,6 @@ Boot_CreateStmt:
                                                                                                           NULL,
 													  NULL);
 						ereport(DEBUG4, (errmsg("relation created with OID %u", id)));
-					}
-
-					if (IsK2PgEnabled())
-					{
-						K2PgCreateSysCatalogTable($2, $3, tupdesc, shared_relation, $13);
 					}
 
 					do_end();

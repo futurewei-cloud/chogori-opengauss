@@ -2364,7 +2364,7 @@ void InsertBuiltinFuncInBootstrap()
         for (int j = 0; j < fg->fnums; j++) {
             func = &fg->funcs[j];
             tup = CreateHeapTuple4BuiltinFunc(func, NULL);
-            simple_heap_insert(t_thrd.bootstrap_cxt.boot_reldesc, tup);
+            CatalogTupleInsert(t_thrd.bootstrap_cxt.boot_reldesc, tup);
             heap_freetuple(tup);
         }
     }

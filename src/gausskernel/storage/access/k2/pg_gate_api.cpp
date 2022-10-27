@@ -456,7 +456,7 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
 //--------------------------------------------------------------------------------------------------
 K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
-    elog(LOG, "PgGateAPI: PgGate_DmlFetch %d", nattrs);
+    elog(LOG, "PgGateAPI: PgGate_DmlFetch handle: %p, nattrs: %d", handle, nattrs);
 
     *has_data = false;
 
@@ -535,7 +535,7 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *val
 // This function returns the tuple id (k2pgctid) of a Postgres tuple.
 K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_oid, const std::vector<K2PgAttributeDef>& attrs,
                                     uint64_t *k2pgctid){
-    elog(LOG, "PgGateAPI: PgGate_DmlBuildPgTupleId %lu", attrs.size());
+    elog(LOG, "PgGateAPI: PgGate_DmlBuildPgTupleId db: %d, table %d, attr size: %lu", db_oid, table_oid, attrs.size());
 
     skv::http::dto::SKVRecord fullRecord;
     std::shared_ptr<k2pg::PgTableDesc> pg_table = k2pg::pg_session->LoadTable(db_oid, table_oid);

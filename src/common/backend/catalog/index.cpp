@@ -645,7 +645,7 @@ static void UpdateIndexRelation(Oid indexoid, Oid heapoid, IndexInfo* indexInfo,
     /*
      * insert the tuple into the pg_index catalog
      */
-    (void)simple_heap_insert(pg_index, tuple);
+    CatalogTupleInsert(pg_index, tuple);
 
     /* update the indexes on pg_index */
     CatalogUpdateIndexes(pg_index, tuple);
