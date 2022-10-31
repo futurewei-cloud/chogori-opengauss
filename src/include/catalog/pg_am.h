@@ -152,9 +152,9 @@ DATA(insert OID = 4439 (  ubtree		5 2 t f t t t t t t f t t 0 ubtinsert ubtbegin
 DESCR("ustore b-tree index access method");
 #define UBTREE_AM_OID 4439
 
-DATA(insert OID = 9901 (  k2index		5 3 t f t t t t t t f t t 0 k2ininsert k2inbeginscan k2ingettuple - k2inrescan k2inendscan - - - k2inbuild k2inbuildempty k2inbulkdelete k2invacuumcleanup k2incanreturn k2incostestimate k2inoptions));
+DATA(insert OID = 10030 (  k2index		5 3 t f t t t t t t f t t 0 k2ininsert k2inbeginscan k2ingettuple - k2inrescan k2inendscan - - - k2inbuild k2inbuildempty k2inbulkdelete k2invacuumcleanup k2incanreturn k2incostestimate k2inoptions));
 DESCR("k2 b-tree index access method");
-#define K2INDEX_AM_OID 9901
+#define K2INDEX_AM_OID 10030
 
 #define OID_IS_BTREE(oid) ((oid) == BTREE_AM_OID || (oid) == UBTREE_AM_OID)
 

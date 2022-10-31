@@ -572,8 +572,7 @@ ShouldPushdownScanKey(Relation relation, CamScanPlan scan_plan, AttrNumber attnu
 		 * TODO: we can probably allow ineq conditions for system tables now.
 		 */
 		return IsBasicOpSearch(key->sk_flags) &&
-			key->sk_strategy == BTEqualStrategyNumber &&
-			is_primary_key;
+			key->sk_strategy == BTEqualStrategyNumber;
 	}
 	else
 	{
@@ -650,8 +649,7 @@ static void	camSetupScanKeys(Relation relation,
 			continue;
 		}
 
-		if (is_primary_key)
-			scan_plan->sk_cols = bms_add_member(scan_plan->sk_cols, idx);
+		scan_plan->sk_cols = bms_add_member(scan_plan->sk_cols, idx);
 	}
 
 	/*

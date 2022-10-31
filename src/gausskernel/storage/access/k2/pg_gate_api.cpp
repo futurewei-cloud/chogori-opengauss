@@ -37,6 +37,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "k2pg-internal.h"
 #include "config.h"
 #include "session.h"
+#include "access/sysattr.h"
 #include "access/k2/pg_session.h"
 #include "access/k2/k2_util.h"
 #include "access/k2/storage.h"
@@ -396,7 +397,7 @@ K2PgStatus PgGate_GetTableDesc(K2PgOid database_oid,
 K2PgStatus PgGate_GetColumnInfo(K2PgTableDesc table_desc,
                              int16_t attr_number,
                              bool *is_primary) {
-    elog(LOG, "PgGateAPI: PgGate_GetTableDesc %d", attr_number);
+    elog(DEBUG5, "PgGateAPI: PgGate_GetColumnInfo %d", attr_number);
     return table_desc->GetColumnInfo(attr_number, is_primary);
 }
 
@@ -456,7 +457,7 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle){
 //--------------------------------------------------------------------------------------------------
 K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *values, bool *isnulls,
                         K2PgSysColumns *syscols, bool *has_data){
-    elog(LOG, "PgGateAPI: PgGate_DmlFetch handle: %p, nattrs: %d", handle, nattrs);
+    elog(DEBUG5, "PgGateAPI: PgGate_DmlFetch handle: %p, nattrs: %d", handle, nattrs);
 
     *has_data = false;
 
@@ -577,7 +578,8 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
                              bool increment_catalog,
-                             std::vector<K2PgAttributeDef>& columns) {
+                             std::vector<K2PgAttributeDef>& columns,
+                             Datum* k2pgtupleid) {
     elog(LOG, "PgGateAPI: PgGate_ExecInsert %d, %d", database_oid, table_oid);
     auto catalog = pg_gate->GetCatalogClient();
 
@@ -614,6 +616,18 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
 
     if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
         return status;
+    }
+
+    K2PgStatus tid_status = PgGate_DmlBuildPgTupleId(database_oid, table_oid, columns, k2pgtupleid);
+
+    if (tid_status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+        return status;
+    }
+
+    for (auto& attribute : columns) {
+        if (attribute.attr_num == K2PgTupleIdAttributeNumber && !attribute.value.is_null && attribute.value.datum == 0) {
+            attribute.value.datum = *k2pgtupleid;
+        }
     }
 
     auto [k2status] = k2pg::TXMgr.write(record, false, upsert ? skv::http::dto::ExistencePrecondition::None : skv::http::dto::ExistencePrecondition::NotExists).get();
@@ -696,9 +710,10 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     skv::http::dto::SKVRecord record = builder->build();
     auto [k2status] = k2pg::TXMgr.partialUpdate(record, std::move(fieldsForUpdate)).get();
     status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
-    if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+    if (!k2status.is2xxOK() && k2status.code != 412) { // 412 Precondition falied is not an error for PG in this case
+        status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
         return status;
-    } else if (rows_affected) {
+    } else if (rows_affected && k2status.is2xxOK()) {
         *rows_affected = 1;
     }
 

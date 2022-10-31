@@ -32,7 +32,7 @@ Config::Config() {
     }
 
     // read the config file
-    K2LOG_I(log::k2pg, "{}", configFileName);
+    K2LOG_D(log::k2pg, "{}", configFileName);
     std::ifstream ifile(configFileName);
     ifile >> _config;
 }

@@ -310,7 +310,9 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 	bool is_syscatalog_change = IsSystemCatalogChange(rel) && RelationHasCachedLists(rel);
 
 	/* Execute the insert */
-	HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, false /* upsert */, is_syscatalog_change, columns));
+        Datum k2pgtid = 0;
+        HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, false /* upsert */, is_syscatalog_change, columns, &k2pgtid));
+        tuple->t_k2pgctid = k2pgtid;
 
 	/*
 	 * Optimization to increment the catalog version for the local cache as
@@ -454,7 +456,8 @@ void K2PgExecuteInsertIndex(Relation index,
 	}
 
 	/* Execute the insert and clean up. */
-	HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, upsert, false, columns));
+	Datum k2pgtid = 0;
+	HandleK2PgStatus(PgGate_ExecInsert(dboid, relid, upsert, false, columns, &k2pgtid));
 }
 
 bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, ModifyTableState *mtstate)
