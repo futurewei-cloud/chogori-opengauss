@@ -233,7 +233,8 @@ K2PgStatus PgGate_ExecInsert(K2PgOid database_oid,
                              K2PgOid table_oid,
                              bool upsert,
                              bool increment_catalog,
-                             std::vector<K2PgAttributeDef>& columns);
+                             std::vector<K2PgAttributeDef>& columns,
+                             Datum* k2pgtupleid);
 
 // UPDATE ------------------------------------------------------------------------------------------
 K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,

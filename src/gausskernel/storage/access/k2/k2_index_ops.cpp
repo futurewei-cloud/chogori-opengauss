@@ -45,8 +45,7 @@ typedef struct
 	bool	is_backfill;	/* are we concurrently backfilling an index? */
 } K2PgBuildState;
 
-static void
-k2inbuildCallback(Relation index, HeapTuple heapTuple, Datum *values, const bool *isnull,
+static void k2inbuildCallback(Relation index, HeapTuple heapTuple, Datum *values, const bool *isnull,
 				   bool tupleIsAlive, void *state)
 {
 	K2PgBuildState  *buildstate = (K2PgBuildState *)state;
@@ -60,9 +59,17 @@ k2inbuildCallback(Relation index, HeapTuple heapTuple, Datum *values, const bool
 	buildstate->index_tuples += 1;
 }
 
-IndexBuildResult *
-k2inbuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
+bool
+k2invalidate(Oid opclassoid)
 {
+	return true;
+}
+
+Datum k2inbuild(PG_FUNCTION_ARGS)
+{
+	Relation heap = (Relation)PG_GETARG_POINTER(0);
+    Relation index = (Relation)PG_GETARG_POINTER(1);
+    IndexInfo *indexInfo = (IndexInfo *)PG_GETARG_POINTER(2);
 	K2PgBuildState	buildstate;
 	double			heap_tuples = 0;
 
@@ -79,55 +86,79 @@ k2inbuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
 	IndexBuildResult *result = (IndexBuildResult *) palloc(sizeof(IndexBuildResult));
 	result->heap_tuples  = heap_tuples;
 	result->index_tuples = buildstate.index_tuples;
-	return result;
+
+	PG_RETURN_POINTER(result);
 }
 
-void
-k2inbuildempty(Relation index)
+Datum k2inbuildempty(PG_FUNCTION_ARGS)
 {
-	elog(WARNING, "Unexpected building of empty unlogged index");
+	Relation index = (Relation)PG_GETARG_POINTER(0);
+	elog(WARNING, "Unexpected building of empty unlogged index: %d", index->rd_id);
+	PG_RETURN_VOID();
 }
 
-bool
-k2ininsert(Relation index, Datum *values, bool *isnull, Datum k2pgctid, Relation heap,
-			IndexUniqueCheck checkUnique, struct IndexInfo *indexInfo)
+Datum k2ininsert(PG_FUNCTION_ARGS)
 {
+	Relation index = (Relation)PG_GETARG_POINTER(0);
+	Datum *values = (Datum *)PG_GETARG_POINTER(1);
+    bool *isnull = (bool *)PG_GETARG_POINTER(2);
+    Datum k2pgctid = (Datum)PG_GETARG_POINTER(3);
+	Relation heap = (Relation)PG_GETARG_POINTER(4);
+    IndexUniqueCheck checkUnique = (IndexUniqueCheck)PG_GETARG_INT32(5);
+    IndexInfo *indexInfo = (IndexInfo *)PG_GETARG_POINTER(6);
+    bool result = false;
+
 	if (!index->rd_index->indisprimary)
 		K2PgExecuteInsertIndex(index,
 							  values,
 							  isnull,
 							  k2pgctid);
 
-	return index->rd_index->indisunique ? true : false;
+	result = index->rd_index->indisunique ? true : false;
+	PG_RETURN_BOOL(result);
 }
 
-void
-k2indelete(Relation index, Datum *values, bool *isnull, Datum k2pgctid, Relation heap,
-			struct IndexInfo *indexInfo)
+Datum k2indelete(PG_FUNCTION_ARGS)
 {
+	Relation index = (Relation)PG_GETARG_POINTER(0);
+	Datum *values = (Datum *)PG_GETARG_POINTER(1);
+    bool *isnull = (bool *)PG_GETARG_POINTER(2);
+    Datum k2pgctid = (Datum)PG_GETARG_POINTER(3);
+	Relation heap = (Relation)PG_GETARG_POINTER(4);
+    IndexInfo *indexInfo = (IndexInfo *)PG_GETARG_POINTER(5);
+
 	if (!index->rd_index->indisprimary)
 		K2PgExecuteDeleteIndex(index, values, isnull, k2pgctid);
+
+    PG_RETURN_VOID();
 }
 
-IndexBulkDeleteResult *
-k2inbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
-				IndexBulkDeleteCallback callback, void *callback_state)
+Datum k2inbulkdelete(PG_FUNCTION_ARGS)
 {
+	IndexVacuumInfo *info = (IndexVacuumInfo *)PG_GETARG_POINTER(0);
+    IndexBulkDeleteResult *volatile stats = (IndexBulkDeleteResult *)PG_GETARG_POINTER(1);
+    IndexBulkDeleteCallback callback = (IndexBulkDeleteCallback)PG_GETARG_POINTER(2);
+    void *callbackState = (void *)PG_GETARG_POINTER(3);
+
 	elog(WARNING, "Unexpected bulk delete of index via vacuum");
-	return NULL;
+
+    PG_RETURN_POINTER(stats);
 }
 
-IndexBulkDeleteResult *
-k2invacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
+Datum k2invacuumcleanup(PG_FUNCTION_ARGS)
 {
+	IndexVacuumInfo *info = (IndexVacuumInfo *)PG_GETARG_POINTER(0);
+    IndexBulkDeleteResult *stats = (IndexBulkDeleteResult *)PG_GETARG_POINTER(1);
+
 	elog(WARNING, "Unexpected index cleanup via vacuum");
-	return NULL;
+
+	PG_RETURN_POINTER(stats);
 }
 
-/* --------------------------------------------------------------------------------------------- */
-
-bool k2incanreturn(Relation index, int attno)
+Datum k2incanreturn(PG_FUNCTION_ARGS)
 {
+	Relation index = (Relation)PG_GETARG_POINTER(0);
+	int attno =  (int)PG_GETARG_INT32(1);
 	/*
 	 * If "canreturn" is true, Postgres will attempt to perform index-only scan on the indexed
 	 * columns and expect us to return the column values as an IndexTuple. This will be the case
@@ -136,53 +167,71 @@ bool k2incanreturn(Relation index, int attno)
 	 * For indexes which are primary keys, we will return the table row as a HeapTuple instead.
 	 * For this reason, we set "canreturn" to false for primary keys.
 	 */
-	return !index->rd_index->indisprimary;
+	bool result = !index->rd_index->indisprimary;
+	PG_RETURN_BOOL(result);
 }
 
-void
-k2incostestimate(struct PlannerInfo *root, struct IndexPath *path, double loop_count,
-				  Cost *indexStartupCost, Cost *indexTotalCost, Selectivity *indexSelectivity,
-				  double *indexCorrelation, double *indexPages)
+Datum k2incostestimate(PG_FUNCTION_ARGS)
 {
+    PlannerInfo* root = (PlannerInfo*)PG_GETARG_POINTER(0);
+    IndexPath* path = (IndexPath*)PG_GETARG_POINTER(1);
+    double loop_count = PG_GETARG_FLOAT8(2);
+    Cost* indexStartupCost = (Cost*)PG_GETARG_POINTER(3);
+    Cost* indexTotalCost = (Cost*)PG_GETARG_POINTER(4);
+    Selectivity* indexSelectivity = (Selectivity*)PG_GETARG_POINTER(5);
+    double* indexCorrelation = (double*)PG_GETARG_POINTER(6);
+
 	camIndexCostEstimate(path, indexSelectivity, indexStartupCost, indexTotalCost);
+
+	PG_RETURN_VOID();
 }
 
-bytea *
-k2inoptions(Datum reloptions, bool validate)
+Datum k2inoptions(PG_FUNCTION_ARGS)
 {
-	return NULL;
+	Datum reloptions = PG_GETARG_DATUM(0);
+    bool validate = PG_GETARG_BOOL(1);
+    bytea *result = NULL;
+
+    if (result != NULL) {
+        PG_RETURN_BYTEA_P(result);
+    }
+    PG_RETURN_NULL();
 }
 
-bool
-k2invalidate(Oid opclassoid)
+Datum k2inbeginscan(PG_FUNCTION_ARGS)
 {
-	return true;
+    Relation rel = (Relation)PG_GETARG_POINTER(0);
+    int nkeys = PG_GETARG_INT32(1);
+    int norderbys = PG_GETARG_INT32(2);
+
+    IndexScanDesc scan;
+
+    /* no order by operators allowed */
+    Assert(norderbys == 0);
+
+    /* get the scan */
+    scan = RelationGetIndexScan(rel, nkeys, norderbys);
+    scan->opaque = NULL;
+
+    PG_RETURN_POINTER(scan);
 }
 
-/* --------------------------------------------------------------------------------------------- */
-
-IndexScanDesc
-k2inbeginscan(Relation rel, int nkeys, int norderbys)
+Datum k2inrescan(PG_FUNCTION_ARGS)
 {
-	IndexScanDesc scan;
+	IndexScanDesc scan = (IndexScanDesc)PG_GETARG_POINTER(0);
+    ScanKey scankey = (ScanKey)PG_GETARG_POINTER(1);
+	int nscankeys = (int)PG_GETARG_INT32(2);
+	ScanKey orderbys = (ScanKey)PG_GETARG_POINTER(3);
+	int norderbys = (int)PG_GETARG_INT32(4);
 
-	/* no order by operators allowed */
-	Assert(norderbys == 0);
-
-	/* get the scan */
-	scan = RelationGetIndexScan(rel, nkeys, norderbys);
-	scan->opaque = NULL;
-
-	return scan;
-}
-
-void
-k2inrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,	ScanKey orderbys, int norderbys)
-{
 	if (scan->opaque)
 	{
 		/* For rescan, end the previous scan. */
-		k2inendscan(scan);
+		Datum args[1];
+		FunctionCallInfoData finfo;
+		finfo.arg = &args[0];
+		args[0] = PointerGetDatum(scan);
+		k2inendscan(&finfo);
 		scan->opaque = NULL;
 	}
 
@@ -190,6 +239,19 @@ k2inrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,	ScanKey orderbys,
 																	 nscankeys, scankey);
 	camScan->index = scan->indexRelation;
 	scan->opaque = camScan;
+
+	PG_RETURN_VOID();
+}
+
+Datum k2inendscan(PG_FUNCTION_ARGS)
+{
+	IndexScanDesc scan = (IndexScanDesc)PG_GETARG_POINTER(0);
+
+	CamScanDesc k2can = (CamScanDesc)scan->opaque;
+	Assert(PointerIsValid(k2can));
+	camEndScan(k2can);
+
+	PG_RETURN_VOID();
 }
 
 /*
@@ -198,9 +260,11 @@ k2inrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,	ScanKey orderbys,
  *     ( SELECT rowid FROM indexRelation WHERE key = given_value )
  *
  */
-bool
-k2ingettuple(IndexScanDesc scan, ScanDirection dir)
+Datum k2ingettuple(PG_FUNCTION_ARGS)
 {
+	IndexScanDesc scan = (IndexScanDesc)PG_GETARG_POINTER(0);
+    ScanDirection dir = (ScanDirection)PG_GETARG_INT32(1);
+
 	Assert(dir == ForwardScanDirection || dir == BackwardScanDirection);
 	const bool is_forward_scan = (dir == ForwardScanDirection);
 
@@ -239,13 +303,7 @@ k2ingettuple(IndexScanDesc scan, ScanDirection dir)
 		}
 	}
 
-	return scan->xs_ctup.t_k2pgctid != 0;
-}
+	bool result = scan->xs_ctup.t_k2pgctid != 0;
 
-void
-k2inendscan(IndexScanDesc scan)
-{
-	CamScanDesc k2can = (CamScanDesc)scan->opaque;
-	Assert(PointerIsValid(k2can));
-	camEndScan(k2can);
+	PG_RETURN_BOOL(result);
 }

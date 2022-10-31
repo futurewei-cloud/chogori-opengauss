@@ -289,5 +289,36 @@ DATA(insert OID = 8806 (4439       raw_ops         PGNSP PGUID));
 DATA(insert OID = 9535 (4439       int1_ops         PGNSP PGUID));
 DATA(insert OID = 9570 (4439       smalldatetime_ops         PGNSP PGUID));
 
+// k2index op family to make index work
+DATA(insert OID = 10050 (10030    integer_ops      PGNSP    PGUID));
+DATA(insert OID = 10051 (10030    oid_ops          PGNSP    PGUID));
+DATA(insert OID = 10052 (10030    datetime_ops     PGNSP    PGUID));
+DATA(insert OID = 10053 (10030    float_ops        PGNSP    PGUID));
+DATA(insert OID = 10054 (10030    numeric_ops      PGNSP    PGUID));
+DATA(insert OID = 10055 (10030    text_ops         PGNSP    PGUID));
+DATA(insert OID = 10056 (10030    bpchar_ops       PGNSP    PGUID));
+DATA(insert OID = 10057 (10030    time_ops         PGNSP    PGUID));
+DATA(insert OID = 10058 (10030    timetz_ops       PGNSP    PGUID));
+DATA(insert OID = 10059 (10030    money_ops        PGNSP    PGUID));
+DATA(insert OID = 10060 (10030    interval_ops     PGNSP    PGUID));
+DATA(insert OID = 10061 (10030    tinterval_ops    PGNSP    PGUID));
+DATA(insert OID = 10062 (10030    int1_ops         PGNSP    PGUID));
+DATA(insert OID = 10063 (10030    bool_ops         PGNSP    PGUID));
+DATA(insert OID = 10064 (10030    smalldatetime_ops  PGNSP  PGUID));
+DATA(insert OID = 10065 (10030    name_ops         PGNSP    PGUID));
+DATA(insert OID = 10066 (10030    char_ops         PGNSP    PGUID));
+DATA(insert OID = 10067 (10030    array_ops        PGNSP    PGUID));
+DATA(insert OID = 10068 (10030    bit_ops          PGNSP    PGUID));
+DATA(insert OID = 10069 (10030    bytea_ops        PGNSP    PGUID));
+DATA(insert OID = 10070 (10030    abstime_ops      PGNSP    PGUID));
+DATA(insert OID = 10071 (10030    network_ops      PGNSP    PGUID));
+DATA(insert OID = 10072 (10030    oidvector_ops    PGNSP    PGUID));
+DATA(insert OID = 10073 (10030    record_ops       PGNSP    PGUID));
+DATA(insert OID = 10074 (10030    varbit_ops       PGNSP    PGUID));
+DATA(insert OID = 10075 (10030    tid_ops          PGNSP    PGUID));
+DATA(insert OID = 10076 (10030    xid_ops          PGNSP    PGUID));
+DATA(insert OID = 10077 (10030    cid_ops          PGNSP    PGUID));
+DATA(insert OID = 10078 (10030    macaddr_ops      PGNSP    PGUID));
+
 #endif   /* PG_OPFAMILY_H */
 

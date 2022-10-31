@@ -367,5 +367,41 @@ DATA(insert ( 405     jsonb_ops        PGNSP    PGUID  4034  3802 t 0 ));
 DATA(insert ( 2742    jsonb_ops        PGNSP    PGUID  4036  3802 t 25 ));
 DATA(insert ( 2742    jsonb_hash_ops   PGNSP    PGUID  4037  3802 f 23 ));
 
+/* k2index index to make index work */
+DATA(insert ( 10030    int4_ops         PGNSP    PGUID  10050    23    t    0));
+DATA(insert ( 10030    int2_ops         PGNSP    PGUID  10050    21    t    0));
+DATA(insert ( 10030    int8_ops         PGNSP    PGUID  10050    20    t    0));
+DATA(insert ( 10030    oid_ops          PGNSP    PGUID  10051    26    t    0));
+DATA(insert ( 10030    date_ops         PGNSP    PGUID  10052  1082    t    0));
+DATA(insert ( 10030    timestamp_ops    PGNSP    PGUID  10052  1114    t    0));
+DATA(insert ( 10030    timestamptz_ops  PGNSP    PGUID  10052  1184    t    0));
+DATA(insert ( 10030    float4_ops       PGNSP    PGUID  10053   700    t    0));
+DATA(insert ( 10030    float8_ops       PGNSP    PGUID  10053   701    t    0));
+DATA(insert ( 10030    numeric_ops      PGNSP    PGUID  10054  1700    t    0));
+DATA(insert ( 10030    text_ops         PGNSP    PGUID  10055    25    t    0));
+DATA(insert ( 10030    bpchar_ops       PGNSP    PGUID  10056  1042    t    0));
+DATA(insert ( 10030    time_ops         PGNSP    PGUID  10057  1083    t    0));
+DATA(insert ( 10030    timetz_ops       PGNSP    PGUID  10058  1266    t    0));
+DATA(insert ( 10030    money_ops        PGNSP    PGUID  10059   790    t    0));
+DATA(insert ( 10030    interval_ops     PGNSP    PGUID  10060  1186    t    0));
+DATA(insert ( 10030    tinterval_ops    PGNSP    PGUID  10061   704    t    0));
+DATA(insert ( 10030    int1_ops         PGNSP    PGUID  10062  5545    t    0));
+DATA(insert ( 10030    bool_ops         PGNSP    PGUID  10063    16    t    0));
+DATA(insert ( 10030    smalldatetime_ops  PGNSP  PGUID  10064  9003    t    0));
+DATA(insert ( 10030    name_ops         PGNSP    PGUID  10065   19     t    0));
+DATA(insert ( 10030    char_ops         PGNSP    PGUID  10066   18     t    0));
+DATA(insert ( 10030    array_ops        PGNSP    PGUID  10067   2277   t    0));
+DATA(insert ( 10030    bit_ops          PGNSP    PGUID  10068   1560   t    0));
+DATA(insert ( 10030    bytea_ops        PGNSP    PGUID  10069   17     t    0));
+DATA(insert ( 10030    abstime_ops      PGNSP    PGUID  10070   702    t    0));
+DATA(insert ( 10030    oidvector_ops    PGNSP    PGUID  10072   30     t    0));
+DATA(insert ( 10030    record_ops       PGNSP    PGUID  10073   2249   t    0));
+DATA(insert ( 10030    varbit_ops       PGNSP    PGUID  10074   1562   t    0));
+DATA(insert ( 10030    tid_ops          PGNSP    PGUID  10075   27     t    0));
+DATA(insert ( 10030    xid_ops          PGNSP    PGUID  10076   28     t    0));
+DATA(insert ( 10030    cid_ops          PGNSP    PGUID  10077   29     t    0));
+DATA(insert ( 10030    macaddr_ops      PGNSP    PGUID  10078   829    t    0));
+
+
 #endif   /* PG_OPCLASS_H */
 

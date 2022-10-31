@@ -702,8 +702,12 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
                 return status;
             }
 
-        record = tupleIDDatumToSKVRecord(attribute.value.datum, builder->getCollectionName(), builder->getSchema());
-        use_tupleID = true;
+            if (attribute.value.datum != 0) {
+                record = tupleIDDatumToSKVRecord(attribute.value.datum, builder->getCollectionName(), builder->getSchema());
+                use_tupleID = true;
+            } else {
+                K2LOG_W(log::k2pg, "TupeId is NULL in makeSKVBuilderWithKeys for schema {}", *(builder->getSchema()));
+            }
         }
     }
 

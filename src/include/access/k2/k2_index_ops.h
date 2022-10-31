@@ -30,37 +30,20 @@ Copyright(c) 2022 Futurewei Cloud
 /*
  * external entry points for K2PG indexes
  */
-extern IndexBuildResult *k2inbuild(Relation heap, Relation index, struct IndexInfo *indexInfo);
-extern void k2inbuildempty(Relation index);
-extern bool k2ininsert(Relation rel, Datum *values, bool *isnull, Datum k2pgctid, Relation heapRel,
-						IndexUniqueCheck checkUnique, struct IndexInfo *indexInfo);
-extern void k2indelete(Relation rel, Datum *values, bool *isnull, Datum k2pgctid, Relation heapRel,
-						struct IndexInfo *indexInfo);
-
-extern IndexBulkDeleteResult *k2inbulkdelete(IndexVacuumInfo *info,
-											  IndexBulkDeleteResult *stats,
-											  IndexBulkDeleteCallback callback,
-											  void *callback_state);
-extern IndexBulkDeleteResult *k2invacuumcleanup(IndexVacuumInfo *info,
-												 IndexBulkDeleteResult *stats);
-
-extern bool k2incanreturn(Relation index, int attno);
-extern void k2incostestimate(struct PlannerInfo *root,
-							  struct IndexPath *path,
-							  double loop_count,
-							  Cost *indexStartupCost,
-							  Cost *indexTotalCost,
-							  Selectivity *indexSelectivity,
-							  double *indexCorrelation,
-							  double *indexPages);
-extern bytea *k2inoptions(Datum reloptions, bool validate);
+extern Datum k2inbuild(PG_FUNCTION_ARGS);
+extern Datum k2inbuildempty(PG_FUNCTION_ARGS);
+extern Datum k2ininsert(PG_FUNCTION_ARGS);
+extern Datum k2inbeginscan(PG_FUNCTION_ARGS);
+extern Datum k2ingettuple(PG_FUNCTION_ARGS);
+extern Datum k2inrescan(PG_FUNCTION_ARGS);
+extern Datum k2inendscan(PG_FUNCTION_ARGS);
+extern Datum k2indelete(PG_FUNCTION_ARGS);
+extern Datum k2inbulkdelete(PG_FUNCTION_ARGS);
+extern Datum k2invacuumcleanup(PG_FUNCTION_ARGS);
+extern Datum k2incanreturn(PG_FUNCTION_ARGS);
+extern Datum k2inoptions(PG_FUNCTION_ARGS);
+extern Datum k2incostestimate(PG_FUNCTION_ARGS);
 
 extern bool k2invalidate(Oid opclassoid);
-
-extern IndexScanDesc k2inbeginscan(Relation rel, int nkeys, int norderbys);
-extern void k2inrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,
-						ScanKey orderbys, int norderbys);
-extern bool k2ingettuple(IndexScanDesc scan, ScanDirection dir);
-extern void k2inendscan(IndexScanDesc scan);
 
 #endif							/* K2_INDEX_OPS_H */
