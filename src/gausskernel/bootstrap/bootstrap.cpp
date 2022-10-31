@@ -410,19 +410,22 @@ static void BootstrapModeMain(void)
         Nulls[i] = false;
     }
 
-	/*
-	 * In K2PG we only need to create the template1 database
-	 * (corresponding to creating the "base/1" subdir as its oid is hardcoded).
-	 */
-	if (IsK2PgEnabled())
-	{
-		K2InitPGCluster();
+    /*
+     * In K2PG we only need to create the template1 database
+     * (corresponding to creating the "base/1" subdir as its oid is hardcoded).
+     */
+    if (IsK2PgEnabled())
+    {
+        K2InitPGCluster();
 
-		K2PgCreateDatabase(TemplateDbOid,
-		                  "template1",
-		                  InvalidOid,
-		                  FirstBootstrapObjectId);
-	}
+
+        K2PgCreateDatabase(TemplateDbOid,
+                          "template1",
+                          InvalidOid,
+                          FirstBootstrapObjectId);
+
+        K2PgCommitTxn();
+    }
 
     /*
      * Process bootstrap input.

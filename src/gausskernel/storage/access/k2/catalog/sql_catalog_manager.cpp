@@ -361,19 +361,11 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
             num_index += result.num_index;
         }
         CommitTransaction();
-        // TODO(ahsank): Normally bootstrap process commits txn so the above commit
-        // function is no op, but initial database creation by K2 doesn't commit so
-        // Adding commit until that's fixed
-        TXMgr.endTxn(sh::dto::EndAction::Commit).get();
         K2LOG_D(log::catalog, "Finished copying {} tables and {} indexes from source database {} to {}",
                 tableIds.size(), num_index, source_database_info->database_id, new_ns->database_id);
     }
 
     CommitTransaction();
-    // TODO(ahsank): Normally bootstrap process commits txn so the above commit
-    // function is no op, but initial database creation by K2 doesn't commit so
-    // Adding commit until that's fixed
-    TXMgr.endTxn(sh::dto::EndAction::Commit).get();
     K2LOG_D(log::catalog, "Created database {}", new_ns->database_id);
     return std::make_pair(sh::Statuses::S200_OK, new_ns);
 }

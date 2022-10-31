@@ -73,4 +73,6 @@ extern void K2PgExecAlterPgTable(K2PgStatement handle, Oid relationId);
 
 extern void K2PgRename(RenameStmt* stmt, Oid relationId);
 
+extern void K2PgCommitTxn();
+
 #endif

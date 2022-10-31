@@ -1023,7 +1023,8 @@ K2PgStatus PgGate_RestartTransaction(){
 
 K2PgStatus PgGate_CommitTransaction(){
   elog(LOG, "PgGateAPI: PgGate_CommitTransaction");
-  return K2PgStatus::NotSupported;
+  auto [status] = k2pg::TXMgr.endTxn(skv::http::dto::EndAction::Commit).get();
+  return k2pg::K2StatusToK2PgStatus(std::move(status));
 }
 
 K2PgStatus PgGate_AbortTransaction(){
