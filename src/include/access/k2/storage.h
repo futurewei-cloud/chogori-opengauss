@@ -62,7 +62,7 @@ namespace gate {
                                                           std::shared_ptr<skv::http::dto::Schema> primarySchema);
 
     void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
-                           skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end);
+                           skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end, bool& isRangeScan);
 
     skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& constant);
 

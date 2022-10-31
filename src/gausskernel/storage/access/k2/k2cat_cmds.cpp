@@ -288,8 +288,7 @@ K2PgCreateIndex(const char *indexName,
 	char *db_name	  = get_database_name(u_sess->proc_cxt.MyDatabaseId);
 	char *schema_name = get_namespace_name(RelationGetNamespace(rel));
 
-	if (!IsBootstrapProcessingMode())
-		elog(INFO, "Creating index %s.%s.%s",
+	elog(INFO, "Creating index %s.%s.%s",
 					 db_name,
 					 schema_name,
 					 indexName);
@@ -305,11 +304,10 @@ K2PgCreateIndex(const char *indexName,
 
 		if (is_key)
 		{
-			if (!K2PgAllowForPrimaryKey(att->atttypid))
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("INDEX on column of type '%s' not yet supported",
-								K2PgTypeOidToStr(att->atttypid))));
+			if (!K2PgAllowForPrimaryKey(att->atttypid)) {
+                 elog(WARNING, "INDEX on column of type '%s' is only supported for uniqueness not ordering",
+                        K2PgTypeOidToStr(att->atttypid));
+            }
 		}
 
 		const int16 options        = coloptions[i];

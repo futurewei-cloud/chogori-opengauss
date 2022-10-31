@@ -934,6 +934,7 @@ K2PgStatus PgGate_ExecSelect(
 
     skv::http::dto::SKVRecordBuilder start(handle->collectionName, schema);
     skv::http::dto::SKVRecordBuilder end(handle->collectionName, schema);
+    bool isRangeScan = false;
 
     try {
         start.serializeNext<int64_t>((int64_t)base_table_oid);
@@ -941,7 +942,7 @@ K2PgStatus PgGate_ExecSelect(
         start.serializeNext<int64_t>((int64_t)index_id);
         end.serializeNext<int64_t>((int64_t)index_id);
 
-        BuildRangeRecords(range_conds, where_conds.expressionChildren, start, end);
+        BuildRangeRecords(range_conds, where_conds.expressionChildren, start, end, isRangeScan);
     }
     catch (const std::exception& err) {
         K2PgStatus status {
@@ -952,6 +953,35 @@ K2PgStatus PgGate_ExecSelect(
         };
 
         return status;
+    }
+
+    // Check if we are trying to range scan an index that does not support it
+    if (isRangeScan) {
+        for (const K2PgConstraintDef& constraint: constraints) {
+            if (constraint.constants.size() && !K2PgAllowForPrimaryKey(constraint.constants[0].type_id)) {
+                K2PgStatus status {
+                    .pg_code = ERRCODE_INTERNAL_ERROR,
+                    .k2_code = 0,
+                    .msg = "Type not supported for index range scan",
+                    .detail = ""
+                };
+
+                return status;
+            }
+        }
+
+        for(int i=0; i < schema->partitionKeyFields.size(); ++i) {
+            if (schema->fields[i].descending) {
+                K2PgStatus status {
+                    .pg_code = ERRCODE_INTERNAL_ERROR,
+                    .k2_code = 0,
+                    .msg = "Descending index not supported  for index range scan",
+                    .detail = ""
+                };
+
+                return status;
+            }
+        }
     }
 
     std::vector<std::string> projection;
