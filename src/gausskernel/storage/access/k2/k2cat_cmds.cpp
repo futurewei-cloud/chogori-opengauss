@@ -305,16 +305,21 @@ K2PgCreateIndex(const char *indexName,
 
 		if (is_key)
 		{
-			if (!K2PgAllowForPrimaryKey(att->atttypid))
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("INDEX on column of type '%s' not yet supported",
-								K2PgTypeOidToStr(att->atttypid))));
+			if (!K2PgAllowForPrimaryKey(att->atttypid)) {
+						 elog(LOG, "INDEX on column of type '%s' not yet supported",
+								K2PgTypeOidToStr(att->atttypid));
+                return;
+            }
 		}
 
 		const int16 options        = coloptions[i];
 		const bool  is_desc        = options & INDOPTION_DESC;
 		const bool  is_nulls_first = options & INDOPTION_NULLS_FIRST;
+
+        if (is_desc) {
+             elog(LOG, "DESC INDEX on column of type not yet supported");
+            return;
+        }
 
         K2PGColumnDef column {
             .attr_name = attname,
