@@ -357,7 +357,7 @@ static void AppendValueToRecord(skv::http::dto::expression::Value& value, skv::h
 
 // Start and end builders must be passed with the metadata fields already serialized (e.g. table and index ID)
 void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std::vector<skv::http::dto::expression::Expression>& leftover_exprs,
-                              skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end) {
+                              skv::http::dto::SKVRecordBuilder& start, skv::http::dto::SKVRecordBuilder& end, bool& isRangeScan) {
     using namespace skv::http::dto::expression;
     using namespace skv::http;
 
@@ -401,6 +401,8 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
     }
 
     int start_idx = K2_FIELD_OFFSET - 1;
+    int start_serialized = K2_FIELD_OFFSET;
+    int end_serialized = K2_FIELD_OFFSET;
     bool didBranch = false;
     for (auto& pg_expr : sorted_args) {
         if (didBranch) {
@@ -423,8 +425,10 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
 
                     K2LOG_D(log::k2pg, "Appending to start");
                     AppendValueToRecord(val, start);
+                    ++start_serialized;
                     K2LOG_D(log::k2pg, "Appending to end");
                     AppendValueToRecord(val, end);
+                    ++end_serialized;
                 } else {
                     didBranch = true;
                     K2LOG_D(log::k2pg, "Appending to leftover EQ else cur: {}, start: {}", cur_idx, start_idx);
@@ -437,6 +441,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                     start_idx = cur_idx;
                     K2LOG_D(log::k2pg, "Appending to start");
                     AppendValueToRecord(val, start);
+                    ++start_serialized;
                 } else {
                     didBranch = true;
                 }
@@ -449,6 +454,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                     start_idx = cur_idx;
                     K2LOG_D(log::k2pg, "Appending to end");
                     AppendValueToRecord(val, end);
+                    ++end_serialized;
                 } else {
                     didBranch = true;
                 }
@@ -480,6 +486,13 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                 leftover_exprs.emplace_back(pg_expr);
             } break;
         }
+    }
+
+    if ((start_serialized == K2_FIELD_OFFSET && end_serialized == K2_FIELD_OFFSET) ||
+        (start_serialized == schema->partitionKeyFields.size() && end_serialized == schema->partitionKeyFields.size())) {
+        isRangeScan = false;
+    } else {
+        isRangeScan = true;
     }
 }
 
