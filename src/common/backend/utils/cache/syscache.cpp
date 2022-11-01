@@ -100,7 +100,6 @@
 #include "utils/rel_gs.h"
 #include "utils/syscache.h"
 #include "catalog/pg_user_status.h"
-#include <vector>
 
 /* ---------------------------------------------------------------------------
 
@@ -761,8 +760,6 @@ static const struct cachedesc cacheinfo[] = {{AggregateRelationId, /* AGGFNOID *
 
 int SysCacheSize = lengthof(cacheinfo);
 
-static std::vector<CatCache *> SysCache(SysCacheSize);
-
 /*
  * InitCatalogCache - initialize the caches
  *
@@ -1162,20 +1159,20 @@ void K2PgSetSysCacheTuple(Relation rel, HeapTuple tup)
 	switch (RelationGetRelid(rel))
 	{
 		case RelationRelationId:
-			SetCatCacheTuple(SysCache[RELOID], tup, tupdesc);
-			SetCatCacheTuple(SysCache[RELNAMENSP], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[RELOID], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[RELNAMENSP], tup, tupdesc);
 			break;
 		case TypeRelationId:
-			SetCatCacheTuple(SysCache[TYPEOID], tup, tupdesc);
-			SetCatCacheTuple(SysCache[TYPENAMENSP], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[TYPEOID], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[TYPENAMENSP], tup, tupdesc);
 			break;
 		case ProcedureRelationId:
-			SetCatCacheTuple(SysCache[PROCOID], tup, tupdesc);
-			SetCatCacheTuple(SysCache[PROCNAMEARGSNSP], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[PROCOID], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[PROCNAMEARGSNSP], tup, tupdesc);
 			break;
 		case AttributeRelationId:
-			SetCatCacheTuple(SysCache[ATTNUM], tup, tupdesc);
-			SetCatCacheTuple(SysCache[ATTNAME], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[ATTNUM], tup, tupdesc);
+			SetCatCacheTuple(u_sess->syscache_cxt.SysCache[ATTNAME], tup, tupdesc);
 			break;
 
 		default:
@@ -1192,8 +1189,8 @@ void
 K2PgPreloadCatalogCache(int cache_id, int idx_cache_id)
 {
 
-	CatCache* cache         = SysCache[cache_id];
-	CatCache* idx_cache     = idx_cache_id != -1 ? SysCache[idx_cache_id] : NULL;
+	CatCache* cache         = u_sess->syscache_cxt.SysCache[cache_id];
+	CatCache* idx_cache     = idx_cache_id != -1 ? u_sess->syscache_cxt.SysCache[idx_cache_id] : NULL;
 	List*     current_list  = NIL;
 	List*     list_of_lists = NIL;
 	HeapTuple ntp;
