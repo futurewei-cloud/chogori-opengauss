@@ -428,8 +428,37 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               bool is_unique_index,
                               const bool skip_index_backfill,
                               bool if_not_exist,
-                              const std::vector<K2PGColumnDef>& columns){
+                              std::vector<K2PGColumnDef>& columns){
     elog(LOG, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
+    // Add kPgUniqueIdxKeySuffix column to store key suffix for handling multiple NULL values in column
+    // with unique index.
+    // Value of this column is set to k2pgctid (same as k2pgbasectid) for index row in case index
+    // is unique and at least one of its key column is NULL.
+    // In all other case value of this column is NULL.
+    if (is_unique_index) {
+        K2PGColumnDef keysuffix_column {
+            .attr_name = "k2pguniqueidxkeysuffix",
+            .attr_num = k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgUniqueIdxKeySuffix),
+            .type_oid = BYTEAOID,
+            .is_key = true,
+            .is_desc = false,
+            .is_nulls_first = columns[0].is_nulls_first // honor the settings in other keys
+        };
+        elog(LOG, "adding column k2pguniqueidxkeysuffix ... for index %s", index_name);
+        columns.push_back(keysuffix_column);
+    }
+
+    K2PGColumnDef basectid_column {
+        .attr_name = "k2pgidxbasectid",
+        .attr_num = k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgIdxBaseTupleId),
+        .type_oid = BYTEAOID,
+        .is_key = false,
+        .is_desc = false,
+        .is_nulls_first = columns[0].is_nulls_first // honor the settings in other keys
+    };
+    elog(LOG, "adding column k2pgidxbasectid ... for index %s", index_name);
+    columns.push_back(basectid_column);
+
     auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns, false /* add_primary_key */);
     if (!status.IsOK()) {
         return status;
