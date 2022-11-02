@@ -4817,10 +4817,13 @@ void RelationCacheInitializePhase2(void)
 {
     MemoryContext oldcxt;
 
-    /*
-     * relation mapper needs initialized too
-     */
-    RelationMapInitializePhase2();
+	/* We do not use a relation map file in K2PG mode yet */
+	if (!IsK2PgEnabled()) {
+        /*
+        * relation mapper needs initialized too
+        */
+        RelationMapInitializePhase2();
+    }
 
     /*
      * In bootstrap mode, the shared catalogs aren't there yet anyway, so do
