@@ -7310,6 +7310,9 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
      */
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser(dbname, InvalidOid, username);
 
+    /* Connect to K2PG cluster. */
+	K2PgInitPostgresBackend("postgres", dbname, username);
+
     /*
      * PostgresMain thread can be user for wal sender, which will call
      * DataSenderMain() or WalSenderMain() later.
@@ -7318,9 +7321,6 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
         t_thrd.proc_cxt.PostInit->InitWAL();
     else
         t_thrd.proc_cxt.PostInit->InitBackendWorker();
-
-    /* Connect to K2PG cluster. */
-	K2PgInitPostgresBackend("postgres", dbname, username);
 
     /*
      * If the t_thrd.mem_cxt.postmaster_mem_cxt is still around, recycle the space; we don't
