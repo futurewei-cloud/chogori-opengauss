@@ -2991,6 +2991,8 @@ double IndexBuildHeapScan(Relation heapRelation, Relation indexRelation, IndexIn
     econtext = GetPerTupleExprContext(estate);
     slot = MakeSingleTupleTableSlot(RelationGetDescr(heapRelation));
 
+//	K2PgSelectLimitParams *exec_params = &estate->k2pg_exec_params;
+
     /* Arrange for econtext's scan tuple to be the tuple under test */
     econtext->ecxt_scantuple = slot;
 
@@ -3024,6 +3026,8 @@ double IndexBuildHeapScan(Relation heapRelation, Relation indexRelation, IndexIn
             NULL,                                 /* scan key */
             true,                                 /* buffer access strategy OK */
             allow_sync);                          /* syncscan OK? */
+ 		// if (IsK2PgRelation(heapRelation))
+		// 	scan->k2scan->exec_params = exec_params;
     } else {
         /*
          * Parallel index build.
@@ -3052,237 +3056,247 @@ double IndexBuildHeapScan(Relation heapRelation, Relation indexRelation, IndexIn
         if (ENABLE_WORKLOAD_CONTROL)
             IOSchedulerAndUpdate(IO_TYPE_READ, 1, IO_TYPE_ROW);
 
-        /*
-         * When dealing with a HOT-chain of updated tuples, we want to index
-         * the values of the live tuple (if any), but index it under the TID
-         * of the chain's root tuple.  This approach is necessary to preserve
-         * the HOT-chain structure in the heap. So we need to be able to find
-         * the root item offset for every tuple that's in a HOT-chain.  When
-         * first reaching a new page of the relation, call
-         * heap_get_root_tuples() to build a map of root item offsets on the
-         * page.
-         *
-         * It might look unsafe to use this information across buffer
-         * lock/unlock.  However, we hold ShareLock on the table so no
-         * ordinary insert/update/delete should occur; and we hold pin on the
-         * buffer continuously while visiting the page, so no pruning
-         * operation can occur either.
-         *
-         * Also, although our opinions about tuple liveness could change while
-         * we scan the page (due to concurrent transaction commits/aborts),
-         * the chain root locations won't, so this info doesn't need to be
-         * rebuilt after waiting for another transaction.
-         *
-         * Note the implied assumption that there is no more than one live
-         * tuple per HOT-chain --- else we could create more than one index
-         * entry pointing to the same root tuple.
-         */
-        if (scan->rs_cblock != root_blkno) {
-            Page page = BufferGetPage(scan->rs_cbuf);
-
-            LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
-            heap_get_root_tuples(page, root_offsets);
-            LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
-
-            root_blkno = scan->rs_cblock;
-        }
-
-        if (snapshot == SnapshotAny) {
-            /* do our own time qual check */
-            bool indexIt = false;
-            TransactionId xwait;
-
-        recheck:
-
+		/*
+		 * Skip handling of HOT-chained tuples which does not apply to K2PG-based
+		 * tables.
+		 */
+		if (!IsK2PgEnabled())
+		{
             /*
-             * We could possibly get away with not locking the buffer here,
-             * since caller should hold ShareLock on the relation, but let's
-             * be conservative about it.  (This remark is still correct even
-             * with HOT-pruning: our pin on the buffer prevents pruning.)
-             */
-            LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
+            * When dealing with a HOT-chain of updated tuples, we want to index
+            * the values of the live tuple (if any), but index it under the TID
+            * of the chain's root tuple.  This approach is necessary to preserve
+            * the HOT-chain structure in the heap. So we need to be able to find
+            * the root item offset for every tuple that's in a HOT-chain.  When
+            * first reaching a new page of the relation, call
+            * heap_get_root_tuples() to build a map of root item offsets on the
+            * page.
+            *
+            * It might look unsafe to use this information across buffer
+            * lock/unlock.  However, we hold ShareLock on the table so no
+            * ordinary insert/update/delete should occur; and we hold pin on the
+            * buffer continuously while visiting the page, so no pruning
+            * operation can occur either.
+            *
+            * Also, although our opinions about tuple liveness could change while
+            * we scan the page (due to concurrent transaction commits/aborts),
+            * the chain root locations won't, so this info doesn't need to be
+            * rebuilt after waiting for another transaction.
+            *
+            * Note the implied assumption that there is no more than one live
+            * tuple per HOT-chain --- else we could create more than one index
+            * entry pointing to the same root tuple.
+            */
+            if (scan->rs_cblock != root_blkno) {
+                Page page = BufferGetPage(scan->rs_cbuf);
 
-            if (u_sess->attr.attr_storage.enable_debug_vacuum)
-                t_thrd.utils_cxt.pRelatedRel = heapRelation;
+                LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
+                heap_get_root_tuples(page, root_offsets);
+                LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
 
-            if (!u_sess->attr.attr_sql.enable_cluster_resize) {
-                result  = HeapTupleSatisfiesVacuum(heapTuple, OldestXmin, scan->rs_cbuf);
-            } else {
-                Oid redis_ns = get_namespace_oid("data_redis", true);
-                if (!OidIsValid(redis_ns) || heapRelation->rd_rel->relnamespace != redis_ns) {
-                    result  = HeapTupleSatisfiesVacuum(heapTuple, OldestXmin, scan->rs_cbuf);
-                } else if (!inRedistribution) {
+                root_blkno = scan->rs_cblock;
+            }
+
+            if (snapshot == SnapshotAny) {
+                /* do our own time qual check */
+                bool indexIt = false;
+                TransactionId xwait;
+
+            recheck:
+
                 /*
-                 * Determine the status of tuples for redistribution.
-                 * In redistribution, data in the temporary table is inserted into by
-                 * original table, No delete or update operation is performed.
-                 * All tuples are valid.
-                 */
-                    ereport(LOG, (errmsg("In redistribution, skip HeapTupleSatisfiesVacuum for table %s",
-                        RelationGetRelationName(heapRelation))));
-                    inRedistribution = true;
+                * We could possibly get away with not locking the buffer here,
+                * since caller should hold ShareLock on the relation, but let's
+                * be conservative about it.  (This remark is still correct even
+                * with HOT-pruning: our pin on the buffer prevents pruning.)
+                */
+                LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
+
+                if (u_sess->attr.attr_storage.enable_debug_vacuum)
+                    t_thrd.utils_cxt.pRelatedRel = heapRelation;
+
+                if (!u_sess->attr.attr_sql.enable_cluster_resize) {
+                    result  = HeapTupleSatisfiesVacuum(heapTuple, OldestXmin, scan->rs_cbuf);
+                } else {
+                    Oid redis_ns = get_namespace_oid("data_redis", true);
+                    if (!OidIsValid(redis_ns) || heapRelation->rd_rel->relnamespace != redis_ns) {
+                        result  = HeapTupleSatisfiesVacuum(heapTuple, OldestXmin, scan->rs_cbuf);
+                    } else if (!inRedistribution) {
+                    /*
+                    * Determine the status of tuples for redistribution.
+                    * In redistribution, data in the temporary table is inserted into by
+                    * original table, No delete or update operation is performed.
+                    * All tuples are valid.
+                    */
+                        ereport(LOG, (errmsg("In redistribution, skip HeapTupleSatisfiesVacuum for table %s",
+                            RelationGetRelationName(heapRelation))));
+                        inRedistribution = true;
+                    }
                 }
-            }
-            switch (result) {
-                case HEAPTUPLE_DEAD:
-                    /* Definitely dead, we can ignore it */
-                    indexIt = false;
-                    tupleIsAlive = false;
-                    break;
-                case HEAPTUPLE_LIVE:
-                    /* Normal case, index and unique-check it */
-                    indexIt = true;
-                    tupleIsAlive = true;
-                    break;
-                case HEAPTUPLE_RECENTLY_DEAD:
-
-                    /*
-                     * If tuple is recently deleted then we must index it
-                     * anyway to preserve MVCC semantics.  (Pre-existing
-                     * transactions could try to use the index after we finish
-                     * building it, and may need to see such tuples.)
-                     *
-                     * However, if it was HOT-updated then we must only index
-                     * the live tuple at the end of the HOT-chain.	Since this
-                     * breaks semantics for pre-existing snapshots, mark the
-                     * index as unusable for them.
-                     */
-                    if (HeapTupleIsHotUpdated(heapTuple)) {
+                switch (result) {
+                    case HEAPTUPLE_DEAD:
+                        /* Definitely dead, we can ignore it */
                         indexIt = false;
-                        /* mark the index as unsafe for old snapshots */
-                        indexInfo->ii_BrokenHotChain = true;
-                    } else
+                        tupleIsAlive = false;
+                        break;
+                    case HEAPTUPLE_LIVE:
+                        /* Normal case, index and unique-check it */
                         indexIt = true;
-                    /* In any case, exclude the tuple from unique-checking */
-                    tupleIsAlive = false;
-                    break;
-                case HEAPTUPLE_INSERT_IN_PROGRESS:
-
-                    /*
-                     * Since caller should hold ShareLock or better, normally
-                     * the only way to see this is if it was inserted earlier
-                     * in our own transaction.	However, it can happen in
-                     * system catalogs, since we tend to release write lock
-                     * before commit there.  Give a warning if neither case
-                     * applies.
-                     */
-                    xwait = HeapTupleGetRawXmin(heapTuple);
-                    if (!TransactionIdIsCurrentTransactionId(xwait)) {
-                        if (!is_system_catalog)
-                            ereport(WARNING,
-                                (errmsg("concurrent insert in progress within table \"%s\"",
-                                    RelationGetRelationName(heapRelation))));
+                        tupleIsAlive = true;
+                        break;
+                    case HEAPTUPLE_RECENTLY_DEAD:
 
                         /*
-                         * If we are performing uniqueness checks, indexing
-                         * such a tuple could lead to a bogus uniqueness
-                         * failure.  In that case we wait for the inserting
-                         * transaction to finish and check again.
-                         */
-                        if (checking_uniqueness) {
-                            /*
-                             * Must drop the lock on the buffer before we wait
-                             */
-                            LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
-                            XactLockTableWait(xwait);
-                            CHECK_FOR_INTERRUPTS();
-                            goto recheck;
-                        }
-                    }
-
-                    /*
-                     * We must index such tuples, since if the index build
-                     * commits then they're good.
-                     */
-                    indexIt = true;
-                    tupleIsAlive = true;
-                    break;
-                case HEAPTUPLE_DELETE_IN_PROGRESS:
-
-                    /*
-                     * As with INSERT_IN_PROGRESS case, this is unexpected
-                     * unless it's our own deletion or a system catalog.
-                     */
-                    Assert(!(heapTuple->t_data->t_infomask & HEAP_XMAX_IS_MULTI));
-                    xwait = HeapTupleGetRawXmax(heapTuple);
-                    if (!TransactionIdIsCurrentTransactionId(xwait)) {
-                        if (!is_system_catalog)
-                            ereport(WARNING,
-                                (errmsg("concurrent delete in progress within table \"%s\"",
-                                    RelationGetRelationName(heapRelation))));
+                        * If tuple is recently deleted then we must index it
+                        * anyway to preserve MVCC semantics.  (Pre-existing
+                        * transactions could try to use the index after we finish
+                        * building it, and may need to see such tuples.)
+                        *
+                        * However, if it was HOT-updated then we must only index
+                        * the live tuple at the end of the HOT-chain.	Since this
+                        * breaks semantics for pre-existing snapshots, mark the
+                        * index as unusable for them.
+                        */
+                        if (HeapTupleIsHotUpdated(heapTuple)) {
+                            indexIt = false;
+                            /* mark the index as unsafe for old snapshots */
+                            indexInfo->ii_BrokenHotChain = true;
+                        } else
+                            indexIt = true;
+                        /* In any case, exclude the tuple from unique-checking */
+                        tupleIsAlive = false;
+                        break;
+                    case HEAPTUPLE_INSERT_IN_PROGRESS:
 
                         /*
-                         * If we are performing uniqueness checks, assuming
-                         * the tuple is dead could lead to missing a
-                         * uniqueness violation.  In that case we wait for the
-                         * deleting transaction to finish and check again.
-                         *
-                         * Also, if it's a HOT-updated tuple, we should not
-                         * index it but rather the live tuple at the end of
-                         * the HOT-chain.  However, the deleting transaction
-                         * could abort, possibly leaving this tuple as live
-                         * after all, in which case it has to be indexed. The
-                         * only way to know what to do is to wait for the
-                         * deleting transaction to finish and check again.
-                         */
-                        if (checking_uniqueness || HeapTupleIsHotUpdated(heapTuple)) {
+                        * Since caller should hold ShareLock or better, normally
+                        * the only way to see this is if it was inserted earlier
+                        * in our own transaction.	However, it can happen in
+                        * system catalogs, since we tend to release write lock
+                        * before commit there.  Give a warning if neither case
+                        * applies.
+                        */
+                        xwait = HeapTupleGetRawXmin(heapTuple);
+                        if (!TransactionIdIsCurrentTransactionId(xwait)) {
+                            if (!is_system_catalog)
+                                ereport(WARNING,
+                                    (errmsg("concurrent insert in progress within table \"%s\"",
+                                        RelationGetRelationName(heapRelation))));
+
                             /*
-                             * Must drop the lock on the buffer before we wait
-                             */
-                            LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
-                            XactLockTableWait(xwait);
-                            CHECK_FOR_INTERRUPTS();
-                            goto recheck;
+                            * If we are performing uniqueness checks, indexing
+                            * such a tuple could lead to a bogus uniqueness
+                            * failure.  In that case we wait for the inserting
+                            * transaction to finish and check again.
+                            */
+                            if (checking_uniqueness) {
+                                /*
+                                * Must drop the lock on the buffer before we wait
+                                */
+                                LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
+                                XactLockTableWait(xwait);
+                                CHECK_FOR_INTERRUPTS();
+                                goto recheck;
+                            }
                         }
 
                         /*
-                         * Otherwise index it but don't check for uniqueness,
-                         * the same as a RECENTLY_DEAD tuple.
-                         */
+                        * We must index such tuples, since if the index build
+                        * commits then they're good.
+                        */
                         indexIt = true;
-                    } else if (HeapTupleIsHotUpdated(heapTuple)) {
+                        tupleIsAlive = true;
+                        break;
+                    case HEAPTUPLE_DELETE_IN_PROGRESS:
+
                         /*
-                         * It's a HOT-updated tuple deleted by our own xact.
-                         * We can assume the deletion will commit (else the
-                         * index contents don't matter), so treat the same as
-                         * RECENTLY_DEAD HOT-updated tuples.
-                         */
-                        indexIt = false;
-                        /* mark the index as unsafe for old snapshots */
-                        indexInfo->ii_BrokenHotChain = true;
-                    } else {
-                        /*
-                         * It's a regular tuple deleted by our own xact. Index
-                         * it but don't check for uniqueness, the same as a
-                         * RECENTLY_DEAD tuple.
-                         */
-                        indexIt = true;
-                    }
-                    /* In any case, exclude the tuple from unique-checking */
-                    tupleIsAlive = false;
-                    break;
-                default:
-                    ereport(ERROR,
-                        (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-                            errmsg("unexpected HeapTupleSatisfiesVacuum result")));
-                    indexIt = tupleIsAlive = false; /* keep compiler quiet */
-                    break;
+                        * As with INSERT_IN_PROGRESS case, this is unexpected
+                        * unless it's our own deletion or a system catalog.
+                        */
+                        Assert(!(heapTuple->t_data->t_infomask & HEAP_XMAX_IS_MULTI));
+                        xwait = HeapTupleGetRawXmax(heapTuple);
+                        if (!TransactionIdIsCurrentTransactionId(xwait)) {
+                            if (!is_system_catalog)
+                                ereport(WARNING,
+                                    (errmsg("concurrent delete in progress within table \"%s\"",
+                                        RelationGetRelationName(heapRelation))));
+
+                            /*
+                            * If we are performing uniqueness checks, assuming
+                            * the tuple is dead could lead to missing a
+                            * uniqueness violation.  In that case we wait for the
+                            * deleting transaction to finish and check again.
+                            *
+                            * Also, if it's a HOT-updated tuple, we should not
+                            * index it but rather the live tuple at the end of
+                            * the HOT-chain.  However, the deleting transaction
+                            * could abort, possibly leaving this tuple as live
+                            * after all, in which case it has to be indexed. The
+                            * only way to know what to do is to wait for the
+                            * deleting transaction to finish and check again.
+                            */
+                            if (checking_uniqueness || HeapTupleIsHotUpdated(heapTuple)) {
+                                /*
+                                * Must drop the lock on the buffer before we wait
+                                */
+                                LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
+                                XactLockTableWait(xwait);
+                                CHECK_FOR_INTERRUPTS();
+                                goto recheck;
+                            }
+
+                            /*
+                            * Otherwise index it but don't check for uniqueness,
+                            * the same as a RECENTLY_DEAD tuple.
+                            */
+                            indexIt = true;
+                        } else if (HeapTupleIsHotUpdated(heapTuple)) {
+                            /*
+                            * It's a HOT-updated tuple deleted by our own xact.
+                            * We can assume the deletion will commit (else the
+                            * index contents don't matter), so treat the same as
+                            * RECENTLY_DEAD HOT-updated tuples.
+                            */
+                            indexIt = false;
+                            /* mark the index as unsafe for old snapshots */
+                            indexInfo->ii_BrokenHotChain = true;
+                        } else {
+                            /*
+                            * It's a regular tuple deleted by our own xact. Index
+                            * it but don't check for uniqueness, the same as a
+                            * RECENTLY_DEAD tuple.
+                            */
+                            indexIt = true;
+                        }
+                        /* In any case, exclude the tuple from unique-checking */
+                        tupleIsAlive = false;
+                        break;
+                    default:
+                        ereport(ERROR,
+                            (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+                                errmsg("unexpected HeapTupleSatisfiesVacuum result")));
+                        indexIt = tupleIsAlive = false; /* keep compiler quiet */
+                        break;
+                }
+
+                if (u_sess->attr.attr_storage.enable_debug_vacuum)
+                    t_thrd.utils_cxt.pRelatedRel = NULL;
+
+                LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
+
+                if (!indexIt) {
+                    continue;
+                }
+            } else {
+                /* heap_getnext did the time qual check */
+                tupleIsAlive = true;
             }
 
-            if (u_sess->attr.attr_storage.enable_debug_vacuum)
-                t_thrd.utils_cxt.pRelatedRel = NULL;
-
-            LockBuffer(scan->rs_cbuf, BUFFER_LOCK_UNLOCK);
-
-            if (!indexIt) {
-                continue;
-            }
+            reltuples += 1;
         } else {
-            /* heap_getnext did the time qual check */
-            tupleIsAlive = true;
+ 			/* In K2 PG mode K2 Platform will only send live tuples. */
+			tupleIsAlive = true;
         }
-
-        reltuples += 1;
 
         MemoryContextReset(econtext->ecxt_per_tuple_memory);
 
@@ -3315,9 +3329,10 @@ double IndexBuildHeapScan(Relation heapRelation, Relation indexRelation, IndexIn
          * You'd think we should go ahead and build the index tuple here, but
          * some index AMs want to do further processing on the data first.	So
          * pass the values[] and isnull[] arrays, instead.
+         *
+         * This is not needed and should be skipped for K2PG enabled tables.
          */
-
-        if (HeapTupleIsHeapOnly(heapTuple)) {
+        if (!IsK2PgEnabled() && HeapTupleIsHeapOnly(heapTuple)) {
             /*
              * For a heap-only tuple, pretend its TID is that of the root. See
              * src/backend/access/heap/README.HOT for discussion.
