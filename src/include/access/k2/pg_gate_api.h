@@ -174,7 +174,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               bool is_unique_index,
                               const bool skip_index_backfill,
                               bool if_not_exist,
-                              const std::vector<K2PGColumnDef>& columns);
+                              std::vector<K2PGColumnDef>& columns);
 
 K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,
                             K2PgOid index_oid,
