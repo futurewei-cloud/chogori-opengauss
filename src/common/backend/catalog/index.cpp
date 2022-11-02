@@ -2991,8 +2991,6 @@ double IndexBuildHeapScan(Relation heapRelation, Relation indexRelation, IndexIn
     econtext = GetPerTupleExprContext(estate);
     slot = MakeSingleTupleTableSlot(RelationGetDescr(heapRelation));
 
-//	K2PgSelectLimitParams *exec_params = &estate->k2pg_exec_params;
-
     /* Arrange for econtext's scan tuple to be the tuple under test */
     econtext->ecxt_scantuple = slot;
 
@@ -3026,8 +3024,6 @@ double IndexBuildHeapScan(Relation heapRelation, Relation indexRelation, IndexIn
             NULL,                                 /* scan key */
             true,                                 /* buffer access strategy OK */
             allow_sync);                          /* syncscan OK? */
- 		// if (IsK2PgRelation(heapRelation))
-		// 	scan->k2scan->exec_params = exec_params;
     } else {
         /*
          * Parallel index build.
