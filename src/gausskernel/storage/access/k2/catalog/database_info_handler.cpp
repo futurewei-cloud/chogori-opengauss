@@ -99,7 +99,7 @@ sh::Response<DatabaseInfo> DatabaseInfoHandler::GetDatabase(const std::string& d
 
     auto [read_status, value] = TXMgr.read(rec).get();
     if (!read_status.is2xxOK()) {
-        K2LOG_E(log::catalog, "Failed to read SKV record due to {}", read_status);
+        K2LOG_E(log::catalog, "Failed to read SKV record {} {} {} due to {}", collection_name_, schema_ptr_->name, database_id, read_status);
         return sh::Response<DatabaseInfo>(read_status, {});
     }
     DatabaseInfo info = getInfo(value);

@@ -514,3 +514,8 @@ K2PgDropIndex(Oid relationId)
 		}
 	}
 }
+
+void
+K2PgCommitTxn() {
+    HandleK2PgStatus(PgGate_CommitTransaction());
+}
