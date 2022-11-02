@@ -144,7 +144,7 @@ using k2pg::catalog::CatalogConsts;
 
         // Code calling FindColumn may not know if the table has a RowId, so that is not an error,
         // for other attributes not finding it is an error..
-        if (attr_num != PgSystemAttrNum::kPgRowId) {
+        if (attr_num != (int)PgSystemAttrNum::kPgRowId) {
             elog(ERROR, "Invalid column number %d", attr_num);
         }
         return NULL;
