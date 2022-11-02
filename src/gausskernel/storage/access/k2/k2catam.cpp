@@ -252,8 +252,8 @@ static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan
 	TupleDesc tupdesc  = camScan->target_desc;
 
 	Datum           *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
-	bool            *nulls  = (bool *) palloc(tupdesc->natts * sizeof(bool));
-	K2PgSysColumns syscols;
+	bool            *nulls  = (bool *) palloc0(tupdesc->natts * sizeof(bool));
+	K2PgSysColumns syscols{};
 
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
@@ -304,8 +304,8 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	TupleDesc  tupdesc  = camScan->target_desc;
 
 	Datum           *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
-	bool            *nulls = (bool *) palloc(tupdesc->natts * sizeof(bool));
-	K2PgSysColumns syscols;
+	bool            *nulls = (bool *) palloc0(tupdesc->natts * sizeof(bool));
+	K2PgSysColumns syscols{};
 
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
@@ -1635,8 +1635,8 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
 	bool      has_data = false;
 
 	Datum           *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
-	bool            *nulls  = (bool *) palloc(tupdesc->natts * sizeof(bool));
-	K2PgSysColumns syscols;
+	bool            *nulls  = (bool *) palloc0(tupdesc->natts * sizeof(bool));
+	K2PgSysColumns syscols{};
 
 	/* Fetch one row. */
 	HandleK2PgStatus(PgGate_DmlFetch(k2pg_stmt,
