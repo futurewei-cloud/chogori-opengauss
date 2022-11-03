@@ -442,11 +442,13 @@ static void BootstrapModeMain(void)
         RelationMapFinishBootstrap();
     }
 
- 	if (IsK2PgEnabled())
-	{
-		// set initDbDone to be true on K2 SKV
-		K2FinishInitDB();
-	}
+    if (IsK2PgEnabled())
+    {
+        // set initDbDone to be true on K2 SKV
+        K2FinishInitDB();
+
+        K2PgCommitTxn();
+    }
 
     /* Clean up and exit */
     cleanup();
