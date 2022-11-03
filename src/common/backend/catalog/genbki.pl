@@ -259,10 +259,10 @@ foreach my $catname (@{ $catalogs->{names} })
 # (i.e., not contained in a header with a CATALOG() statement) comes here
 
 # Write out declare toast/index statements
-foreach my $declaration (@{ $catalogs->{toasting}->{data} })
-{
-	print BKI $declaration;
-}
+# foreach my $declaration (@{ $catalogs->{toasting}->{data} })
+# {
+# 	print BKI $declaration;
+# }
 
 foreach my $declaration (@{ $catalogs->{indexing}->{data} })
 {
