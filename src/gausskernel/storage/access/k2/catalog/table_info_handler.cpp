@@ -1143,8 +1143,8 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexMetaSKVRecords(const
     values.emplace_back(sh::dto::expression::makeValueReference(BASE_TABLE_ID_COLUMN_NAME));
     values.emplace_back(sh::dto::expression::makeValueLiteral<sh::String>(sh::String(base_table_id)));
     sh::dto::expression::Expression filterExpr = sh::dto::expression::makeExpression(sh::dto::expression::Operation::EQ, std::move(values), std::move(exps));
-    auto startScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, oid_table_meta, 0/*index_oid*/, std::nullopt);
-    auto endScanRecord = buildRangeRecord(collection_name, table_meta_SKVSchema_, oid_table_meta, 0/*index_oid*/, std::nullopt);
+    auto startScanRecord = buildRangeRecord(collection_name, indexcolumn_meta_SKVSchema_, oid_table_meta, 0/*index_oid*/, std::nullopt);
+    auto endScanRecord = buildRangeRecord(collection_name, indexcolumn_meta_SKVSchema_, oid_table_meta, 0/*index_oid*/, std::nullopt);
 
     auto [status, query] = TXMgr.createQuery(startScanRecord, endScanRecord, std::move(filterExpr)).get();
     if (!status.is2xxOK()) {
@@ -1165,7 +1165,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexMetaSKVRecords(const
         }
 
         for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
-            sh::dto::SKVRecord record(collection_name,  table_meta_SKVSchema_, std::move(storage), true);
+            sh::dto::SKVRecord record(collection_name, indexcolumn_meta_SKVSchema_, std::move(storage), true);
             records.push_back(std::move(record));
         }
         // if the query is not done, the query itself is updated with the pagination token for the next call
@@ -1203,7 +1203,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchTableColumnMetaSKVRecords
         }
 
         for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
-            sh::dto::SKVRecord record(collection_name, table_meta_SKVSchema_, std::move(storage), true);
+            sh::dto::SKVRecord record(collection_name, tablecolumn_meta_SKVSchema_, std::move(storage), true);
             records.push_back(std::move(record));
         }
         // if the query is not done, the query itself is updated with the pagination token for the next call
