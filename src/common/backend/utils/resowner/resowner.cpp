@@ -1416,11 +1416,13 @@ void ResourceOwnerForgetFakerelRef(ResourceOwner owner, Relation fakerel)
         return;
     }
 
-    ereport(ERROR,
-        (errcode(ERRCODE_WARNING_PRIVILEGE_NOT_GRANTED),
-            errmsg("fakerel reference %s is not owned by resource owner %s",
-                RelationGetRelationName(fakerel),
-                owner->name)));
+    elog(WARNING, "fakerel reference %s is not owned by resource owner %s", RelationGetRelationName(fakerel), owner->name);
+
+    // ereport(ERROR,
+    //     (errcode(ERRCODE_WARNING_PRIVILEGE_NOT_GRANTED),
+    //         errmsg("fakerel reference %s is not owned by resource owner %s",
+    //             RelationGetRelationName(fakerel),
+    //             owner->name)));
 }
 
 void ResourceOwnerEnlargeFakepartRefs(ResourceOwner owner)

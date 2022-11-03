@@ -1167,7 +1167,7 @@ static void setup_config(void)
     char* buf_nodename = NULL;
     char* buf_default_timezone = NULL;
 
-    fputs(_("creating configuration files ... "), stdout);
+    fputs(_("creating configuration files ... \n"), stdout);
     (void)fflush(stdout);
 
     /* postgresql.conf */
@@ -1293,79 +1293,76 @@ static void setup_config(void)
     FREE_AND_RESET_STR(conflines);
 
     /* pg_hba.conf */
-    // don't create pg_hba.conf in k2_mode
-    if (!k2_mode) {
-        conflines = readfile(hba_file);
+    conflines = readfile(hba_file);
 
-    #ifndef HAVE_UNIX_SOCKETS
-        conflines = filter_lines_with_token(conflines, "@remove-line-for-nolocal@");
-    #else
-        conflines = replace_token(conflines, "@remove-line-for-nolocal@", "");
-    #endif
+#ifndef HAVE_UNIX_SOCKETS
+    conflines = filter_lines_with_token(conflines, "@remove-line-for-nolocal@");
+#else
+    conflines = replace_token(conflines, "@remove-line-for-nolocal@", "");
+#endif
 
-    #ifdef HAVE_IPV6
+ #ifdef HAVE_IPV6
 
-        /*
-        * Probe to see if there is really any platform support for IPv6, and
-        * comment out the relevant pg_hba line if not.  This avoids runtime
-        * warnings if getaddrinfo doesn't actually cope with IPv6.  Particularly
-        * useful on Windows, where executables built on a machine with IPv6 may
-        * have to run on a machine without.
-        */
-        {
-            struct addrinfo* gai_result = NULL;
-            struct addrinfo hints;
-            int err = 0;
+    /*
+     * Probe to see if there is really any platform support for IPv6, and
+     * comment out the relevant pg_hba line if not.  This avoids runtime
+     * warnings if getaddrinfo doesn't actually cope with IPv6.  Particularly
+     * useful on Windows, where executables built on a machine with IPv6 may
+     * have to run on a machine without.
+    */
+    {
+        struct addrinfo* gai_result = NULL;
+        struct addrinfo hints;
+        int err = 0;
 
-    #ifdef WIN32
-            /* need to call WSAStartup before calling getaddrinfo */
-            WSADATA wsaData;
+#ifdef WIN32
+        /* need to call WSAStartup before calling getaddrinfo */
+        WSADATA wsaData;
 
-            err = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    #endif
+        err = WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 
-            /* for best results, this code should match parse_hba() */
-            hints.ai_flags = AI_NUMERICHOST;
-            hints.ai_family = PF_UNSPEC;
-            hints.ai_socktype = 0;
-            hints.ai_protocol = 0;
-            hints.ai_addrlen = 0;
-            hints.ai_canonname = NULL;
-            hints.ai_addr = NULL;
-            hints.ai_next = NULL;
+        /* for best results, this code should match parse_hba() */
+        hints.ai_flags = AI_NUMERICHOST;
+        hints.ai_family = PF_UNSPEC;
+        hints.ai_socktype = 0;
+        hints.ai_protocol = 0;
+        hints.ai_addrlen = 0;
+        hints.ai_canonname = NULL;
+        hints.ai_addr = NULL;
+        hints.ai_next = NULL;
 
-            if (err != 0 || getaddrinfo("::1", NULL, &hints, &gai_result) != 0)
-                conflines = replace_token(conflines,
-                    "host    all             all             ::1",
-                    "#host    all             all             ::1");
+        if (err != 0 || getaddrinfo("::1", NULL, &hints, &gai_result) != 0)
+            conflines = replace_token(conflines,
+                "host    all             all             ::1",
+                "#host    all             all             ::1");
 
-            freeaddrinfo(gai_result);
-        }
-    #else  /* !HAVE_IPV6 */
-        /* If we didn't compile IPV6 support at all, always comment it out */
-        conflines = replace_token(
-            conflines, "host    all             all             ::1", "#host    all             all             ::1");
-    #endif /* HAVE_IPV6 */
-
-        /* Replace default authentication methods */
-        conflines = replace_token(conflines, "@authmethodhost@", authmethodhost);
-        conflines = replace_token(conflines, "@authmethodlocal@", authmethodlocal);
-
-        conflines = replace_token(conflines,
-            "@authcomment@",
-            (strcmp(authmethodlocal, "trust") == 0 || strcmp(authmethodhost, "trust") == 0) ? AUTHTRUST_WARNING : "");
-
-        /* Replace username for replication */
-        conflines = replace_token(conflines, "@default_username@", username);
-
-        nRet = sprintf_s(path, sizeof(path), "%s/pg_hba.conf", pg_data);
-        securec_check_ss_c(nRet, "\0", "\0");
-
-        writefile(path, conflines);
-        (void)chmod(path, S_IRUSR | S_IWUSR);
-
-        FREE_AND_RESET_STR(conflines);
+        freeaddrinfo(gai_result);
     }
+#else  /* !HAVE_IPV6 */
+    /* If we didn't compile IPV6 support at all, always comment it out */
+    conflines = replace_token(
+        conflines, "host    all             all             ::1", "#host    all             all             ::1");
+#endif /* HAVE_IPV6 */
+
+    /* Replace default authentication methods */
+    conflines = replace_token(conflines, "@authmethodhost@", authmethodhost);
+    conflines = replace_token(conflines, "@authmethodlocal@", authmethodlocal);
+
+    conflines = replace_token(conflines,
+        "@authcomment@",
+        (strcmp(authmethodlocal, "trust") == 0 || strcmp(authmethodhost, "trust") == 0) ? AUTHTRUST_WARNING : "");
+
+    /* Replace username for replication */
+    conflines = replace_token(conflines, "@default_username@", username);
+
+    nRet = sprintf_s(path, sizeof(path), "%s/pg_hba.conf", pg_data);
+    securec_check_ss_c(nRet, "\0", "\0");
+
+    writefile(path, conflines);
+    (void)chmod(path, S_IRUSR | S_IWUSR);
+
+    FREE_AND_RESET_STR(conflines);
 
     /* pg_ident.conf */
 
@@ -1531,12 +1528,16 @@ static void setup_auth(void)
         "REVOKE ALL on pg_authid FROM public;\n",
         NULL};
 
-    fputs(_("initializing pg_authid ... "), stdout);
+    fputs(_("initializing pg_authid ... \n"), stdout);
     (void)fflush(stdout);
 
     nRet = snprintf_s(
         cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
     securec_check_ss_c(nRet, "\0", "\0");
+
+    fputs(_(cmd), stdout);
+    fputs(_("\n"), stdout);
+    (void)fflush(stdout);
 
     PG_CMD_OPEN;
 
@@ -1554,6 +1555,9 @@ static void setup_auth(void)
 static void get_set_pwd(void)
 {
     PG_CMD_DECL;
+
+    fputs(_("get_set_pwd\n"), stdout);
+    (void)fflush(stdout);
 
     char* pwd1 = NULL;
     char* pwd2 = NULL;
@@ -5207,6 +5211,9 @@ k2pg_pclose_check(FILE *stream)
 	int			exitstatus;
 
 	exitstatus = pclose(stream);
+
+	fprintf(stdout, _("k2pg_pclose_check exitstatus: %d\n"), exitstatus);
+        (void)fflush(stdout);
 
 	if (exitstatus == 0)
 		return 0;				/* all is well */

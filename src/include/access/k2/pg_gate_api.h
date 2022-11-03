@@ -359,8 +359,3 @@ void* PgGate_GetThreadLocalJumpBuffer();
 void PgGate_SetThreadLocalErrMsg(const void* new_msg);
 
 const void* PgGate_GetThreadLocalErrMsg();
-
-// APIs called by pg_dump.c only
-void PgGate_ShutdownPgGateBackend();
-
-K2PgStatus PgGate_InitPgGateBackend();

@@ -1231,13 +1231,3 @@ void K2PgAssignTransactionPriorityLowerBound(double newval, void* extra) {
 void K2PgAssignTransactionPriorityUpperBound(double newval, void* extra) {
   elog(LOG, "PgGateAPI: K2PgAssignTransactionPriorityUpperBound %f", newval);
 }
-
-// the following APIs are called by pg_dump.c only
-// TODO: check if we really need to implement them
-
-K2PgStatus PgGate_InitPgGateBackend() {
-  return K2PgStatus::OK;
-}
-
-void PgGate_ShutdownPgGateBackend() {
-}
