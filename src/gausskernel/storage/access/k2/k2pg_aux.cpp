@@ -21,8 +21,6 @@ uint64_t k2pg_catalog_cache_version = K2PG_CATCACHE_VERSION_UNINITIALIZED;
 int k2pg_pg_double_write = -1;
 int k2pg_disable_pg_locking = -1;
 
-/* Forward declarations */
-static void K2PgInstallTxnDdlHook();
 
 bool
 IsK2PgEnabled()
@@ -272,7 +270,6 @@ K2PgInitPostgresBackend(
 	if (K2PgIsEnabledInPostgresEnvVar())
 	{
 		PgGate_InitPgGate();
-		K2PgInstallTxnDdlHook();
 
 		/*
 		 * For each process, we create one K2PG session for PostgreSQL to use
@@ -780,54 +777,6 @@ static void K2PgTxnDdlProcessUtility(
 		K2PgDecrementDdlNestingLevel(/* success */ true);
 	}
 
-}
-
-// static void K2PgTxnDdlProcessUtility(
-// 		PlannedStmt *pstmt,
-// 		const char *queryString,
-// 		ProcessUtilityContext context,
-// 		ParamListInfo params,
-// 		QueryEnvironment *queryEnv,
-// 		DestReceiver *dest,
-// 		char *completionTag) {
-// 	Node	   *parsetree = pstmt->utilityStmt;
-// 	NodeTag node_tag = nodeTag(parsetree);
-
-// 	bool is_txn_ddl = IsTransactionalDdlStatement(node_tag);
-
-// 	if (is_txn_ddl) {
-// 		K2PgIncrementDdlNestingLevel();
-// 	}
-// 	PG_TRY();
-// 	{
-// 		if (prev_ProcessUtility)
-// 			prev_ProcessUtility(pstmt, queryString,
-// 								context, params, queryEnv,
-// 								dest, completionTag);
-// 		else
-// 			standard_ProcessUtility(pstmt, queryString,
-// 									context, params, queryEnv,
-// 									dest, completionTag);
-// 	}
-// 	PG_CATCH();
-// 	{
-// 		if (is_txn_ddl) {
-// 			K2PgDecrementDdlNestingLevel(/* success */ false);
-// 		}
-// 		PG_RE_THROW();
-// 	}
-// 	PG_END_TRY();
-// 	if (is_txn_ddl) {
-// 		K2PgDecrementDdlNestingLevel(/* success */ true);
-// 	}
-// }
-
-
-static void K2PgInstallTxnDdlHook() {
-	if (!K2PgIsInitDbModeEnvVarSet()) {
-		prev_ProcessUtility = ProcessUtility_hook;
-		ProcessUtility_hook = K2PgTxnDdlProcessUtility;
-	}
 }
 
 bool

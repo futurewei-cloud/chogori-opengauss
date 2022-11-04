@@ -2363,10 +2363,16 @@ RelationInitBucketKey(Relation relation, HeapTuple tuple)
 static void RelationInitPhysicalAddr(Relation relation)
 {
     relation->rd_node.spcNode = ConvertToRelfilenodeTblspcOid(relation->rd_rel->reltablespace);
-    if (relation->rd_node.spcNode == GLOBALTABLESPACE_OID)
+    if (relation->rd_node.spcNode == GLOBALTABLESPACE_OID) {
         relation->rd_node.dbNode = InvalidOid;
-    else
+    } else {
         relation->rd_node.dbNode = u_sess->proc_cxt.MyDatabaseId;
+    }
+
+	if (!IsBootstrapProcessingMode() && IsK2PgRelation(relation)) {
+	  return;
+    }
+
     if (relation->rd_rel->relfilenode) {
         /*
          * Even if we are using a decoding snapshot that doesn't represent
