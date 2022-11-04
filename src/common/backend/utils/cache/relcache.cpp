@@ -4923,7 +4923,6 @@ void RelationCacheInitializePhase3(void)
     MemoryContext oldcxt;
     bool needNewCacheFile = !u_sess->relcache_cxt.criticalSharedRelcachesBuilt;
 
-    RelationMapInitializePhase3();
 	/* We do not use a relation map file in K2PG mode yet */
 	if (!IsK2PgEnabled())
 	{
