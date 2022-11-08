@@ -7023,6 +7023,21 @@ void RemoveTempNamespace()
  */
 int PostgresMain(int argc, char* argv[], const char* dbname, const char* username)
 {
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "template0") == 0 || strcmp(argv[i], "template1") == 0) {
+            K2PgSetPreparingTemplates();
+        }
+    }
+    if (dbname) {
+        if (strcmp(dbname, "template0") == 0 || strcmp(dbname, "template1") == 0) {
+            K2PgSetPreparingTemplates();
+        }
+    } else if (username) {
+        if (strcmp(username, "template0") == 0 || strcmp(username, "template1") == 0) {
+            K2PgSetPreparingTemplates();
+        }
+    }
+
     int firstchar;
     StringInfoData input_message = {NULL, 0, 0, 0};
     sigjmp_buf local_sigjmp_buf;

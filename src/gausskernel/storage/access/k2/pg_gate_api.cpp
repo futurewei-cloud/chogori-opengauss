@@ -320,16 +320,18 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               const char *table_name,
                               K2PgOid database_oid,
                               K2PgOid table_oid,
+                              bool is_shared_table,
                               bool if_not_exist,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns) {
-    elog(LOG, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s", database_name, schema_name, table_name);
+    elog(LOG, "PgGateAPI: PgGate_NewCreateTable %s, %s, %s, shared: %d, if_not_exist: %d, add_primary_key: %d", database_name, schema_name, table_name,
+        is_shared_table, if_not_exist, add_primary_key);
     auto [status, is_pg_catalog_table, schema] = makeSchema(schema_name, columns, add_primary_key);
     if (!status.IsOK()) {
         return status;
     }
     const k2pg::PgObjectId table_object_id(database_oid, table_oid);
-    return pg_gate->GetCatalogClient()->CreateTable(database_name, table_name, table_object_id, schema, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
+    return pg_gate->GetCatalogClient()->CreateTable(database_name, table_name, table_object_id, schema, is_pg_catalog_table, is_shared_table, if_not_exist);
 }
 
 K2PgStatus PgGate_NewAlterTable(K2PgOid database_oid,

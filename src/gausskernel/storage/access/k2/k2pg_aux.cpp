@@ -729,56 +729,6 @@ static bool IsTransactionalDdlStatement(NodeTag node_tag) {
 	}
 }
 
-static void K2PgTxnDdlProcessUtility(
-	Node* parsetree,
-	const char* queryString,
-	ParamListInfo params,
-    bool isTopLevel,
-	DestReceiver* dest,
-#ifdef PGXC
-    bool sentToRemote,
-#endif /* PGXC */
-    char* completionTag,
-    bool isCTAS) {
-	NodeTag node_tag = nodeTag(parsetree);
-
-	bool is_txn_ddl = IsTransactionalDdlStatement(node_tag);
-
-	if (is_txn_ddl) {
-		K2PgIncrementDdlNestingLevel();
-	}
-	PG_TRY();
-	{
-		// TODO: check to see if we need to update isTopLevel
-		if (prev_ProcessUtility)
-			prev_ProcessUtility(parsetree, queryString,
-								params, isTopLevel, dest,
-#ifdef PGXC
-    							sentToRemote,
-#endif /* PGXC */
-								completionTag, isCTAS);
-		else
-			standard_ProcessUtility(parsetree, queryString,
-								params, isTopLevel, dest,
-#ifdef PGXC
-    							sentToRemote,
-#endif /* PGXC */
-								completionTag, isCTAS);
-	}
-	PG_CATCH();
-	{
-		if (is_txn_ddl) {
-			K2PgDecrementDdlNestingLevel(/* success */ false);
-		}
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-	if (is_txn_ddl) {
-		K2PgDecrementDdlNestingLevel(/* success */ true);
-	}
-
-}
-
 bool
 K2PgIsEnvVarTrue(const char* env_var_name)
 {
