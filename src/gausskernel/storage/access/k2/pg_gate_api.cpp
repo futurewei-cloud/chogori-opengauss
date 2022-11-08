@@ -427,11 +427,12 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
                               K2PgOid database_oid,
                               K2PgOid index_oid,
                               K2PgOid table_oid,
+                              bool is_shared_index,
                               bool is_unique_index,
                               const bool skip_index_backfill,
                               bool if_not_exist,
                               std::vector<K2PGColumnDef>& columns){
-    elog(LOG, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s", database_name, schema_name, index_name);
+    elog(LOG, "PgGateAPI: PgGate_NewCreateIndex %s, %s, %s, shared: %d, unique: %d", database_name, schema_name, index_name, is_shared_index, is_unique_index);
     // Add kPgUniqueIdxKeySuffix column to store key suffix for handling multiple NULL values in column
     // with unique index.
     // Value of this column is set to k2pgctid (same as k2pgbasectid) for index row in case index
@@ -467,7 +468,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
     }
     const k2pg::PgObjectId index_object_id(database_oid, index_oid);
     const k2pg::PgObjectId base_table_object_id(database_oid, table_oid);
-    return pg_gate->GetCatalogClient()->CreateIndexTable(database_name, index_name, index_object_id, base_table_object_id, schema, is_unique_index, skip_index_backfill, is_pg_catalog_table, false /* is_shared_table */, if_not_exist);
+    return pg_gate->GetCatalogClient()->CreateIndexTable(database_name, index_name, index_object_id, base_table_object_id, schema, is_unique_index, skip_index_backfill, is_pg_catalog_table, is_shared_index, if_not_exist);
 }
 
 K2PgStatus PgGate_NewDropIndex(K2PgOid database_oid,

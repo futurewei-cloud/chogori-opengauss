@@ -333,6 +333,7 @@ K2PgCreateIndex(const char *indexName,
 									   u_sess->proc_cxt.MyDatabaseId,
 									   indexId,
 									   RelationGetRelid(rel),
+									   rel->rd_rel->relisshared,
 									   indexInfo->ii_Unique,
 									   skip_index_backfill,
 									   false, /* if_not_exists */
