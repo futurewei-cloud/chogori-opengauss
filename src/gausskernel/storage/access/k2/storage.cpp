@@ -489,7 +489,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
     }
 
     if ((start_serialized == K2_FIELD_OFFSET && end_serialized == K2_FIELD_OFFSET) ||
-        (start_serialized == schema->partitionKeyFields.size() && end_serialized == schema->partitionKeyFields.size())) {
+        (start_serialized == (int)schema->partitionKeyFields.size() && end_serialized == (int)schema->partitionKeyFields.size())) {
         isRangeScan = false;
     } else {
         isRangeScan = true;
