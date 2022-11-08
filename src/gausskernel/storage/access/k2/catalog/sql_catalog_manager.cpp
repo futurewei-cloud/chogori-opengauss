@@ -226,6 +226,7 @@ void SqlCatalogManager::CheckCatalogVersion() {
 
 
 uint64_t SqlCatalogManager::GetCatalogVersion() {
+    std::lock_guard<std::mutex> l(lock_);
     return catalog_version_;
 }
 
@@ -268,6 +269,7 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
     K2LOG_D(log::catalog,
     "Creating database with name: {}, id: {}, oid: {}, source_id: {}, nextPgOid: {}",
     request.databaseName, request.databaseId, request.databaseOid, request.sourceDatabaseId, request.nextPgOid.value_or(-1));
+    std::lock_guard<std::mutex> l(lock_);
         // step 1/3:  check input conditions
         //      check if the target database has already been created, if yes, return already present
         //      check the source database is already there, if it present in the create requet
@@ -382,6 +384,7 @@ sh::Response<std::vector<DatabaseInfo>> SqlCatalogManager::ListDatabases() {
     if (databaseInfos.empty()) {
         K2LOG_W(log::catalog, "No databases are found");
     } else {
+        std::lock_guard<std::mutex> l(lock_);
         UpdateDatabaseCache(databaseInfos);
         K2LOG_D(log::catalog, "Found {} databases", databaseInfos.size());
     }
@@ -390,6 +393,7 @@ sh::Response<std::vector<DatabaseInfo>> SqlCatalogManager::ListDatabases() {
 
 sh::Response<std::shared_ptr<DatabaseInfo>> SqlCatalogManager::GetDatabase(const std::string& databaseName, const std::string& databaseId) {
     K2LOG_D(log::catalog, "Getting database with name: {}, id: {}", databaseName, databaseId);
+    std::lock_guard<std::mutex> l(lock_);
     if (std::shared_ptr<DatabaseInfo> database_info = GetCachedDatabaseById(databaseId); database_info != nullptr) {
         return std::make_pair(sh::Statuses::S200_OK, database_info);
     }
@@ -411,6 +415,7 @@ sh::Response<std::shared_ptr<DatabaseInfo>> SqlCatalogManager::GetDatabase(const
 
 sh::Status SqlCatalogManager::DeleteDatabase(const std::string& databaseName, const std::string& databaseId) {
     K2LOG_D(log::catalog, "Deleting database with name: {}, id: {}", databaseName, databaseId);
+    std::lock_guard<std::mutex> l(lock_);
     // TODO: use a background task to refresh the database caches to avoid fetching from SKV on each call
     auto [status, database_info] = database_info_handler_.GetDatabase(databaseId);
     CommitTransaction();
@@ -439,6 +444,7 @@ sh::Status SqlCatalogManager::DeleteDatabase(const std::string& databaseName, co
 }
 
 sh::Status SqlCatalogManager::UseDatabase(const std::string& databaseName) {
+    std::lock_guard<std::mutex> l(lock_);
     // check if the database exists
     std::shared_ptr<DatabaseInfo> database_info = CheckAndLoadDatabaseByName(databaseName);
     if (database_info == nullptr) {
@@ -461,6 +467,7 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::CreateTable(const Cr
     K2LOG_D(log::catalog,
     "Creating table ns name: {}, ns oid: {}, table name: {}, table oid: {}, systable: {}, shared: {}",
     request.databaseName, request.databaseOid, request.tableName, request.tableOid, request.isSysCatalogTable, request.isSharedTable);
+    std::lock_guard<std::mutex> l(lock_);
     std::shared_ptr<DatabaseInfo> database_info = CheckAndLoadDatabaseByName(request.databaseName);
     if (database_info == nullptr) {
         K2LOG_E(log::catalog, "Cannot find databaseName {}", request.databaseName);
@@ -520,6 +527,7 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::CreateTable(const Cr
 sh::Response<std::shared_ptr<IndexInfo>> SqlCatalogManager::CreateIndexTable(const CreateIndexTableRequest& request) {
     K2LOG_D(log::catalog, "Creating index ns name: {}, ns oid: {}, index name: {}, index oid: {}, base table oid: {}",
     request.databaseName, request.databaseOid, request.tableName, request.tableOid, request.baseTableOid);
+    std::lock_guard<std::mutex> l(lock_);
     std::shared_ptr<DatabaseInfo> database_info = CheckAndLoadDatabaseByName(request.databaseName);
     if (database_info == nullptr) {
         K2LOG_E(log::catalog, "Cannot find databaseName {}", request.databaseName);
@@ -591,6 +599,7 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::GetTableSchema(const
     std::string table_id = PgObjectId::GetTableId(tableOid);
     K2LOG_D(log::catalog, "Get table schema ns oid: {}, table oid: {}, table id: {}",
         databaseOid, tableOid, table_id);
+    std::lock_guard<std::mutex> l(lock_);
     // check the table schema from cache
     std::shared_ptr<TableInfo> table_info = GetCachedTableInfoById(table_uuid);
     if (table_info != nullptr) {
@@ -658,6 +667,7 @@ sh::Response<DeleteTableResponse> SqlCatalogManager::DeleteTable(const uint32_t 
     std::string table_id = PgObjectId::GetTableId(tableOid);
     response.databaseId = database_id;
     response.tableId = table_id;
+    std::lock_guard<std::mutex> l(lock_);
 
     std::shared_ptr<TableInfo> table_info = GetCachedTableInfoById(table_uuid);
     if (table_info == nullptr) {
@@ -811,6 +821,7 @@ sh::Response<ReservePgOidsResponse> SqlCatalogManager::ReservePgOid(const std::s
     K2LOG_D(log::catalog, "Reserved PgOid succeeded for database {}", databaseId);
         // update database caches after persisting to SKV successfully
     auto updated_ns = std::make_shared<DatabaseInfo>(databaseInfo);
+    std::lock_guard<std::mutex> l(lock_);
     database_id_map_[updated_ns->database_id] = updated_ns;
     database_name_map_[updated_ns->database_name] = updated_ns;
     return std::make_tuple(sh::Statuses::S200_OK, response);
@@ -818,7 +829,6 @@ sh::Response<ReservePgOidsResponse> SqlCatalogManager::ReservePgOid(const std::s
 
 // update table caches
 void SqlCatalogManager::UpdateTableCache(std::shared_ptr<TableInfo> table_info) {
-    std::lock_guard<std::mutex> l(lock_);
     table_uuid_map_[table_info->table_uuid()] = table_info;
     // TODO: add logic to remove table with old name if rename table is called
     TableNameKey key = std::make_pair(table_info->database_id(), table_info->table_name());
@@ -829,7 +839,6 @@ void SqlCatalogManager::UpdateTableCache(std::shared_ptr<TableInfo> table_info) 
 
 // remove table info from table cache and its related indexes from index cache
 void SqlCatalogManager::ClearTableCache(std::shared_ptr<TableInfo> table_info) {
-    std::lock_guard<std::mutex> l(lock_);
     ClearIndexCacheForTable(table_info->table_id());
     table_uuid_map_.erase(table_info->table_uuid());
     TableNameKey key = std::make_pair(table_info->database_id(), table_info->table_name());
@@ -921,7 +930,6 @@ std::shared_ptr<TableInfo> SqlCatalogManager::GetCachedBaseTableInfoByIndexId(ui
 
 // update database caches
 void SqlCatalogManager::UpdateDatabaseCache(const std::vector<DatabaseInfo>& database_infos) {
-    std::lock_guard<std::mutex> l(lock_);
     database_id_map_.clear();
     database_name_map_.clear();
     for (const auto& ns : database_infos) {
