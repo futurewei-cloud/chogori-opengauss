@@ -286,39 +286,6 @@ K2PgOnPostgresBackendShutdown()
 	PgGate_DestroyPgGate();
 }
 
-void
-K2PgRestartTransaction()
-{
-	if (!IsK2PgEnabled())
-		return;
-	HandleK2PgStatus(PgGate_RestartTransaction());
-}
-
-void
-K2PgCommitTransaction()
-{
-	if (!IsK2PgEnabled())
-		return;
-
-	HandleK2PgStatus(PgGate_CommitTransaction());
-}
-
-void
-K2PgAbortTransaction()
-{
-	if (!IsK2PgEnabled())
-		return;
-
-	if (K2PgTransactionsEnabled())
-		HandleK2PgStatus(PgGate_AbortTransaction());
-}
-
-bool
-K2PgIsPgLockingEnabled()
-{
-	return !K2PgTransactionsEnabled();
-}
-
 static bool k2pg_preparing_templates = false;
 void
 K2PgSetPreparingTemplates() {
@@ -430,84 +397,6 @@ K2PgTypeOidToStr(Oid type_id) {
 	}
 }
 
-void
-K2PgReportIfK2PgEnabled()
-{
-	if (K2PgIsEnabledInPostgresEnvVar()) {
-		ereport(LOG, (errmsg(
-			"K2Pg is ENABLED in PostgreSQL. Transactions are %s.",
-			K2PgIsEnvVarTrue("K2PG_TRANSACTIONS_ENABLED") ?
-			"enabled" : "disabled")));
-	} else {
-		ereport(LOG, (errmsg("K2Pg is NOT ENABLED -- "
-							"this is a vanilla PostgreSQL server!")));
-	}
-}
-
-bool
-K2PgShouldRestartAllChildrenIfOneCrashes() {
-	if (!K2PgIsEnabledInPostgresEnvVar()) {
-		ereport(LOG, (errmsg("K2PgShouldRestartAllChildrenIfOneCrashes returning 0, K2PgIsEnabledInPostgresEnvVar is false")));
-		return true;
-	}
-	const char* flag =
-		getenv("PG_NO_RESTART_ALL_CHILDREN_ON_CRASH");
-	// We will use PostgreSQL's default behavior (restarting all children if one of them crashes)
-	// if the flag env variable is not specified
-	return !flag;
-}
-
-bool
-K2PgShouldLogStackTraceOnError()
-{
-	static int cached_value = -1;
-	if (cached_value != -1)
-	{
-		return cached_value;
-	}
-
-	cached_value = K2PgIsEnvVarTrue("K2PG_STACK_TRACE_ON_ERROR");
-	return cached_value;
-}
-
-const char*
-K2PgErrorLevelToString(int elevel) {
-	switch (elevel)
-	{
-		case DEBUG5: return "DEBUG5";
-		case DEBUG4: return "DEBUG4";
-		case DEBUG3: return "DEBUG3";
-		case DEBUG2: return "DEBUG2";
-		case DEBUG1: return "DEBUG1";
-		case LOG: return "LOG";
-		case COMMERROR: return "COMMERROR";
-		case INFO: return "INFO";
-		case WARNING: return "WARNING";
-		case ERROR: return "ERROR";
-		case FATAL: return "FATAL";
-		case PANIC: return "PANIC";
-		default: return "UNKNOWN";
-	}
-}
-
-const char*
-K2PgGetDatabaseName(Oid relid)
-{
-	/*
-	 * Hardcode the names for system db since the cache might not
-	 * be initialized during initdb (bootstrap mode).
-	 * For shared rels (e.g. pg_database) we may not have a database id yet,
-	 * so assuming template1 in that case since that's where shared tables are
-	 * stored in K2.
-	 * TODO Eventually K2PG should switch to using oid's everywhere so
-	 * that dbname and schemaname should not be needed at all.
-	 */
-	if (u_sess->proc_cxt.MyDatabaseId == TemplateDbOid || IsSharedRelation(relid))
-		return "template1";
-	else
-		return get_database_name(u_sess->proc_cxt.MyDatabaseId);
-}
-
 const char*
 K2PgGetSchemaName(Oid schemaoid)
 {
@@ -529,32 +418,6 @@ Oid
 K2PgGetDatabaseOid(Relation rel)
 {
 	return rel->rd_rel->relisshared ? TemplateDbOid : u_sess->proc_cxt.MyDatabaseId;
-}
-
-void
-K2PgRaiseNotSupported(const char *msg, int issue_no)
-{
-	K2PgRaiseNotSupportedSignal(msg, issue_no, K2PgUnsupportedFeatureSignalLevel());
-}
-
-void
-K2PgRaiseNotSupportedSignal(const char *msg, int issue_no, int signal_level)
-{
-	if (issue_no > 0)
-	{
-		ereport(signal_level,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("%s", msg),
-				 errhint("See https://github.com/futurewei-cloud/chogori-sql/issues/%d. "
-						 "Click '+' on the description to raise its priority", issue_no)));
-	}
-	else
-	{
-		ereport(signal_level,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("%s", msg),
-				 errhint("%s", "")));
-	}
 }
 
 //------------------------------------------------------------------------------

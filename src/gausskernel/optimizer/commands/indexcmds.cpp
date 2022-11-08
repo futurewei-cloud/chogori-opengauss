@@ -1712,8 +1712,9 @@ void ComputeIndexAttrs(IndexInfo* indexInfo, Oid* typeOidP, Oid* collationOidP, 
 {
     ListCell* nextExclOp = NULL;
     ListCell* lc = NULL;
-    int attn;
+    int attn(0);
     int nkeycols = indexInfo->ii_NumIndexKeyAttrs;
+    bool use_k2pg_ordering = false;
 
     /* Allocate space for exclusion operator info, if needed */
     if (exclusionOpNames != NULL) {
@@ -1726,13 +1727,56 @@ void ComputeIndexAttrs(IndexInfo* indexInfo, Oid* typeOidP, Oid* collationOidP, 
         nextExclOp = NULL;
 
     /*
+     * Get whether the index will use K2PG ordering
+     */
+    if (IsK2PgEnabled() &&
+        !IsBootstrapProcessingMode() &&
+        !K2PgIsPreparingTemplates()) {
+        Relation rel = RelationIdGetRelation(relId);
+        use_k2pg_ordering = IsK2PgRelation(rel) && !IsSystemRelation(rel);
+        RelationClose(rel);
+    }
+
+    /*
      * process attributeList
      */
+    bool range_index = false;
+
     attn = 0;
     foreach (lc, attList) {
         IndexElem* attribute = (IndexElem*)lfirst(lc);
         Oid atttype;
         Oid attcollation;
+
+        if (IsK2PgEnabled()) {
+            if (use_k2pg_ordering) {
+                switch (attribute->ordering) {
+                    case SORTBY_ASC:
+                    case SORTBY_DESC:
+                        range_index = true;
+                        break;
+                    case SORTBY_DEFAULT:
+                        /*
+                         * In K2PG mode, first attribute defaults to HASH and
+                         * other attributes default to ASC.
+                         */
+                        if (attn > 0) {
+                            range_index = true;
+                            break;
+                        }
+                        if (range_index)
+                            ereport(ERROR,
+                                    (errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+                                     errmsg("hash column not allowed after an ASC/DESC column")));
+                        break;
+                    default:
+                        ereport(ERROR,
+                                (errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+                                 errmsg("unsupported column sort order")));
+                        break;
+                }
+            }
+        }
 
         /*
          * Process the column-or-expression to be indexed.
@@ -1948,9 +1992,24 @@ void ComputeIndexAttrs(IndexInfo* indexInfo, Oid* typeOidP, Oid* collationOidP, 
          */
         colOptionP[attn] = 0;
         if (amcanorder) {
-            /* default ordering is ASC */
+            /*
+             * In K2PG, use HASH as the default for the first column of
+             * non-colocated tables
+             */
+            if (use_k2pg_ordering &&
+                attn == 0 &&
+                attribute->ordering == SORTBY_DEFAULT)
+                colOptionP[attn] |= INDOPTION_HASH;
+
+            /* default ordering is ASC
+            * TODO
+            * We do not support DESC index (see chogori-sql issue #268),
+            * so commenting this out forces PG to see the index as ascending and sort if necessary
+            * This can be uncommented if the issue is resolved.
             if (attribute->ordering == SORTBY_DESC)
                 colOptionP[attn] = ((uint16)colOptionP[attn]) | INDOPTION_DESC;
+            */
+
             /* default null ordering is LAST for ASC, FIRST for DESC */
             if (attribute->nulls_ordering == SORTBY_NULLS_DEFAULT) {
                 if (attribute->ordering == SORTBY_DESC)

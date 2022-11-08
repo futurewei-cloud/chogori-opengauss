@@ -159,27 +159,6 @@ extern void K2PgInitPostgresBackend(const char *program_name,
 extern void K2PgOnPostgresBackendShutdown();
 
 /*
- * Signals PgTxnManager to restart current transaction - pick a new read point, etc.
- */
-extern void K2PgRestartTransaction();
-
-/*
- * Commits the current K2PG-level transaction (if any).
- */
-extern void K2PgCommitTransaction();
-
-/*
- * Aborts the current K2PG-level transaction.
- */
-extern void K2PgAbortTransaction();
-
-/*
- * Return true if we want to allow PostgreSQL's own locking. This is needed
- * while system tables are still managed by PostgreSQL.
- */
-extern bool K2PgIsPgLockingEnabled();
-
-/*
  * Return a string representation of the given type id, or say it is unknown.
  * What is returned is always a static C string constant.
  */
@@ -190,11 +169,6 @@ extern const char* K2PgTypeOidToStr(Oid type_id);
  */
 extern void K2PgReportTypeNotSupported(Oid type_id);
 
-/*
- * Log whether or not K2PG is enabled.
- */
-extern void K2PgReportIfK2PgEnabled();
-
 #define K2PG_REPORT_TYPE_NOT_SUPPORTED(type_id) do { \
 		Oid computed_type_id = type_id; \
 		ereport(ERROR, \
@@ -204,45 +178,10 @@ extern void K2PgReportIfK2PgEnabled();
 	} while (0)
 
 /*
- * Determines if PostgreSQL should restart all child processes if one of them
- * crashes. This behavior usually shows up in the log like so:
- *
- * WARNING:  terminating connection because of crash of another server process
- * DETAIL:  The postmaster has commanded this server process to roll back the
- *          current transaction and exit, because another server process exited
- *          abnormally and possibly corrupted shared memory.
- *
- * However, we want to avoid this behavior in some cases, e.g. when our test
- * framework is trying to intentionally cause core dumps of stuck backend
- * processes and analyze them. Disabling this behavior is controlled by setting
- * the K2PG_NO_RESTART_ALL_CHILDREN_ON_CRASH_FLAG_PATH variable to a file path,
- * which could be created or deleted at run time, and its existence is always
- * checked.
- */
-bool K2PgShouldRestartAllChildrenIfOneCrashes();
-
-/*
  * These functions help indicating if we are creating system catalog.
  */
 void K2PgSetPreparingTemplates();
 bool K2PgIsPreparingTemplates();
-
-/*
- * Whether every ereport of the ERROR level and higher should log a stack trace.
- */
-bool K2PgShouldLogStackTraceOnError();
-
-/*
- * Converts the PostgreSQL error level as listed in elog.h to a string. Always
- * returns a static const char string.
- */
-const char* K2PgErrorLevelToString(int elevel);
-
-/*
- * Get the database name for a relation id (accounts for system databases and
- * shared relations)
- */
-const char* K2PgGetDatabaseName(Oid relid);
 
 /*
  * Get the schema name for a schema oid (accounts for system namespaces)
@@ -254,13 +193,6 @@ const char* K2PgGetSchemaName(Oid schemaoid);
  * template1.
  */
 Oid K2PgGetDatabaseOid(Relation rel);
-
-/*
- * Raise an unsupported feature error with the given message and
- * linking to the referenced issue (if any).
- */
-void K2PgRaiseNotSupported(const char *msg, int issue_no);
-void K2PgRaiseNotSupportedSignal(const char *msg, int issue_no, int signal_level);
 
 //------------------------------------------------------------------------------
 // K2PG Debug utils.
