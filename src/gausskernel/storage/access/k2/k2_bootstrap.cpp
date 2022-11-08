@@ -141,7 +141,8 @@ void K2PgCreateSysCatalogTable(const char *table_name,
 	                                   table_name,
 	                                   TemplateDbOid,
 	                                   table_oid,
+					     is_shared_relation,
 	                                   false, /* if_not_exists */
-									   pkey_idx == NULL, /* add_primary_key */
+					     pkey_idx == NULL, /* add_primary_key */
 	                                   columns));
 }

@@ -261,6 +261,7 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 									   stmt->relation->relname,
 									   u_sess->proc_cxt.MyDatabaseId,
 									   relationId,
+									   false, /* is_shared_table */
 									   false, /* if_not_exists */
 									   primary_key == NULL /* add_primary_key */,
 									   columns));

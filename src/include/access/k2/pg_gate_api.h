@@ -124,6 +124,7 @@ K2PgStatus PgGate_ExecCreateTable(const char *database_name,
                               const char *table_name,
                               K2PgOid database_oid,
                               K2PgOid table_oid,
+                              bool is_shared_relation,
                               bool if_not_exist,
                               bool add_primary_key,
                               const std::vector<K2PGColumnDef>& columns);

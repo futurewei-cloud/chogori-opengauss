@@ -186,6 +186,10 @@ void createdb(const CreatedbStmt* stmt)
     createdb_failure_params fparms;
     Snapshot snapshot;
 
+    if (dbname != NULL && (strcmp(dbname, "template0") == 0 || strcmp(dbname, "template1") == 0)) {
+        K2PgSetPreparingTemplates();
+    }
+
     /* Extract options from the statement node tree */
     foreach (option, stmt->options) {
         DefElem* defel = (DefElem*)lfirst(option);
