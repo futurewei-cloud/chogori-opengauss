@@ -593,8 +593,8 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
 
     auto it = attr_to_offset.find(constraint.attr_num);
     if (it == attr_to_offset.end()) {
-        K2LOG_W(log::k2pg, "Attr_num not found in map for buildScanExpr: {}", constraint.attr_num);
-        return opr_expr;
+        K2LOG_W(log::k2pg, "Attr_num not found in map for buildScanExpr: {}, constants size {}", constraint.attr_num, constraint.constants.size());
+        return expression::Expression();
     }
     uint32_t offset = it->second;
 
