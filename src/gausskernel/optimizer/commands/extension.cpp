@@ -1194,11 +1194,11 @@ void CreateExtension(CreateExtensionStmt* stmt)
                     errmsg("extension \"%s\" already exists in schema \"%s\", skipping", stmt->extname, schemaName)));
             return;
         } else {
-#ifndef ENABLE_MULTIPLE_NODES		
+#ifndef ENABLE_MULTIPLE_NODES
             ereport(ERROR,
                 (errcode(ERRCODE_DUPLICATE_OBJECT),
                     errmsg("extension \"%s\" already exists in schema \"%s\"", stmt->extname, schemaName)));
-#else					
+#else
             /*
              * Currently extension only support postgis.
              */
@@ -1208,7 +1208,7 @@ void CreateExtension(CreateExtensionStmt* stmt)
                         errmsg("extension \"%s\" already exists in schema \"%s\"", stmt->extname, schemaName)));
             else
                 FEATURE_NOT_PUBLIC_ERROR("EXTENSION is not yet supported.");
-#endif				
+#endif
         }
     }
 
@@ -1501,7 +1501,7 @@ Oid InsertExtensionTuple(const char* extName, Oid extOwner, Oid schemaOid, bool 
 
     tuple = heap_form_tuple(rel->rd_att, values, nulls);
 
-    extensionOid = simple_heap_insert(rel, tuple);
+    extensionOid = CatalogTupleInsert(rel, tuple);
     CatalogUpdateIndexes(rel, tuple);
 
     tableam_tops_free_tuple(tuple);
@@ -2896,7 +2896,7 @@ void AlterExtensionOwner_oid(Oid extensionOid, Oid newOwnerId)
     heap_close(rel, NoLock);
 }
 
-/* 
+/*
  * Expand the size of extension_session_vars_array_size by twice the number
  * of extensions each time if latter is bigger.
  */

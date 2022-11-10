@@ -160,7 +160,7 @@ void CommentObject(CommentStmt* stmt)
              * failures.
              */
             if (relation != NULL) {
-                if (relation->rd_rel->relkind != RELKIND_RELATION && 
+                if (relation->rd_rel->relkind != RELKIND_RELATION &&
                     relation->rd_rel->relkind != RELKIND_VIEW &&
                     relation->rd_rel->relkind != RELKIND_CONTQUERY &&
                     relation->rd_rel->relkind != RELKIND_MATVIEW &&
@@ -260,7 +260,7 @@ void CreateComments(Oid oid, Oid classoid, int32 subid, const char* comment)
     /* If we didn't find an old tuple, insert a new one */
     if (newtuple == NULL && comment != NULL) {
         newtuple = heap_form_tuple(RelationGetDescr(description), values, nulls);
-        (void)simple_heap_insert(description, newtuple);
+        (void)CatalogTupleInsert(description, newtuple);
     }
 
     /* Update indexes, if necessary */
@@ -331,7 +331,7 @@ void CreateSharedComments(Oid oid, Oid classoid, const char* comment)
     /* If we didn't find an old tuple, insert a new one */
     if (newtuple == NULL && comment != NULL) {
         newtuple = heap_form_tuple(RelationGetDescr(shdescription), values, nulls);
-        (void)simple_heap_insert(shdescription, newtuple);
+        (void)CatalogTupleInsert(shdescription, newtuple);
     }
 
     /* Update indexes, if necessary */
