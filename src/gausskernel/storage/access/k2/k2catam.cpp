@@ -717,8 +717,8 @@ static void camBindScanKeys(Relation relation,
 	Oid		relid    = RelationGetRelid(relation);
 
 	HandleK2PgStatus(PgGate_NewSelect(dboid, relid, camScan->prepare_params, &camScan->handle));
-	ResourceOwnerEnlargeK2PgStmts(t_thrd.utils_cxt.CurrentResourceOwner);
-	ResourceOwnerRememberK2PgStmt(t_thrd.utils_cxt.CurrentResourceOwner, camScan->handle);
+	// ResourceOwnerEnlargeK2PgStmts(t_thrd.utils_cxt.CurrentResourceOwner);
+	// ResourceOwnerRememberK2PgStmt(t_thrd.utils_cxt.CurrentResourceOwner, camScan->handle);
 	camScan->stmt_owner = t_thrd.utils_cxt.CurrentResourceOwner;
 
 	if (IsSystemRelation(relation))

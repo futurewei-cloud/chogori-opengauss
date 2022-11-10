@@ -11603,6 +11603,7 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 
 	*need_retry = false;
 
+    return;
 	/*
 	 * A retry is only required if the transaction is handled by K2PG.
 	 */
