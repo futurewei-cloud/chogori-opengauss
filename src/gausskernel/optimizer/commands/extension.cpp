@@ -1501,7 +1501,7 @@ Oid InsertExtensionTuple(const char* extName, Oid extOwner, Oid schemaOid, bool 
 
     tuple = heap_form_tuple(rel->rd_att, values, nulls);
 
-    extensionOid = simple_heap_insert(rel, tuple);
+    extensionOid = CatalogTupleInsert(rel, tuple);
     CatalogUpdateIndexes(rel, tuple);
 
     tableam_tops_free_tuple(tuple);

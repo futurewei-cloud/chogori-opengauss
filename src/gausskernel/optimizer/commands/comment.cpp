@@ -260,7 +260,7 @@ void CreateComments(Oid oid, Oid classoid, int32 subid, const char* comment)
     /* If we didn't find an old tuple, insert a new one */
     if (newtuple == NULL && comment != NULL) {
         newtuple = heap_form_tuple(RelationGetDescr(description), values, nulls);
-        (void)simple_heap_insert(description, newtuple);
+        (void)CatalogTupleInsert(description, newtuple);
     }
 
     /* Update indexes, if necessary */

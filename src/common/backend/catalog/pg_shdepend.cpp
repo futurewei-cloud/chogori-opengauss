@@ -873,7 +873,7 @@ static void shdepAddDependency(Relation sdepRel, Oid classId, Oid objectId, int3
 
     tup = heap_form_tuple(sdepRel->rd_att, values, nulls);
 
-    (void)simple_heap_insert(sdepRel, tup);
+    (void)CatalogTupleInsert(sdepRel, tup);
 
     /* keep indexes current */
     CatalogUpdateIndexes(sdepRel, tup);

@@ -104,7 +104,7 @@ void recordMultipleDependencies(
 
             tup = heap_form_tuple(dependDesc->rd_att, values, nulls);
 
-            (void)simple_heap_insert(dependDesc, tup);
+            (void)CatalogTupleInsert(dependDesc, tup);
 
             /* keep indexes current */
             if (indstate == NULL)

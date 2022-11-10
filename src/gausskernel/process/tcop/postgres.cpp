@@ -11597,44 +11597,19 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 {
 	bool		need_global_cache_refresh = false;
 	bool		need_table_cache_refresh = false;
-	char	   *table_to_refresh;
+	char	   *table_to_refresh = NULL;
 	const char *table_cache_refresh_search_str =
 		"schema version mismatch for table ";
 
 	*need_retry = false;
 
-    return;
 	/*
 	 * A retry is only required if the transaction is handled by K2PG.
 	 */
 	if (!IsK2PgEnabled())
 		return;
 
-	/* Get error data */
-	ErrorData *edata;
 	MemoryContextSwitchTo(oldcontext);
-	edata = CopyErrorData();
-	bool is_retryable_err = K2PgNeedRetryAfterCacheRefresh(edata);
-	if ((table_to_refresh = strstr(edata->message,
-								   table_cache_refresh_search_str)) != NULL)
-	{
-		size_t size_of_uuid = 16; /* boost::uuids::uuid::static_size() */
-		size_t size_of_hex_uuid = size_of_uuid * 2;
-
-		/* Skip to the table id part of the error message. */
-		table_to_refresh += strlen(table_cache_refresh_search_str);
-		if (strlen(table_to_refresh) < size_of_hex_uuid)
-			/* Unexpected table id size; ignore table cache refreshing. */
-			table_to_refresh = NULL;
-		else
-		{
-			/* Trim off the rest of the message. */
-			*(table_to_refresh + size_of_hex_uuid) = '\0';
-			/* Duplicate the string to safely FreeErrorData below. */
-			table_to_refresh = pstrdup(table_to_refresh);
-		}
-	}
-	need_table_cache_refresh = table_to_refresh != NULL;
 
 	/*
 	 * Get the latest syscatalog version from the master to check if we need
@@ -11654,79 +11629,9 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 	if (need_global_cache_refresh)
 		k2pg_need_cache_refresh = true;
 
-	/*
-	 * Prepare to retry the query if possible.
-	 */
-	if (is_retryable_err)
-	{
-		/*
-		 * For single-query transactions we abort the current
-		 * transaction to undo any already-applied operations
-		 * and retry the query.
-		 *
-		 * For transaction blocks we would have to re-apply
-		 * all previous queries and also continue the
-		 * transaction for future queries (before commit).
-		 * So we just re-throw the error in that case.
-		 *
-		 */
-		if (consider_retry && !IsTransactionBlock())
-		{
-			/* Clear error state */
-			FlushErrorState();
-			FreeErrorData(edata);
+    if (k2pg_need_cache_refresh)
+	    K2PgRefreshCache();
 
-			/* Abort the transaction and clean up. */
-			AbortCurrentTransaction();
-//			if (AM_WAL_SENDER)
-//				WalSndErrorCleanup();
-
-//			if (MyReplicationSlot != NULL)
-//				ReplicationSlotRelease();
-
-//			ReplicationSlotCleanup();
-
-			if (u_sess->postgres_cxt.doing_extended_query_message)
-				u_sess->postgres_cxt.ignore_till_sync = true;
-
-			t_thrd.postgres_cxt.xact_started = false;
-
-			/* Refresh cache now so that the retry uses latest version. */
-			if (need_global_cache_refresh)
-				K2PgRefreshCache();
-			else
-			{
-				/* need_table_cache_refresh */
-				ereport(LOG,
-						(errmsg("invalidating table cache entry %s",
-								table_to_refresh)));
-				HandleK2PgStatus(PgGate_InvalidateTableCacheByTableId(table_to_refresh));
-			}
-
-			*need_retry = true;
-		}
-		else
-		{
-			if (need_global_cache_refresh)
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Catalog Version Mismatch: A DDL occurred "
-								"while processing this query. Try Again.")));
-			else
-			{
-				/* need_table_cache_refresh */
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("%s", edata->message)));
-			}
-		}
-	}
-	else
-	{
-		/* Clear error state */
-		FlushErrorState();
-		FreeErrorData(edata);
-	}
 }
 
 /*
