@@ -8174,191 +8174,149 @@ void K2PgPreloadRelCache()
 								  0,
 								  NULL);
 
-	bool finish_processing_relation = false;
-
 	/*
 	 * We are scanning through the entire pg_attribute table to get all the attributes (columns)
-	 * for all the relations. All the attributes for a relation are contiguous, so we maintain the
-	 * current relation and, when we finish processing its attributes (detected when we read a
-	 * different relation_id which is first range key of pg_attribute), we load up the retrieved
+	 * for all the relations.
+	 * When we finish processing a relatin=on's attributes we load up the retrieved
 	 * info into the Relation entry, which among other things, sets up then constraint and default
 	 * info.
 	 */
+    std::unordered_map<Oid, std::vector<Form_pg_attribute>> rel_to_attrs;
 	while (true)
 	{
-		if (!finish_processing_relation)
-			pg_attribute_tuple = systable_getnext(scandesc);
+	    pg_attribute_tuple = systable_getnext(scandesc);
 
 		if (!HeapTupleIsValid(pg_attribute_tuple)) {
-			if (!relation) {
-				break;
-			} else {
-				/* If the tuple is not valid, then we are done processing this relation */
-				finish_processing_relation = true;
-			}
-		}
-		else
-		{
-			Form_pg_attribute attp = (Form_pg_attribute) GETSTRUCT(pg_attribute_tuple);
-
-			if (!relation) {
-				/*
-				 * New (or first) relation, set up the needed variables before reading its
-				 * attributes.
-				 */
-
-				/* This will guarantee that the next tuple is read */
-				finish_processing_relation = false;
-
-				RelationIdCacheLookup(attp->attrelid, relation);
-				if (!relation) {
-					continue;
-				}
-				need = relation->rd_rel->relnatts;
-				ndef = 0;
-				attrdef = NULL;
-				constr = (TupleConstr*) MemoryContextAlloc(u_sess->cache_mem_cxt, sizeof(TupleConstr));
-				constr->has_not_null = false;
-			}
-
-			/*
-			 * relation->rd_id == attp->attrelid means that we are still reading attributes for
-			 * the current relation.
-			 */
-			if (relation->rd_id == attp->attrelid)
-			{
-				/* Skip system attributes */
-				if (attp->attnum <= 0)
-					continue;
-
-				if (attp->attnum > relation->rd_rel->relnatts)
-					elog(ERROR,
-						 "invalid attribute number %d for %s",
-						 attp->attnum,
-						 RelationGetRelationName(relation));
-
-				memcpy(TupleDescAttr(relation->rd_att, attp->attnum - 1),
-					   attp,
-					   ATTRIBUTE_FIXED_PART_SIZE);
-
-				/* Update constraint/default info */
-				if (attp->attnotnull)
-					constr->has_not_null = true;
-
-				if (attp->atthasdef)
-				{
-					if (attrdef == NULL)
-						attrdef = (AttrDefault*) MemoryContextAllocZero(
-								u_sess->cache_mem_cxt,
-								relation->rd_rel->relnatts * sizeof(AttrDefault));
-					attrdef[ndef].adnum = attp->attnum;
-					attrdef[ndef].adbin = NULL;
-					ndef++;
-				}
-
-				need--;
-			}
-			/*
-			 * When relation->rd_id != attp->attrelid, it means that we have read an attribute
-			 * for a different table.
-			 */
-			else if (relation->rd_id != attp->attrelid)
-			{
-				if (need != 0)
-					elog(ERROR, "catalog is missing %d attribute(s) for relid %u",
-						 need, RelationGetRelid(relation));
-				/*
-				 * By setting finish_processing_relation to true, we will avoid reading the next
-				 * tuple because we were not able to use the tuple since it belongs to a different
-				 * relation.
-				 */
-				finish_processing_relation = true;
-			}
+            break;
 		}
 
-		/*
-		 * Load up the retrieved info into the Relation entry.
-		 * We only execute this after having processed all the attributes for a relation
-		 */
-		if (relation && finish_processing_relation)
-		{
-			if (need != 0)
-				elog(ERROR, "catalog is missing %d attribute(s) for relid %u",
-					 need, RelationGetRelid(relation));
-			/*
-			 * initialize the tuple descriptor (relation->rd_att).
-			 */
-			/* copy some fields from pg_class row to rd_att */
-			relation->rd_att->tdtypeid = relation->rd_rel->reltype;
-			relation->rd_att->tdtypmod = -1;	/* unnecessary, but... */
-			relation->rd_att->tdhasoid = relation->rd_rel->relhasoids;
+	    Form_pg_attribute attp = (Form_pg_attribute) GETSTRUCT(pg_attribute_tuple);
+        rel_to_attrs[attp->attrelid].push_back(attp);
+    }
 
-			/*
-			 * However, we can easily set the attcacheoff value for the first
-			 * attribute: it must be zero.  This eliminates the need for special cases
-			 * for attnum=1 that used to exist in fastgetattr() and index_getattr().
-			 */
-			if (RelationGetNumberOfAttributes(relation) > 0)
-				TupleDescAttr(RelationGetDescr(relation), 0)->attcacheoff = 0;
+    auto it = rel_to_attrs.begin();
+    for (; it != rel_to_attrs.end(); ++it) {
+        RelationIdCacheLookup(it->first, relation);
+        if (!relation) {
+            continue;
+        }
+        need = relation->rd_rel->relnatts;
+        ndef = 0;
+        attrdef = NULL;
+        constr = (TupleConstr*) MemoryContextAlloc(u_sess->cache_mem_cxt, sizeof(TupleConstr));
+        constr->has_not_null = false;
 
-			/*
-			 * Set up constraint/default info
-			 */
-			if (constr->has_not_null || ndef > 0 || relation->rd_rel->relchecks)
-			{
-				relation->rd_att->constr = constr;
+        for (auto attp : it->second) {
+            /* Skip system attributes */
+            if (attp->attnum <= 0)
+                continue;
 
-				if (ndef > 0)            /* DEFAULTs */
-				{
-					if (ndef < RelationGetNumberOfAttributes(relation))
-						constr->defval = (AttrDefault *) repalloc(attrdef,
-																  ndef *
-																  sizeof(AttrDefault));
-					else
-						constr->defval = attrdef;
-					constr->num_defval = ndef;
-					AttrDefaultFetch(relation);
-				}
-				else
-					constr->num_defval = 0;
+            if (attp->attnum > relation->rd_rel->relnatts)
+                elog(ERROR,
+                     "invalid attribute number %d for %s",
+                     attp->attnum,
+                     RelationGetRelationName(relation));
 
-				if (relation->rd_rel->relchecks > 0)    /* CHECKs */
-				{
-					constr->num_check = relation->rd_rel->relchecks;
-					constr->check     = (ConstrCheck *) MemoryContextAllocZero(
-							u_sess->cache_mem_cxt,
-							constr->num_check * sizeof(ConstrCheck));
-					CheckConstraintFetch(relation);
-				}
-				else
-					constr->num_check = 0;
-			}
-			else
-			{
-				pfree(constr);
-				relation->rd_att->constr = NULL;
-			}
+            memcpy(TupleDescAttr(relation->rd_att, attp->attnum - 1),
+                   attp,
+                   ATTRIBUTE_FIXED_PART_SIZE);
 
-			/*
-			 * Fetch rules and triggers that affect this relation
-			 */
-			if (relation->rd_rel->relhasrules)
-				K2PgRelationBuildRuleLock(relation);
-			else
-			{
-				relation->rd_rules    = NULL;
-				relation->rd_rulescxt = NULL;
-			}
+            /* Update constraint/default info */
+            if (attp->attnotnull)
+                constr->has_not_null = true;
 
-			if (relation->rd_rel->relhastriggers)
-				RelationBuildTriggers(relation);
-			else
-				relation->trigdesc = NULL;
+            if (attp->atthasdef)
+            {
+                if (attrdef == NULL)
+                    attrdef = (AttrDefault*) MemoryContextAllocZero(
+                            u_sess->cache_mem_cxt,
+                            relation->rd_rel->relnatts * sizeof(AttrDefault));
+                attrdef[ndef].adnum = attp->attnum;
+                attrdef[ndef].adbin = NULL;
+                ndef++;
+            }
 
-			// Reset relation.
-			relation = NULL;
-			need = 0;
+            need--;
 		}
+
+        if (need != 0) {
+            elog(ERROR, "catalog is missing %d attribute(s) for relid %u",
+                 need, RelationGetRelid(relation));
+        }
+
+        /*
+         * initialize the tuple descriptor (relation->rd_att).
+         */
+        /* copy some fields from pg_class row to rd_att */
+        relation->rd_att->tdtypeid = relation->rd_rel->reltype;
+        relation->rd_att->tdtypmod = -1;	/* unnecessary, but... */
+        relation->rd_att->tdhasoid = relation->rd_rel->relhasoids;
+
+        /*
+         * However, we can easily set the attcacheoff value for the first
+         * attribute: it must be zero.  This eliminates the need for special cases
+         * for attnum=1 that used to exist in fastgetattr() and index_getattr().
+         */
+        if (RelationGetNumberOfAttributes(relation) > 0)
+            TupleDescAttr(RelationGetDescr(relation), 0)->attcacheoff = 0;
+
+        /*
+         * Set up constraint/default info
+         */
+        if (constr->has_not_null || ndef > 0 || relation->rd_rel->relchecks)
+        {
+            relation->rd_att->constr = constr;
+
+            if (ndef > 0)            /* DEFAULTs */
+            {
+                if (ndef < RelationGetNumberOfAttributes(relation))
+                    constr->defval = (AttrDefault *) repalloc(attrdef,
+                                                              ndef *
+                                                              sizeof(AttrDefault));
+                else
+                    constr->defval = attrdef;
+                constr->num_defval = ndef;
+                AttrDefaultFetch(relation);
+            }
+            else
+                constr->num_defval = 0;
+
+            if (relation->rd_rel->relchecks > 0)    /* CHECKs */
+            {
+                constr->num_check = relation->rd_rel->relchecks;
+                constr->check     = (ConstrCheck *) MemoryContextAllocZero(
+                        u_sess->cache_mem_cxt,
+                        constr->num_check * sizeof(ConstrCheck));
+                CheckConstraintFetch(relation);
+            }
+            else
+                constr->num_check = 0;
+        }
+        else
+        {
+            pfree(constr);
+            relation->rd_att->constr = NULL;
+        }
+
+        /*
+         * Fetch rules and triggers that affect this relation
+         */
+        if (relation->rd_rel->relhasrules)
+            K2PgRelationBuildRuleLock(relation);
+        else
+        {
+            relation->rd_rules    = NULL;
+            relation->rd_rulescxt = NULL;
+        }
+
+        if (relation->rd_rel->relhastriggers)
+            RelationBuildTriggers(relation);
+        else
+            relation->trigdesc = NULL;
+
+        // Reset relation.
+        relation = NULL;
+        need = 0;
 	}
 
 	/*
