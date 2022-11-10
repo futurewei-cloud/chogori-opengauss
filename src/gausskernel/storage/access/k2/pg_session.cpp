@@ -70,7 +70,7 @@ std::shared_ptr<PgTableDesc> PgSession::LoadTable(const PgObjectId& table_object
         }
 
         std::shared_ptr<PgTableDesc> table_desc;
-        std::string t_table_id = std::move(table_object_id.GetTableId());
+        std::string t_table_id = table_object_id.GetTableId();
         // check if the t_table_id is for a table or an index
         if (table->table_id().compare(t_table_id) == 0) {
             // a table

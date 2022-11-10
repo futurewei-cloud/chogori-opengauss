@@ -579,10 +579,19 @@ HeapTuple systable_getnext_back(SysScanDesc sysscan)
 {
     HeapTuple htup;
 
-    if (sysscan->irel)
+    if (sysscan->irel) {
         htup = (HeapTuple)index_getnext(sysscan->iscan, BackwardScanDirection);
-    else
-        htup = heap_getnext((TableScanDesc) (sysscan->scan), BackwardScanDirection);
+    } else {
+        if (sysscan->scan != NULL) {
+            htup = heap_getnext((TableScanDesc) (sysscan->scan), BackwardScanDirection);
+        } else {
+            if (IsK2PgEnabled()) {
+                htup = cam_systable_getnext(sysscan);
+            } else {
+                ereport(ERROR, (errmsg("HeapScan in SysScanDesc is null")));
+            }
+        }
+    }
 
     return htup;
 }

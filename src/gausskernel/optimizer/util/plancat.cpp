@@ -61,6 +61,8 @@
 #include "pgxc/pgxc.h"
 #endif
 
+#include "access/k2/k2pg_aux.h"
+
 #define ESTIMATE_PARTITION_NUMBER 10
 #define DEFAULT_PAGES_NUM (u_sess->attr.attr_sql.enable_global_stats ? 10 * u_sess->pgxc_cxt.NumDataNodes : 10)
 #define DEFAULT_TUPLES_NUM DEFAULT_PAGES_NUM
@@ -217,7 +219,7 @@ void get_relation_info(PlannerInfo* root, Oid relationObjectId, bool inhparent, 
         ereport(ERROR, (errmodule(MOD_OPT), (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                     errmsg("cannot access temporary or unlogged relations during recovery"))));
 
-    rel->min_attr = FirstLowInvalidHeapAttributeNumber + 1;
+    rel->min_attr = K2PgGetFirstLowInvalidAttributeNumber(relation) + 1;
     rel->max_attr = RelationGetNumberOfAttributes(relation);
     rel->reltablespace = RelationGetForm(relation)->reltablespace;
 
@@ -403,8 +405,13 @@ void get_relation_info(PlannerInfo* root, Oid relationObjectId, bool inhparent, 
                     int16 btstrategy;
                     Oid btopfamily, btopcintype;
 
-                    info->reverse_sort[i] = (((unsigned int)opt) & INDOPTION_DESC) != 0;
-                    info->nulls_first[i] = (((unsigned int)opt) & INDOPTION_NULLS_FIRST) != 0;
+                    if (IsK2PgRelation(relation) && (((unsigned int)opt) & INDOPTION_HASH) != 0) {
+                        info->reverse_sort[i] = false;
+                        info->nulls_first[i] = false;
+                    } else {
+                        info->reverse_sort[i] = (((unsigned int)opt) & INDOPTION_DESC) != 0;
+                        info->nulls_first[i] = (((unsigned int)opt) & INDOPTION_NULLS_FIRST) != 0;
+                    }
 
                     Oid ltopr = get_opfamily_member(
                         info->opfamily[i], info->opcintype[i], info->opcintype[i], BTLessStrategyNumber);
@@ -455,7 +462,7 @@ void get_relation_info(PlannerInfo* root, Oid relationObjectId, bool inhparent, 
              * a table, except we can be sure that the index is not larger
              * than the table.
              */
-            if (info->indpred == NIL) {
+            if (info->indpred == NIL && !IsK2PgRelation(indexRelation)) {
 #ifdef PGXC
                 /*
                  * If parent relation is distributed the local storage manager
@@ -558,6 +565,18 @@ void estimate_rel_size(Relation rel, int32* attr_widths, RelPageType* pages, dou
     double reltuples;
     BlockNumber relallvisible;
     double density;
+
+    /*
+     * We don't support forwarding k2 size estimates to postgres yet.
+     * Use whatever is in pg_class.
+     */
+    if (IsK2PgEnabled())
+    {
+        *pages = rel->rd_rel->relpages;
+        *tuples = rel->rd_rel->reltuples;
+        *allvisfrac = 0;
+        return;
+    }
 
     switch (rel->rd_rel->relkind) {
         case RELKIND_RELATION:

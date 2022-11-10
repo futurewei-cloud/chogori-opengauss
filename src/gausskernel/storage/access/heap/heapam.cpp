@@ -1508,7 +1508,7 @@ void relation_close(Relation relation, LOCKMODE lockmode)
     Relation rel = relation;
     LockRelId relid;
 
-    if (RelationIsBucket(relation)) {
+    if (!IsK2PgEnabled() && RelationIsBucket(relation)) {
         rel = relation->parent;
         Assert(RELATION_OWN_BUCKET(rel));
         bucketCloseRelation(relation);
@@ -5572,6 +5572,15 @@ static void HeapSatisfiesHOTUpdate(Relation relation, Bitmapset* hot_attrs, Bitm
  * via ereport().
  */
 void simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup)
+{
+    if (IsK2PgRelation(relation)) {
+        K2PgUpdateSysCatalogTuple(relation, NULL, tup);
+    } else {
+        simple_heap_update_internal(relation, otid, tup);
+    }
+}
+
+void simple_heap_update_internal(Relation relation, ItemPointer otid, HeapTuple tup)
 {
     TM_Result result;
     TM_FailureData tmfd;

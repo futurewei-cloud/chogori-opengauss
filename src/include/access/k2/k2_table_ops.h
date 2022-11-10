@@ -70,7 +70,7 @@ extern bool K2PgExecuteDelete(Relation rel,
  */
 extern void K2PgExecuteDeleteIndex(Relation index,
                                   Datum *values,
-                                  bool *isnull,
+                                  const bool *isnull,
                                   Datum k2pgctid);
 
 /*

@@ -717,7 +717,7 @@ static void ResetCatalogCache(CatCache* cache)
 
         nextelt = DLGetSucc(elt);
 
-        if (cl->isnailed)
+        if (cl == NULL || cl->isnailed)
             continue;
 
         if (cl->refcount > 0)
@@ -733,7 +733,7 @@ static void ResetCatalogCache(CatCache* cache)
 
             nextelt = DLGetSucc(elt);
 
-            if (ct->isnailed)
+            if (ct == NULL || ct->isnailed)
                 continue;
 
             if (ct->refcount > 0 || (ct->c_list && ct->c_list->refcount > 0)) {

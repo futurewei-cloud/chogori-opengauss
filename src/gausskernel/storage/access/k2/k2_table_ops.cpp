@@ -338,7 +338,7 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
  */
 static void PrepareIndexWriteStmt(Relation index,
                                   Datum *values,
-                                  bool *isnull,
+                                  const bool *isnull,
                                   int natts,
                                   Datum k2pgbasectid,
                                   bool k2pgctid_as_value,
@@ -535,7 +535,7 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	return !isSingleRow || rows_affected_count > 0;
 }
 
-void K2PgExecuteDeleteIndex(Relation index, Datum *values, bool *isnull, Datum k2pgctid)
+void K2PgExecuteDeleteIndex(Relation index, Datum *values, const bool *isnull, Datum k2pgctid)
 {
   Assert(index->rd_rel->relkind == RELKIND_INDEX);
 
