@@ -2738,8 +2738,12 @@ static OpClassCacheEnt* LookupOpclassInfo(Oid operatorClassOid, StrategyNumber n
      * looking up info for the opclasses used by the indexes we would like to
      * reference here.
      */
-    indexOK = u_sess->relcache_cxt.criticalRelcachesBuilt ||
-              (operatorClassOid != OID_BTREE_OPS_OID && operatorClassOid != INT2_BTREE_OPS_OID);
+    if (IsK2PgEnabled()) {
+        indexOK = u_sess->relcache_cxt.criticalRelcachesBuilt;
+    } else {
+        indexOK = u_sess->relcache_cxt.criticalRelcachesBuilt ||
+                  (operatorClassOid != OID_BTREE_OPS_OID && operatorClassOid != INT2_BTREE_OPS_OID);
+    }
 
     /*
      * We have to fetch the pg_opclass row to determine its opfamily and

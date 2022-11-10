@@ -97,6 +97,9 @@
 #include "pgxc/pgxc.h"
 #endif
 
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
+
 /* ----------------------------------------------------------------
  *					macros used in index_ routines
  *
@@ -187,7 +190,7 @@ void index_close(Relation relation, LOCKMODE lockmode)
 
     Assert(lockmode >= NoLock && lockmode < MAX_LOCKMODES);
 
-    if (RelationIsBucket(relation)) {
+    if (!IsK2PgEnabled() && RelationIsBucket(relation)) {
         rel = relation->parent;
         Assert(RELATION_OWN_BUCKET(rel));
         bucketCloseRelation(relation);
@@ -206,8 +209,13 @@ bool UBTreeDelete(Relation indexRelation, Datum* values, const bool* isnull, Ite
 
 void index_delete(Relation index_relation, Datum* values, const bool* isnull, ItemPointer heap_t_ctid)
 {
-    /* Assert(Ustore) Assert(B tree) */
-    UBTreeDelete(index_relation, values, isnull, heap_t_ctid);
+    if (IsK2PgRelation(index_relation)) {
+        Datum k2pgctid = PointerGetDatum(heap_t_ctid);
+ 		K2PgExecuteDeleteIndex(index_relation, values, isnull, k2pgctid);
+    } else {
+        /* Assert(Ustore) Assert(B tree) */
+        UBTreeDelete(index_relation, values, isnull, heap_t_ctid);
+    }
 }
 
 

@@ -80,8 +80,7 @@ private:
     // this txn is managed by this manager.
     std::unique_ptr<sh::TxnHandle> _txn;
 
-    // share the client among all threads so that we use the same connection pool
-    static inline std::shared_ptr<sh::Client> _client;
+    std::shared_ptr<sh::Client> _client;
 
     Config _config;
     bool _initialized{false};

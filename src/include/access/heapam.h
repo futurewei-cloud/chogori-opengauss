@@ -277,6 +277,7 @@ extern bool heap_tuple_needs_freeze(HeapTuple tuple, TransactionId cutoff_xid, B
 extern Oid simple_heap_insert(Relation relation, HeapTuple tup);
 extern void simple_heap_delete(Relation relation, ItemPointer tid, int options = 0, bool allow_update_self = false);
 extern void simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup);
+extern void simple_heap_update_internal(Relation relation, ItemPointer otid, HeapTuple tup);
 
 extern void heap_markpos(TableScanDesc scan);
 extern void heap_restrpos(TableScanDesc scan);
