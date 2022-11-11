@@ -4080,10 +4080,11 @@ void validate_index_heapscan(
              * there is one.
              */
 
+            ItemPointer t_self = IsK2PgRelation(indexRelation) ? (ItemPointer)(heapTuple->t_k2pgctid) : &rootTuple;
             (void)index_insert(indexRelation,
                 values,
                 isnull,
-                &rootTuple,
+                t_self,
                 heapRelation,
                 indexInfo->ii_Unique ? UNIQUE_CHECK_YES : UNIQUE_CHECK_NO);
 

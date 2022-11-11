@@ -15,6 +15,7 @@
 #include "postgres.h"
 #include "knl/knl_variable.h"
 
+#include "access/k2/k2pg_aux.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_partition_fn.h"
@@ -198,7 +199,8 @@ Datum unique_key_recheck(PG_FUNCTION_ARGS)
          * correct even if t_self is now dead, because that is the TID the
          * index will know about.
          */
-        index_insert(fakeIdxRel, values, isnull, &(new_row->t_self), fakeRel, UNIQUE_CHECK_EXISTING);
+        ItemPointer t_self = IsK2PgRelation(fakeIdxRel) ? (ItemPointer)(new_row->t_k2pgctid) : &(new_row->t_self);
+        index_insert(fakeIdxRel, values, isnull, t_self, fakeRel, UNIQUE_CHECK_EXISTING);
     } else {
         /*
          * For exclusion constraints we just do the normal check, but now it's

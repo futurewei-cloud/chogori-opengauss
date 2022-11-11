@@ -13,6 +13,7 @@
  * -------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "access/k2/k2pg_aux.h"
 #include "access/tableam.h"
 #include "access/multixact.h"
 #include "access/relscan.h"
@@ -1967,10 +1968,11 @@ void insert_into_matview_map(Oid mapid, Oid matid, ItemPointer matctid,
     idxIsNulls[2] = false;
 
     /* 2. insert index tuple into maptmap-index */
+    ItemPointer t_self = IsK2PgRelation(mapIdx) ? (ItemPointer)(tup->t_k2pgctid) : &(tup->t_self);
     (void) index_insert(mapIdx,
                         idxValues,
                         idxIsNulls,
-                        &(tup->t_self),
+                        t_self,
                         mapRel,
                         UNIQUE_CHECK_YES);
 
@@ -2093,10 +2095,11 @@ void insert_into_mlog_table(Relation rel, Oid mlogid, HeapTuple tuple, ItemPoint
     idxisnull[0] = false;
 
     /* 2 insert index tuple into mlog-table */
+    ItemPointer t_self = IsK2PgRelation(mlog_idx) ? (ItemPointer)(htup->t_k2pgctid) : &(htup->t_self);
     index_insert(mlog_idx,
                 idxvalues,
                 idxisnull,
-                &(htup->t_self),
+                t_self,
                 mlog_table,
                 UNIQUE_CHECK_YES);
 

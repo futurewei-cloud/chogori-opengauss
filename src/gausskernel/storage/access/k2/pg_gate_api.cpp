@@ -741,7 +741,6 @@ K2PgStatus PgGate_ExecUpdate(K2PgOid database_oid,
     // Send the partialUpdate request to SKV
     skv::http::dto::SKVRecord record = builder->build();
     auto [k2status] = k2pg::TXMgr.partialUpdate(record, std::move(fieldsForUpdate)).get();
-    status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
     if (!k2status.is2xxOK() && k2status.code != 412) { // 412 Precondition falied is not an error for PG in this case
         status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
         return status;
@@ -800,10 +799,10 @@ K2PgStatus PgGate_ExecDelete(K2PgOid database_oid,
     // Send the delete request to SKV
     skv::http::dto::SKVRecord record = builder->build();
     auto [k2status] = k2pg::TXMgr.write(record, true, skv::http::dto::ExistencePrecondition::Exists).get();
-    status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
-    if (status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+    if (!k2status.is2xxOK() && k2status.code != 412) { // 412 Precondition falied is not an error for PG in this case
+        status = k2pg::K2StatusToK2PgStatus(std::move(k2status));
         return status;
-    } else if (rows_affected) {
+    } else if (rows_affected && k2status.is2xxOK()) {
         *rows_affected = 1;
     }
 

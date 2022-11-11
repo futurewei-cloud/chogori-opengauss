@@ -229,7 +229,6 @@ bool index_insert(Relation index_relation, Datum *values, const bool *isnull, It
     FmgrInfo *procedure = NULL;
 
     RELATION_CHECKS;
-    // TODO: add logic to handle t_k2pgctid in HeapTuple
     GET_REL_PROCEDURE(aminsert);
 
     if (!(index_relation->rd_am->ampredlocks))
