@@ -987,31 +987,43 @@ K2PgStatus PgGate_ExecSelect(
     }
 
     // Check if we are trying to range scan an index that does not support it
+    bool convertToFullScan = false;
     if (isRangeScan) {
         for (const K2PgConstraintDef& constraint: constraints) {
             if (constraint.constants.size() && !K2PgAllowForPrimaryKey(constraint.constants[0].type_id)) {
-                K2PgStatus status {
-                    .pg_code = ERRCODE_INTERNAL_ERROR,
-                    .k2_code = 0,
-                    .msg = "Type not supported for index range scan",
-                    .detail = ""
-                };
-
-                return status;
+                elog(WARNING, "Trying to range scan wih an unsupported type, converting to full scan");
+                convertToFullScan = true;
+                break;
             }
         }
 
         for(int i=0; i < schema->partitionKeyFields.size(); ++i) {
             if (schema->fields[i].descending) {
-                K2PgStatus status {
-                    .pg_code = ERRCODE_INTERNAL_ERROR,
-                    .k2_code = 0,
-                    .msg = "Descending index not supported  for index range scan",
-                    .detail = ""
-                };
-
-                return status;
+                elog(WARNING, "Trying to range scan wih a descending key, converting to full scan");
+                convertToFullScan = true;
+                break;
             }
+        }
+    }
+    if (convertToFullScan) {
+        start = skv::http::dto::SKVRecordBuilder(handle->collectionName, schema);
+        end = skv::http::dto::SKVRecordBuilder(handle->collectionName, schema);
+
+        try {
+            start.serializeNext<int64_t>((int64_t)base_table_oid);
+            end.serializeNext<int64_t>((int64_t)base_table_oid);
+            start.serializeNext<int64_t>((int64_t)index_id);
+            end.serializeNext<int64_t>((int64_t)index_id);
+        }
+        catch (const std::exception& err) {
+            K2PgStatus status {
+                .pg_code = ERRCODE_INTERNAL_ERROR,
+                .k2_code = 0,
+                .msg = "K2 Serialization error in ExecSelect",
+                .detail = err.what()
+            };
+
+            return status;
         }
     }
 
