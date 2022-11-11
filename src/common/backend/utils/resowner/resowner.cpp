@@ -203,11 +203,6 @@ static void PrintFileLeakWarning(File file);
 
 extern void PrintMetaCacheBlockLeakWarning(CacheSlotId_t slot);
 
-/**
- * K2PG-specific
- */
-static void PrintK2PgStmtLeakWarning(K2PgScanHandle* k2pg_stmt);
-
 extern void ReleaseMetaBlock(CacheSlotId_t slot);
 
 /*
@@ -694,21 +689,6 @@ static void ResourceOwnerReleaseInternal(
             MemoryContextDelete(memContext);
             ResourceOwnerForgetGMemContext(t_thrd.utils_cxt.TopTransactionResourceOwner, memContext);
         }
-		if (IsK2Mode())
-		{
-			/* Ditto for K2PG statements */
-	        Datum		foundres;
-			while (ResourceArrayGetAny(&(owner->k2stmtarr), &foundres))
-			{
-				K2PgScanHandle*	res =
-					(K2PgScanHandle*) DatumGetPointer(foundres);
-
-				if (isCommit)
-					PrintK2PgStmtLeakWarning(res);
-
-				ResourceOwnerForgetK2PgStmt(owner, res);
-			}
-		}
     }
 
     /* Let add-on modules get a chance too */
@@ -1416,13 +1396,11 @@ void ResourceOwnerForgetFakerelRef(ResourceOwner owner, Relation fakerel)
         return;
     }
 
-    elog(WARNING, "fakerel reference %s is not owned by resource owner %s", RelationGetRelationName(fakerel), owner->name);
-
-    // ereport(ERROR,
-    //     (errcode(ERRCODE_WARNING_PRIVILEGE_NOT_GRANTED),
-    //         errmsg("fakerel reference %s is not owned by resource owner %s",
-    //             RelationGetRelationName(fakerel),
-    //             owner->name)));
+    ereport(ERROR,
+        (errcode(ERRCODE_WARNING_PRIVILEGE_NOT_GRANTED),
+            errmsg("fakerel reference %s is not owned by resource owner %s",
+                RelationGetRelationName(fakerel),
+                owner->name)));
 }
 
 void ResourceOwnerEnlargeFakepartRefs(ResourceOwner owner)
@@ -2022,49 +2000,4 @@ void PrintGMemContextLeakWarning(MemoryContext memcontext)
 {
     char *name = memcontext->name;
     ereport(WARNING, (errmsg("global memory context: %s leak", name)));
-}
-
-/*
- * Make sure there is room for at least one more entry in a ResourceOwner's
- * dynamic shmem segment reference array.
- *
- * This is separate from actually inserting an entry because if we run out
- * of memory, it's critical to do so *before* acquiring the resource.
- */
-void
-ResourceOwnerEnlargeK2PgStmts(ResourceOwner owner)
-{
-	ResourceArrayEnlarge(&(owner->k2stmtarr));
-}
-
-/*
- * Remember that a K2PG statement is owned by a ResourceOwner
- *
- * Caller must have previously done ResourceOwnerEnlargeK2PgStmts()
- */
-void
-ResourceOwnerRememberK2PgStmt(ResourceOwner owner, K2PgScanHandle* k2pg_stmt)
-{
-	ResourceArrayAdd(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt));
-}
-
-/*
- * Forget that a K2PG statement is owned by a ResourceOwner
- */
-void
-ResourceOwnerForgetK2PgStmt(ResourceOwner owner, K2PgScanHandle* k2pg_stmt)
-{
-	if (!ResourceArrayRemove(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt)))
-		elog(WARNING, "K2PG statement %p is not owned by resource owner %s",
-			 k2pg_stmt, owner->name);
-}
-
-/*
- * Debugging subroutine
- */
-static void
-PrintK2PgStmtLeakWarning(K2PgScanHandle* k2pg_stmt)
-{
-	elog(WARNING, "K2PG statement leak: statement %p still referenced",
-		 k2pg_stmt);
 }

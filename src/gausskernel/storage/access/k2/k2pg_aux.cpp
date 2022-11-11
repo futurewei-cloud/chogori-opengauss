@@ -205,21 +205,6 @@ HandleK2PgStatusIgnoreNotFound(const K2PgStatus& status, bool *not_found)
 }
 
 void
-HandleK2PgStatusWithOwner(const K2PgStatus& status,
-												K2PgScanHandle* k2pg_stmt,
-												ResourceOwner owner)
-{
-	if (k2pg_stmt)
-	{
-		if (owner != NULL)
-		{
-			ResourceOwnerForgetK2PgStmt(owner, k2pg_stmt);
-		}
-	}
-	HandleK2PgStatus(status);
-}
-
-void
 HandleK2PgTableDescStatus(const K2PgStatus& status, K2PgTableDesc table)
 {
 	HandleK2PgStatus(status);

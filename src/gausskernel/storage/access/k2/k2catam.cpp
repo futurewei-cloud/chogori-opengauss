@@ -251,29 +251,26 @@ static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan
 	bool      has_data = false;
 	TupleDesc tupdesc  = camScan->target_desc;
 
-	Datum           *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
-	bool            *nulls  = (bool *) palloc0(tupdesc->natts * sizeof(bool));
+    MemoryContext oldcontext = MemoryContextSwitchTo(camScan->k2_ctx);
+
+	Datum *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
+	bool *nulls  = (bool *) palloc0(tupdesc->natts * sizeof(bool));
 	K2PgSysColumns syscols{};
 
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
 	{
-		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, is_forward_scan, camScan->exec_params),
-														camScan->handle,
-														camScan->stmt_owner);
+		HandleK2PgStatus(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, is_forward_scan, camScan->exec_params));
 		camScan->is_exec_done = true;
 	}
 
 	/* Fetch one row. */
-	HandleK2PgStatusWithOwner(PgGate_DmlFetch(camScan->handle,
-																				tupdesc->natts,
-																				(uint64_t *) values,
-																				nulls,
-																				&syscols,
-																				&has_data),
-													camScan->handle,
-													camScan->stmt_owner);
-
+    HandleK2PgStatus(PgGate_DmlFetch(camScan->handle,
+	                                 tupdesc->natts,
+									 (uint64_t *) values,
+									 nulls,
+									 &syscols,
+									 &has_data));
 	if (has_data)
 	{
 		tuple = heap_form_tuple(tupdesc, values, nulls);
@@ -294,6 +291,8 @@ static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan
 	pfree(values);
 	pfree(nulls);
 
+    (void)MemoryContextSwitchTo(oldcontext);
+
 	return tuple;
 }
 
@@ -303,6 +302,8 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	bool       has_data = false;
 	TupleDesc  tupdesc  = camScan->target_desc;
 
+    MemoryContext oldcontext = MemoryContextSwitchTo(camScan->k2_ctx);
+
 	Datum           *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
 	bool            *nulls = (bool *) palloc0(tupdesc->natts * sizeof(bool));
 	K2PgSysColumns syscols{};
@@ -310,22 +311,17 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	/* Execute the select statement. */
 	if (!camScan->is_exec_done)
 	{
-		HandleK2PgStatusWithOwner(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, is_forward_scan, camScan->exec_params),
-														camScan->handle,
-														camScan->stmt_owner);
+		HandleK2PgStatus(PgGate_ExecSelect(camScan->handle, camScan->constraints, camScan->targets_attrnum, is_forward_scan, camScan->exec_params));
 		camScan->is_exec_done = true;
 	}
 
 	/* Fetch one row. */
-	HandleK2PgStatusWithOwner(PgGate_DmlFetch(camScan->handle,
+	HandleK2PgStatus(PgGate_DmlFetch(camScan->handle,
 	                                          tupdesc->natts,
 	                                          (uint64_t *) values,
 	                                          nulls,
 	                                          &syscols,
-	                                          &has_data),
-	                            camScan->handle,
-	                            camScan->stmt_owner);
-
+	                                          &has_data));
 	if (has_data)
 	{
 		/*
@@ -364,6 +360,8 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	}
 	pfree(values);
 	pfree(nulls);
+
+	(void)MemoryContextSwitchTo(oldcontext);
 
 	return tuple;
 }
@@ -717,9 +715,6 @@ static void camBindScanKeys(Relation relation,
 	Oid		relid    = RelationGetRelid(relation);
 
 	HandleK2PgStatus(PgGate_NewSelect(dboid, relid, camScan->prepare_params, &camScan->handle));
-	ResourceOwnerEnlargeK2PgStmts(t_thrd.utils_cxt.CurrentResourceOwner);
-	ResourceOwnerRememberK2PgStmt(t_thrd.utils_cxt.CurrentResourceOwner, camScan->handle);
-	camScan->stmt_owner = t_thrd.utils_cxt.CurrentResourceOwner;
 
 	if (IsSystemRelation(relation))
 	{
@@ -1059,6 +1054,11 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	camScan->key   = key;
 	camScan->nkeys = nkeys;
 	camScan->tableOid = RelationGetRelid(relation);
+    camScan->k2_ctx = AllocSetContextCreate(CurrentMemoryContext, "k2 scan context",
+        ALLOCSET_SMALL_MINSIZE, ALLOCSET_SMALL_INITSIZE, ALLOCSET_SMALL_MAXSIZE);
+
+    /* switch MemoryContext */
+    MemoryContext oldcontext = MemoryContextSwitchTo(camScan->k2_ctx);
 
 	/* Setup the scan plan */
 	CamScanPlanData	scan_plan;
@@ -1083,26 +1083,25 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	 */
 	if (!IsSystemRelation(relation))
 	{
-        // TODO see if we can remove K2PgStatement from this call
-		HandleK2PgStatusWithOwner(PgGate_SetCatalogCacheVersion((K2PgStatement)camScan->handle,
-		                                                        k2pg_catalog_cache_version),
-		                            camScan->handle,
-		                            camScan->stmt_owner);
+		HandleK2PgStatus(PgGate_SetCatalogCacheVersion((K2PgStatement)camScan->handle, k2pg_catalog_cache_version));
 	}
 
 	bms_free(scan_plan.hash_key);
 	bms_free(scan_plan.primary_key);
 	bms_free(scan_plan.sk_cols);
 
+   /* release memory */
+    (void)MemoryContextSwitchTo(oldcontext);
+
 	return camScan;
 }
 
 void camEndScan(CamScanDesc camScan)
 {
-	if (camScan->handle)
-	{
-		ResourceOwnerForgetK2PgStmt(camScan->stmt_owner, camScan->handle);
+	if (NULL != camScan->k2_ctx && camScan->k2_ctx != CurrentMemoryContext) {
+	    MemoryContextDelete(camScan->k2_ctx);
 	}
+
 	pfree(camScan);
 }
 
