@@ -165,14 +165,4 @@ extern void ResourceOwnerRememberGMemContext(ResourceOwner owner, MemoryContext 
 extern void ResourceOwnerForgetGMemContext(ResourceOwner owner, MemoryContext memcontext);
 extern void PrintGMemContextLeakWarning(MemoryContext memcontext);
 
-/* support for K2PG statement refcount management */
-extern void ResourceOwnerEnlargeK2PgStmts(ResourceOwner owner);
-class K2PgScanHandle;
-extern void ResourceOwnerRememberK2PgStmt(
-	ResourceOwner owner,
-	K2PgScanHandle* k2pg_stmt);
-extern void ResourceOwnerForgetK2PgStmt(
-	ResourceOwner owner,
-	K2PgScanHandle* k2pg_stmt);
-
 #endif /* RESOWNER_H */

@@ -37,51 +37,6 @@
 #include "catalog/pg_hashbucket_fn.h"
 
 /*
- * ResourceArray is a common structure for storing all types of resource IDs.
- *
- * We manage small sets of resource IDs by keeping them in a simple array:
- * itemsarr[k] holds an ID, for 0 <= k < nitems <= maxitems = capacity.
- *
- * If a set grows large, we switch over to using open-addressing hashing.
- * Then, itemsarr[] is a hash table of "capacity" slots, with each
- * slot holding either an ID or "invalidval".  nitems is the number of valid
- * items present; if it would exceed maxitems, we enlarge the array and
- * re-hash.  In this mode, maxitems should be rather less than capacity so
- * that we don't waste too much time searching for empty slots.
- *
- * In either mode, lastidx remembers the location of the last item inserted
- * or returned by GetAny; this speeds up searches in ResourceArrayRemove.
- */
-typedef struct ResourceArray
-{
-	Datum	   *itemsarr;		/* buffer for storing values */
-	Datum		invalidval;		/* value that is considered invalid */
-	uint32		capacity;		/* allocated length of itemsarr[] */
-	uint32		nitems;			/* how many items are stored in items array */
-	uint32		maxitems;		/* current limit on nitems before enlarging */
-	uint32		lastidx;		/* index of last item returned by GetAny */
-} ResourceArray;
-
-/*
- * Initially allocated size of a ResourceArray.  Must be power of two since
- * we'll use (arraysize - 1) as mask for hashing.
- */
-#define RESARRAY_INIT_SIZE 16
-
-/*
- * When to switch to hashing vs. simple array logic in a ResourceArray.
- */
-#define RESARRAY_MAX_ARRAY 64
-#define RESARRAY_IS_ARRAY(resarr) ((resarr)->capacity <= RESARRAY_MAX_ARRAY)
-
-/*
- * How many items may be stored in a resource array of given capacity.
- * When this number is reached, we must resize.
- */
-#define RESARRAY_MAX_ITEMS(capacity) \
-	((capacity) <= RESARRAY_MAX_ARRAY ? (capacity) : (capacity)/4 * 3)
-
-/*
  * ResourceOwner objects look like this
  */
 typedef struct ResourceOwnerData {
@@ -167,8 +122,6 @@ typedef struct ResourceOwnerData {
     int maxGlobalMemContexts;
 
     MemoryContext memCxt;
-
-    ResourceArray k2stmtarr;    /* K2PG statement handles */
 } ResourceOwnerData;
 
 THR_LOCAL ResourceOwner IsolatedResourceOwner = NULL;
@@ -183,12 +136,6 @@ typedef struct ResourceReleaseCallbackItem {
 } ResourceReleaseCallbackItem;
 
 /* Internal routines */
-static void ResourceArrayInit(ResourceArray *resarr, Datum invalidval);
-static void ResourceArrayEnlarge(ResourceArray *resarr);
-static void ResourceArrayAdd(ResourceArray *resarr, Datum value);
-static bool ResourceArrayRemove(ResourceArray *resarr, Datum value);
-static bool ResourceArrayGetAny(ResourceArray *resarr, Datum *value);
-static void ResourceArrayFree(ResourceArray *resarr);
 
 static void ResourceOwnerReleaseInternal(
     ResourceOwner owner, ResourceReleasePhase phase, bool isCommit, bool isTopLevel);
@@ -203,235 +150,7 @@ static void PrintFileLeakWarning(File file);
 
 extern void PrintMetaCacheBlockLeakWarning(CacheSlotId_t slot);
 
-/**
- * K2PG-specific
- */
-static void PrintK2PgStmtLeakWarning(K2PgScanHandle* k2pg_stmt);
-
 extern void ReleaseMetaBlock(CacheSlotId_t slot);
-
-/*
- * Initialize a ResourceArray
- */
-static void
-ResourceArrayInit(ResourceArray *resarr, Datum invalidval)
-{
-	/* Assert it's empty */
-	Assert(resarr->itemsarr == NULL);
-	Assert(resarr->capacity == 0);
-	Assert(resarr->nitems == 0);
-	Assert(resarr->maxitems == 0);
-	/* Remember the appropriate "invalid" value */
-	resarr->invalidval = invalidval;
-	/* We don't allocate any storage until needed */
-}
-
-/*
- * Make sure there is room for at least one more resource in an array.
- *
- * This is separate from actually inserting a resource because if we run out
- * of memory, it's critical to do so *before* acquiring the resource.
- */
-static void
-ResourceArrayEnlarge(ResourceArray *resarr)
-{
-	uint32		i,
-				oldcap,
-				newcap;
-	Datum	   *olditemsarr;
-	Datum	   *newitemsarr;
-
-	if (resarr->nitems < resarr->maxitems)
-		return;					/* no work needed */
-
-	olditemsarr = resarr->itemsarr;
-	oldcap = resarr->capacity;
-
-	/* Double the capacity of the array (capacity must stay a power of 2!) */
-	newcap = (oldcap > 0) ? oldcap * 2 : RESARRAY_INIT_SIZE;
-	newitemsarr = (Datum *) MemoryContextAlloc(t_thrd.mem_cxt.cur_transaction_mem_cxt,
-											   newcap * sizeof(Datum));
-	for (i = 0; i < newcap; i++)
-		newitemsarr[i] = resarr->invalidval;
-
-	/* We assume we can't fail below this point, so OK to scribble on resarr */
-	resarr->itemsarr = newitemsarr;
-	resarr->capacity = newcap;
-	resarr->maxitems = RESARRAY_MAX_ITEMS(newcap);
-	resarr->nitems = 0;
-
-	if (olditemsarr != NULL)
-	{
-		/*
-		 * Transfer any pre-existing entries into the new array; they don't
-		 * necessarily go where they were before, so this simple logic is the
-		 * best way.  Note that if we were managing the set as a simple array,
-		 * the entries after nitems are garbage, but that shouldn't matter
-		 * because we won't get here unless nitems was equal to oldcap.
-		 */
-		for (i = 0; i < oldcap; i++)
-		{
-			if (olditemsarr[i] != resarr->invalidval)
-				ResourceArrayAdd(resarr, olditemsarr[i]);
-		}
-
-		/* And release old array. */
-		pfree(olditemsarr);
-	}
-
-	Assert(resarr->nitems < resarr->maxitems);
-}
-
-/*
- * Add a resource to ResourceArray
- *
- * Caller must have previously done ResourceArrayEnlarge()
- */
-static void
-ResourceArrayAdd(ResourceArray *resarr, Datum value)
-{
-	uint32		idx;
-
-	Assert(value != resarr->invalidval);
-	Assert(resarr->nitems < resarr->maxitems);
-
-	if (RESARRAY_IS_ARRAY(resarr))
-	{
-		/* Append to linear array. */
-		idx = resarr->nitems;
-	}
-	else
-	{
-		/* Insert into first free slot at or after hash location. */
-		uint32		mask = resarr->capacity - 1;
-
-        idx = DatumGetUInt32(hash_any((const unsigned char*) &value, sizeof(value))) & mask;
-		for (;;)
-		{
-			if (resarr->itemsarr[idx] == resarr->invalidval)
-				break;
-			idx = (idx + 1) & mask;
-		}
-	}
-	resarr->lastidx = idx;
-	resarr->itemsarr[idx] = value;
-	resarr->nitems++;
-}
-
-/*
- * Remove a resource from ResourceArray
- *
- * Returns true on success, false if resource was not found.
- *
- * Note: if same resource ID appears more than once, one instance is removed.
- */
-static bool
-ResourceArrayRemove(ResourceArray *resarr, Datum value)
-{
-	uint32		i,
-				idx,
-				lastidx = resarr->lastidx;
-
-	Assert(value != resarr->invalidval);
-
-	/* Search through all items, but try lastidx first. */
-	if (RESARRAY_IS_ARRAY(resarr))
-	{
-		if (lastidx < resarr->nitems &&
-			resarr->itemsarr[lastidx] == value)
-		{
-			resarr->itemsarr[lastidx] = resarr->itemsarr[resarr->nitems - 1];
-			resarr->nitems--;
-			/* Update lastidx to make reverse-order removals fast. */
-			resarr->lastidx = resarr->nitems - 1;
-			return true;
-		}
-		for (i = 0; i < resarr->nitems; i++)
-		{
-			if (resarr->itemsarr[i] == value)
-			{
-				resarr->itemsarr[i] = resarr->itemsarr[resarr->nitems - 1];
-				resarr->nitems--;
-				/* Update lastidx to make reverse-order removals fast. */
-				resarr->lastidx = resarr->nitems - 1;
-				return true;
-			}
-		}
-	}
-	else
-	{
-		uint32		mask = resarr->capacity - 1;
-
-		if (lastidx < resarr->capacity &&
-			resarr->itemsarr[lastidx] == value)
-		{
-			resarr->itemsarr[lastidx] = resarr->invalidval;
-			resarr->nitems--;
-			return true;
-		}
-		idx = DatumGetUInt32(hash_any((const unsigned char*) &value, sizeof(value))) & mask;
-		for (i = 0; i < resarr->capacity; i++)
-		{
-			if (resarr->itemsarr[idx] == value)
-			{
-				resarr->itemsarr[idx] = resarr->invalidval;
-				resarr->nitems--;
-				return true;
-			}
-			idx = (idx + 1) & mask;
-		}
-	}
-
-	return false;
-}
-
-/*
- * Get any convenient entry in a ResourceArray.
- *
- * "Convenient" is defined as "easy for ResourceArrayRemove to remove";
- * we help that along by setting lastidx to match.  This avoids O(N^2) cost
- * when removing all ResourceArray items during ResourceOwner destruction.
- *
- * Returns true if we found an element, or false if the array is empty.
- */
-static bool
-ResourceArrayGetAny(ResourceArray *resarr, Datum *value)
-{
-	if (resarr->nitems == 0)
-		return false;
-
-	if (RESARRAY_IS_ARRAY(resarr))
-	{
-		/* Linear array: just return the first element. */
-		resarr->lastidx = 0;
-	}
-	else
-	{
-		/* Hash: search forward from wherever we were last. */
-		uint32		mask = resarr->capacity - 1;
-
-		for (;;)
-		{
-			resarr->lastidx &= mask;
-			if (resarr->itemsarr[resarr->lastidx] != resarr->invalidval)
-				break;
-			resarr->lastidx++;
-		}
-	}
-
-	*value = resarr->itemsarr[resarr->lastidx];
-	return true;
-}
-
-/*
- * Trash a ResourceArray (we don't care about its state after this)
- */
-static void
-ResourceArrayFree(ResourceArray *resarr)
-{
-	if (resarr->itemsarr)
-		pfree(resarr->itemsarr);
-}
 
 /*****************************************************************************
  *	  EXPORTED ROUTINES														 *
@@ -459,10 +178,6 @@ ResourceOwner ResourceOwnerCreate(ResourceOwner parent, const char* name, Memory
 
     if (parent == NULL && strcmp(name, "TopTransaction") != 0) {
         IsolatedResourceOwner = owner;
-    }
-
-	if (IsK2Mode()) {
-		ResourceArrayInit(&(owner->k2stmtarr), PointerGetDatum(NULL));
     }
 
     return owner;
@@ -694,21 +409,6 @@ static void ResourceOwnerReleaseInternal(
             MemoryContextDelete(memContext);
             ResourceOwnerForgetGMemContext(t_thrd.utils_cxt.TopTransactionResourceOwner, memContext);
         }
-		if (IsK2Mode())
-		{
-			/* Ditto for K2PG statements */
-	        Datum		foundres;
-			while (ResourceArrayGetAny(&(owner->k2stmtarr), &foundres))
-			{
-				K2PgScanHandle*	res =
-					(K2PgScanHandle*) DatumGetPointer(foundres);
-
-				if (isCommit)
-					PrintK2PgStmtLeakWarning(res);
-
-				ResourceOwnerForgetK2PgStmt(owner, res);
-			}
-		}
     }
 
     /* Let add-on modules get a chance too */
@@ -779,7 +479,6 @@ void ResourceOwnerDelete(ResourceOwner owner)
     Assert(owner->nDataCacheSlots == 0);
     Assert(owner->nMetaCacheSlots == 0);
     Assert(owner->nPthreadMutex == 0);
-	Assert(owner->k2stmtarr.nitems == 0);
 
     /*
      * Delete children.  The recursive call will delink the child from me, so
@@ -797,8 +496,6 @@ void ResourceOwnerDelete(ResourceOwner owner)
      * the owner tree.	Better a leak than a crash.
      */
     ResourceOwnerNewParent(owner, NULL);
-
-	ResourceArrayFree(&(owner->k2stmtarr));
 
     if (owner == t_thrd.utils_cxt.STPSavedResourceOwner) {
         return;
@@ -1416,13 +1113,11 @@ void ResourceOwnerForgetFakerelRef(ResourceOwner owner, Relation fakerel)
         return;
     }
 
-    elog(WARNING, "fakerel reference %s is not owned by resource owner %s", RelationGetRelationName(fakerel), owner->name);
-
-    // ereport(ERROR,
-    //     (errcode(ERRCODE_WARNING_PRIVILEGE_NOT_GRANTED),
-    //         errmsg("fakerel reference %s is not owned by resource owner %s",
-    //             RelationGetRelationName(fakerel),
-    //             owner->name)));
+    ereport(ERROR,
+        (errcode(ERRCODE_WARNING_PRIVILEGE_NOT_GRANTED),
+            errmsg("fakerel reference %s is not owned by resource owner %s",
+                RelationGetRelationName(fakerel),
+                owner->name)));
 }
 
 void ResourceOwnerEnlargeFakepartRefs(ResourceOwner owner)
@@ -2022,49 +1717,4 @@ void PrintGMemContextLeakWarning(MemoryContext memcontext)
 {
     char *name = memcontext->name;
     ereport(WARNING, (errmsg("global memory context: %s leak", name)));
-}
-
-/*
- * Make sure there is room for at least one more entry in a ResourceOwner's
- * dynamic shmem segment reference array.
- *
- * This is separate from actually inserting an entry because if we run out
- * of memory, it's critical to do so *before* acquiring the resource.
- */
-void
-ResourceOwnerEnlargeK2PgStmts(ResourceOwner owner)
-{
-	ResourceArrayEnlarge(&(owner->k2stmtarr));
-}
-
-/*
- * Remember that a K2PG statement is owned by a ResourceOwner
- *
- * Caller must have previously done ResourceOwnerEnlargeK2PgStmts()
- */
-void
-ResourceOwnerRememberK2PgStmt(ResourceOwner owner, K2PgScanHandle* k2pg_stmt)
-{
-	ResourceArrayAdd(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt));
-}
-
-/*
- * Forget that a K2PG statement is owned by a ResourceOwner
- */
-void
-ResourceOwnerForgetK2PgStmt(ResourceOwner owner, K2PgScanHandle* k2pg_stmt)
-{
-	if (!ResourceArrayRemove(&(owner->k2stmtarr), PointerGetDatum(k2pg_stmt)))
-		elog(WARNING, "K2PG statement %p is not owned by resource owner %s",
-			 k2pg_stmt, owner->name);
-}
-
-/*
- * Debugging subroutine
- */
-static void
-PrintK2PgStmtLeakWarning(K2PgScanHandle* k2pg_stmt)
-{
-	elog(WARNING, "K2PG statement leak: statement %p still referenced",
-		 k2pg_stmt);
 }

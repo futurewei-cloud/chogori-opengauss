@@ -36,6 +36,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include "utils/relcache.h"
 #include "utils/resowner.h"
 #include "utils/snapshot.h"
+#include "utils/palloc.h"
 
 #include "access/k2/pg_gate_api.h"
 
@@ -48,8 +49,10 @@ typedef struct CamScanDescData
     // Data needed by PgGate for Exec call
     std::vector<K2PgConstraintDef> constraints;
     std::vector<int> targets_attrnum;
+	
+	// memory context for k2 scan operations
+	MemoryContext k2_ctx;
 
-	ResourceOwner stmt_owner;
 	bool is_exec_done;
 
 	Relation index;

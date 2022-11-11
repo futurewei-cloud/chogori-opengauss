@@ -274,7 +274,7 @@ static void shdepChangeDep(Relation sdepRel, Oid classid, Oid objid, int32 objsu
          * it's certainly a new tuple
          */
         oldtup = heap_form_tuple(RelationGetDescr(sdepRel), values, nulls);
-        (void)simple_heap_insert(sdepRel, oldtup);
+        (void)CatalogTupleInsert(sdepRel, oldtup);
 
         /* keep indexes current */
         CatalogUpdateIndexes(sdepRel, oldtup);
@@ -732,7 +732,7 @@ void copyTemplateDependencies(Oid templateDbId, Oid newDbId)
         HeapTuple newtup;
 
         newtup = heap_modify_tuple(tup, sdepDesc, values, nulls, replace);
-        (void)simple_heap_insert(sdepRel, newtup);
+        (void)CatalogTupleInsert(sdepRel, newtup);
 
         /* Keep indexes current */
         CatalogIndexInsert(indstate, newtup);
@@ -873,7 +873,7 @@ static void shdepAddDependency(Relation sdepRel, Oid classId, Oid objectId, int3
 
     tup = heap_form_tuple(sdepRel->rd_att, values, nulls);
 
-    (void)simple_heap_insert(sdepRel, tup);
+    (void)CatalogTupleInsert(sdepRel, tup);
 
     /* keep indexes current */
     CatalogUpdateIndexes(sdepRel, tup);
@@ -1674,7 +1674,7 @@ void changeDependencyOnObjfile(Oid objectId, Oid refobjId, const char* newObjfil
             values[Anum_pg_shdepend_objfile - 1] = CStringGetTextDatum(newObjfile);
 
             newtup = heap_form_tuple(sdepRel->rd_att, values, nulls);
-            (void)simple_heap_insert(sdepRel, newtup);
+            (void)CatalogTupleInsert(sdepRel, newtup);
 
             /* keep indexes current */
             CatalogUpdateIndexes(sdepRel, newtup);
