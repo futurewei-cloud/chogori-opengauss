@@ -328,7 +328,7 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
 
 
     /* Allocate and initialize K2PG scan state. */
-	K2FdwExecState *k2pg_state = (K2FdwExecState *) palloc0(sizeof(K2FdwExecState));
+	K2FdwExecState *k2pg_state = new K2FdwExecState();
 
     node->fdw_state = (void *)k2pg_state;
     k2pg_state->k2_ctx = AllocSetContextCreate(node->scanMcxt, "k2 FDW scan context",
@@ -456,13 +456,14 @@ k2IterateForeignScan(ForeignScanState *node)
  * Step 5. Done with scan
  */
 void k2EndForeignScan(ForeignScanState *node) {
-    (void)node;
-
     K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
-	if (NULL != k2pg_state->k2_ctx && k2pg_state->k2_ctx != CurrentMemoryContext) {
-	    MemoryContextDelete(k2pg_state->k2_ctx);
-	}
-	pfree(k2pg_state);
+
+    if (k2pg_state != NULL) {
+	    if (NULL != k2pg_state->k2_ctx && k2pg_state->k2_ctx != CurrentMemoryContext) {
+	        MemoryContextDelete(k2pg_state->k2_ctx);
+	    }
+	    delete k2pg_state;
+    }
 
     K2LOG_D(log::fdw, "End foreignscan called");
 }
