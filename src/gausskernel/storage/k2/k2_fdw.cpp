@@ -53,47 +53,48 @@ PG_FUNCTION_INFO_V1(k2_fdw_validator);
  */
 Datum k2_fdw_handler(PG_FUNCTION_ARGS)
 {
-    FdwRoutine *routine = makeNode(FdwRoutine);
+    static FdwRoutine routine{
+        .type = T_FdwRoutine,
+        /* Functions for scanning foreign tables */
+        .GetForeignRelSize = k2GetForeignRelSize,
+        .GetForeignPaths = k2GetForeignPaths,
+        .GetForeignPlan = k2GetForeignPlan,
+        .BeginForeignScan = k2BeginForeignScan,
+        .IterateForeignScan = k2IterateForeignScan,
+        .ReScanForeignScan = NULL,
+        .EndForeignScan = k2EndForeignScan,
 
-    /* Functions for scanning foreign tables */
-    routine->GetForeignRelSize = k2GetForeignRelSize ;
-    routine->GetForeignPaths = k2GetForeignPaths ;
-    routine->GetForeignPlan = k2GetForeignPlan ;
-    routine->BeginForeignScan = k2BeginForeignScan ;
-    routine->IterateForeignScan = k2IterateForeignScan ;
-    routine->ReScanForeignScan = NULL;
-    routine->EndForeignScan = k2EndForeignScan;
+        /* Functions for updating foreign tables */
+        .AddForeignUpdateTargets = NULL,
+        .PlanForeignModify = NULL,
+        .BeginForeignModify = NULL,
+        .ExecForeignInsert = NULL,
+        .ExecForeignUpdate = NULL,
+        .ExecForeignDelete = NULL,
+        .EndForeignModify = NULL,
+        .IsForeignRelUpdatable = NULL,
 
-    /* Functions for updating foreign tables */
-    routine->AddForeignUpdateTargets = NULL;
-    routine->PlanForeignModify = NULL;
-    routine->BeginForeignModify = NULL;
-    routine->ExecForeignInsert = NULL;
-    routine->ExecForeignUpdate = NULL;
-    routine->ExecForeignDelete = NULL;
-    routine->EndForeignModify = NULL;
-    routine->IsForeignRelUpdatable = NULL;
+        /* Support functions for EXPLAIN */
+        .ExplainForeignScan = NULL,
+        .ExplainForeignModify = NULL,
 
-    /* Support functions for EXPLAIN */
-    routine->ExplainForeignScan = NULL;
-    routine->ExplainForeignModify = NULL;
+        /* Support functions for ANALYZE */
+        .AnalyzeForeignTable = NULL,
+        .AcquireSampleRows = NULL,
 
-    /* Support functions for ANALYZE */
-    routine->AnalyzeForeignTable = NULL;
-    routine->AcquireSampleRows = NULL;
+        .VecIterateForeignScan = NULL,
+        .GetFdwType = NULL,
+        .ValidateTableDef = NULL,
+        .PartitionTblProcess = NULL,
+        .BuildRuntimePredicate = NULL,
+        .TruncateForeignTable = NULL,
+        .VacuumForeignTable = NULL,
+        .GetForeignRelationMemSize = NULL,
+        .GetForeignMemSize = NULL,
+        .GetForeignSessionMemSize = NULL,
+        .NotifyForeignConfigChange = NULL};
 
-    routine->ValidateTableDef = NULL;
-    routine->PartitionTblProcess = NULL;
-    routine->BuildRuntimePredicate = NULL;
-    routine->GetFdwType = NULL;
-    routine->TruncateForeignTable = NULL;
-    routine->VacuumForeignTable = NULL;
-    routine->GetForeignRelationMemSize = NULL;
-    routine->GetForeignMemSize = NULL;
-    routine->GetForeignSessionMemSize = NULL;
-    routine->NotifyForeignConfigChange = NULL;
-
-    PG_RETURN_POINTER(routine);
+    PG_RETURN_POINTER(&routine);
 }
 
 /*

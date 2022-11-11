@@ -257,7 +257,7 @@ RelOptInfo* make_one_rel(PlannerInfo* root, List* joinlist)
 				RangeTblEntry *rte = root->simple_rte_array[rti];
 				if (IsK2PgRelationById(rte->relid)) {
 					// Set the K2PG FDW routine because we will use the foreign scan API below.
-					relation->fdwroutine = (FdwRoutine *)(&k2_fdw_handler);
+					relation->fdwroutine = (FdwRoutine*)k2_fdw_handler(NULL);
 				}
 			}
 		}
