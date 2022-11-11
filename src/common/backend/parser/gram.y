@@ -84,8 +84,6 @@
 #include "utils/xml.h"
 #include "catalog/pg_streaming_fn.h"
 
-#include "access/k2/k2pg_aux.h"
-
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
@@ -154,31 +152,6 @@ typedef struct PrivTarget
 
 #define parser_yyerror(msg)  scanner_yyerror(msg, yyscanner)
 #define parser_errposition(pos)  scanner_errposition(pos, yyscanner)
-
-
-
-#define parser_k2pg_not_support(pos, feature) \
-	k2pg_not_support(pos, yyscanner, feature " not supported yet", -1)
-
-#define parser_k2pg_warn_ignored(pos, feature) \
-	k2pg_not_support_signal(pos, yyscanner, feature " not supported yet and will be ignored", -1, WARNING)
-
-#define parser_k2pg_signal_unsupported(pos, feature, issue) \
-	k2pg_not_support(pos, yyscanner, feature " not supported yet", issue)
-
-#define parser_k2pg_not_support_in_templates(pos, feature) \
-	k2pg_not_support_in_templates(pos, yyscanner, feature " not supported yet in template0/template1")
-
-#define parser_k2pg_beta_feature(pos, feature) \
-	check_beta_feature(pos, yyscanner, "FLAGS_psql_beta_feature_" feature, feature)
-
-static void base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner, const char *msg);
-static void k2pg_not_support_signal(int pos, core_yyscan_t yyscanner, const char *msg, int issue, int signal_level);
-static void k2pg_not_support(int pos, core_yyscan_t yyscanner, const char *msg, int issue);
-static void k2pg_not_support_in_templates(int pos, core_yyscan_t yyscanner, const char *msg);
-static void check_beta_feature(int pos, core_yyscan_t yyscanner, const char* flag, const char* feature);
-
-
 
 static void base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner,
 						 const char *msg);
@@ -326,7 +299,7 @@ static Node *make_node_from_scanbuf(int start_pos, int end_pos, core_yyscan_t yy
 		AlterRoleStmt AlterRoleSetStmt AlterRlsPolicyStmt
 		AlterDefaultPrivilegesStmt DefACLAction AlterSessionStmt
 		AnalyzeStmt CleanConnStmt ClosePortalStmt ClusterStmt CommentStmt
-		ConstraintsSetStmt CopyStmt CreateAsStmt CreateCastStmt CreateContQueryStmt CreateDirectoryStmt
+		ConstraintsSetStmt CopyStmt CreateAsStmt CreateCastStmt CreateContQueryStmt CreateDirectoryStmt 
 		CreateDomainStmt CreateExtensionStmt CreateGroupStmt CreateKeyStmt CreateOpClassStmt
 		CreateOpFamilyStmt AlterOpFamilyStmt CreatePLangStmt
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateStreamStmt CreateTableSpaceStmt
@@ -352,9 +325,9 @@ static Node *make_node_from_scanbuf(int start_pos, int end_pos, core_yyscan_t yy
 		DropOwnedStmt ReassignOwnedStmt
 		AlterTSConfigurationStmt AlterTSDictionaryStmt AnonyBlockStmt
 		BarrierStmt AlterNodeStmt CreateNodeStmt DropNodeStmt AlterCoordinatorStmt
-		CreateNodeGroupStmt AlterNodeGroupStmt DropNodeGroupStmt
-		CreatePolicyLabelStmt AlterPolicyLabelStmt DropPolicyLabelStmt
-        CreateAuditPolicyStmt AlterAuditPolicyStmt DropAuditPolicyStmt
+		CreateNodeGroupStmt AlterNodeGroupStmt DropNodeGroupStmt 
+		CreatePolicyLabelStmt AlterPolicyLabelStmt DropPolicyLabelStmt 
+        CreateAuditPolicyStmt AlterAuditPolicyStmt DropAuditPolicyStmt 
 		CreateMaskingPolicyStmt AlterMaskingPolicyStmt DropMaskingPolicyStmt
 		CreateResourcePoolStmt AlterResourcePoolStmt DropResourcePoolStmt
 		CreateWorkloadGroupStmt AlterWorkloadGroupStmt DropWorkloadGroupStmt
@@ -705,7 +678,7 @@ static Node *make_node_from_scanbuf(int start_pos, int end_pos, core_yyscan_t yy
 /* ENCRYPTION */
 %type <node> algorithm_desc CreateMasterKeyStmt CreateColumnKeyStmt master_key_elem column_key_elem with_algorithm
 %type <list> master_key_params column_key_params
-%type <list> columnEncryptionKey
+%type <list> columnEncryptionKey 
 %type <algtype> encryptionType
 
 /* CLIENT_LOGIC */
@@ -725,10 +698,10 @@ static Node *make_node_from_scanbuf(int start_pos, int end_pos, core_yyscan_t yy
 %type <range> policy_target_name
 %type <boolean> policy_status_opt
 %type <defelt> policy_privilege_elem policy_access_elem policy_target_elem_opt
-%type <node> policy_filter_elem pp_policy_filter_elem filter_term pp_filter_term filter_expr pp_filter_expr filter_paren filter_expr_list filter_set policy_filter_value
+%type <node> policy_filter_elem pp_policy_filter_elem filter_term pp_filter_term filter_expr pp_filter_expr filter_paren filter_expr_list filter_set policy_filter_value 
 %type <list> policy_filters_list policy_filter_opt policy_privileges_list policy_access_list policy_targets_list
 %type <list> policy_names_list
-%type <defelt>  policy_status_alter_clause
+%type <defelt>  policy_status_alter_clause 
 %type <str> alter_policy_action_clause policy_comments_alter_clause
 
 /* MASKING POLICY */
@@ -1000,75 +973,75 @@ stmt :
 			| AlterDatabaseStmt
 			| AlterDatabaseSetStmt
 			| AlterDataSourceStmt
-			/* | AlterDefaultPrivilegesStmt */
+			| AlterDefaultPrivilegesStmt
 			| AlterDomainStmt
-			/* | AlterEnumStmt */
-			/* | AlterExtensionStmt */
-			/* | AlterExtensionContentsStmt */
-			/* | AlterFdwStmt */
-			/* | AlterForeignServerStmt */
-			/* | AlterForeignTableStmt */
-			/* | AlterFunctionStmt */
+			| AlterEnumStmt
+			| AlterExtensionStmt
+			| AlterExtensionContentsStmt
+			| AlterFdwStmt
+			| AlterForeignServerStmt
+			| AlterForeignTableStmt
+			| AlterFunctionStmt
 			| AlterProcedureStmt
-			/* | AlterGroupStmt */
+			| AlterGroupStmt
 			| AlterNodeGroupStmt
 			| AlterNodeStmt
 			| AlterObjectSchemaStmt
-			/* | AlterOwnerStmt */
+			| AlterOwnerStmt
 			| AlterRlsPolicyStmt
 			| AlterResourcePoolStmt
 			| AlterSeqStmt
 			| AlterSchemaStmt
 			| AlterTableStmt
-			/* | AlterSystemStmt */
-			/* | AlterCompositeTypeStmt */
-			/* | AlterRoleSetStmt */
-			/* | AlterRoleStmt */
+			| AlterSystemStmt
+			| AlterCompositeTypeStmt
+			| AlterRoleSetStmt
+			| AlterRoleStmt
 			| AlterSessionStmt
-			/* | AlterTSConfigurationStmt */
-			/* | AlterTSDictionaryStmt */
-			/* | AlterUserMappingStmt */
+			| AlterTSConfigurationStmt
+			| AlterTSDictionaryStmt
+			| AlterUserMappingStmt
 			| AlterUserSetStmt
 			| AlterUserStmt
 			| AlterWorkloadGroupStmt
-			/* | AnalyzeStmt */
+			| AnalyzeStmt
 			| AnonyBlockStmt
 			| BarrierStmt
 			| CreateAppWorkloadGroupMappingStmt
 			| CallFuncStmt
-			/* | CheckPointStmt */
+			| CheckPointStmt
 			| CleanConnStmt
-			/* | ClosePortalStmt */
-			/* | ClusterStmt */
+			| ClosePortalStmt
+			| ClusterStmt
 			| CommentStmt
 			| ConstraintsSetStmt
 			| CopyStmt
-			/* | CreateAsStmt */
-			/* | CreateAssertStmt */
+			| CreateAsStmt
+			| CreateAssertStmt
 			| CreateCastStmt
                         | CreateContQueryStmt
                         | CreateStreamStmt
-			/* | CreateConversionStmt */
+			| CreateConversionStmt
 			| CreateDomainStmt
 			| CreateDirectoryStmt
-			/* | CreateExtensionStmt */
-			/* | CreateFdwStmt */
-			/* | CreateForeignServerStmt */
-			/* | CreateForeignTableStmt */
+			| CreateExtensionStmt
+			| CreateFdwStmt
+			| CreateForeignServerStmt
+			| CreateForeignTableStmt
 			| CreateDataSourceStmt
-			/* | CreateFunctionStmt */
+			| CreateFunctionStmt
 			| CreatePackageStmt
 			| CreatePackageBodyStmt
-			/* | CreateGroupStmt */
-			/* | CreateMatViewStmt */
+			| CreateGroupStmt
+			| CreateMatViewStmt
 			| CreateModelStmt  // DB4AI
 			| CreateNodeGroupStmt
 			| CreateNodeStmt
-			/* | CreateOpClassStmt */
+			| CreateOpClassStmt
 			| CreateOpFamilyStmt
 			| AlterOpFamilyStmt
 			| CreateRlsPolicyStmt
-			/* | CreatePLangStmt */
+			| CreatePLangStmt
 			| CreateProcedureStmt
             | CreateKeyStmt
 			| CreatePolicyLabelStmt
@@ -1084,24 +1057,24 @@ stmt :
 			| DropMaskingPolicyStmt
 			| CreateResourcePoolStmt
 			| CreateSchemaStmt
-			/* | CreateSeqStmt */
-			/* | CreateStmt */
+			| CreateSeqStmt
+			| CreateStmt
 			| CreateSynonymStmt
-			/* | CreateTableSpaceStmt */
-			/* | CreateTrigStmt */
-			/* | CreateRoleStmt */
+			| CreateTableSpaceStmt
+			| CreateTrigStmt
+			| CreateRoleStmt
 			| CreateUserStmt
-			/* | CreateUserMappingStmt */
+			| CreateUserMappingStmt
 			| CreateWorkloadGroupStmt
 			| CreatedbStmt
 			| DeallocateStmt
-			/* | DeclareCursorStmt */
+			| DeclareCursorStmt
 			| DefineStmt
 			| DeleteStmt
 			| DiscardStmt
-			/* | DoStmt */
+			| DoStmt
 			| DropAppWorkloadGroupMappingStmt
-			/* | DropAssertStmt */
+			| DropAssertStmt
 			| DropCastStmt
 			| DropDataSourceStmt
 			| DropDirectoryStmt
@@ -1111,58 +1084,58 @@ stmt :
 			| DropModelStmt // DB4AI
 			| DropNodeGroupStmt
 			| DropNodeStmt
-			/* | DropOpClassStmt */
+			| DropOpClassStmt
 			| DropOpFamilyStmt
-			/* | DropOwnedStmt */
+			| DropOwnedStmt
 			| DropRlsPolicyStmt
-			/* | DropPLangStmt */
+			| DropPLangStmt
 			| DropResourcePoolStmt
 			| DropRuleStmt
 			| DropStmt
 			| DropSynonymStmt
-			/* | DropTableSpaceStmt */
+			| DropTableSpaceStmt
 			| DropTrigStmt
-			/* | DropRoleStmt */
+			| DropRoleStmt
 			| DropUserStmt
-			/* | DropUserMappingStmt */
+			| DropUserMappingStmt
 			| DropWorkloadGroupStmt
 			| DropdbStmt
 			| ExecuteStmt
 			| ExecDirectStmt
 			| ExplainStmt
-			/* | FetchStmt */
+			| FetchStmt
 			| GrantStmt
-			/* | GrantRoleStmt */
+			| GrantRoleStmt
 			| IndexStmt
 			| InsertStmt
-			/* | ListenStmt */
-			/* | RefreshMatViewStmt */
-			/* | LoadStmt */
+			| ListenStmt
+			| RefreshMatViewStmt
+			| LoadStmt
 			| LockStmt
 			| MergeStmt
-			/* | NotifyStmt */
+			| NotifyStmt
 			| PrepareStmt
 			| PurgeStmt
-			/* | ReassignOwnedStmt */
-			/* | ReindexStmt */
+			| ReassignOwnedStmt
+			| ReindexStmt
 			| RemoveAggrStmt
-			/* | RemoveFuncStmt */
+			| RemoveFuncStmt
 			| RemovePackageStmt
 			| RemoveOperStmt
 			| RenameStmt
 			| RevokeStmt
-			/* | RevokeRoleStmt */
+			| RevokeRoleStmt
 			| RuleStmt
-			/* | SecLabelStmt */
+			| SecLabelStmt
 			| SelectStmt
             | ShutdownStmt
 			| TimeCapsuleStmt
 			| SnapshotStmt
 			| TransactionStmt
 			| TruncateStmt
-			/* | UnlistenStmt */
+			| UnlistenStmt
 			| UpdateStmt
-			/* | VacuumStmt */
+			| VacuumStmt
 			| VariableResetStmt
 			| VariableSetStmt
 			| VariableShowStmt
@@ -1170,74 +1143,6 @@ stmt :
 			| ViewStmt
 			| /*EMPTY*/
 				{ $$ = NULL; }
-
-
-			/* BETA features, not supported by K2PG */
-			| AlterExtensionContentsStmt { parser_k2pg_beta_feature(@1, "extension"); }
-			| AlterExtensionStmt { parser_k2pg_beta_feature(@1, "extension"); }
-			| AnalyzeStmt { parser_k2pg_beta_feature(@1, "analyze"); }
-			| CreateFunctionStmt { parser_k2pg_beta_feature(@1, "function"); }
-			| CreateOpClassStmt { parser_k2pg_beta_feature(@1, "opclass"); }
-			| DoStmt { parser_k2pg_beta_feature(@1, "function"); }
-			| DropOpClassStmt { parser_k2pg_beta_feature(@1, "opclass"); }
-			| RemoveFuncStmt { parser_k2pg_beta_feature(@1, "function"); }
-			| CreateTrigStmt { parser_k2pg_beta_feature(@1, "trigger"); }
-			| CreateExtensionStmt { parser_k2pg_beta_feature(@1, "extension"); }
-			| AlterDefaultPrivilegesStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| AlterGroupStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| AlterOwnerStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| AlterRoleSetStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| AlterRoleStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| CreateGroupStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| CreateRoleStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| DropOwnedStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| DropRoleStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| GrantRoleStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| ReassignOwnedStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| RevokeRoleStmt { parser_k2pg_beta_feature(@1, "roles"); }
-			| VacuumStmt { parser_k2pg_beta_feature(@1, "vacuum"); }
-
-			/* Not supported in template0/template1 statements */
-			| CreateAsStmt { parser_k2pg_not_support_in_templates(@1, "This statement"); }
-			| CreateSeqStmt { parser_k2pg_not_support_in_templates(@1, "This statement"); }
-			| CreateStmt { parser_k2pg_not_support_in_templates(@1, "This statement"); }
-
-			/* Not supported statements */
-			| AlterEnumStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterFdwStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterForeignServerStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterForeignTableStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterFunctionStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterSystemStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterCompositeTypeStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterTSConfigurationStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterTSDictionaryStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| AlterUserMappingStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CheckPointStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| ClosePortalStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| ClusterStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateAssertStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateConversionStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateFdwStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateForeignServerStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateForeignTableStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateMatViewStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreatePLangStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateTableSpaceStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| CreateUserMappingStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| DeclareCursorStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| DropAssertStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| DropPLangStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| DropTableSpaceStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| DropUserMappingStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| FetchStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| ListenStmt { parser_k2pg_warn_ignored(@1, "LISTEN"); }
-			| RefreshMatViewStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| LoadStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| NotifyStmt { parser_k2pg_warn_ignored(@1, "NOTIFY"); }
-			| ReindexStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| SecLabelStmt { parser_k2pg_not_support(@1, "This statement"); }
-			| UnlistenStmt { parser_k2pg_warn_ignored(@1, "UNLISTEN"); }
 		;
 
 /*****************************************************************************
@@ -1411,7 +1316,7 @@ AlterOptRoleElem:
 				{
 					$$ = makeDefElem("parent", (Node *)makeString($3));
 				}
-			| USER GROUP_P DEFAULT
+			| USER GROUP_P DEFAULT	
 				{
 					$$ = makeDefElem("parent_default", NULL);
 				}
@@ -1787,7 +1692,7 @@ AlterSessionStmt:
 /* "alter system" */
 /*****************************************************************************
  *
- * Alter SYSTEM
+ * Alter SYSTEM 
  * (1. kill a session by "select pg_terminate_backend(pid)", so it only needs a SelectStmt node.)
  * (2. disconnect a session. unsupported currently.)
  * (3. set system parameter to, this is used to change configuration parameters persistently.)
@@ -2189,7 +2094,7 @@ set_rest_more:  /* Generic SET syntaxes: */
 var_name:	ColId								{ $$ = $1; }
 			| var_name '.' ColId
 				{
-					int rc = EOK;
+					int rc = EOK;						  
 					int len = strlen($1) + strlen($3) + 2;
 					$$ = (char *)palloc(len);
 					rc = sprintf_s($$, len, "%s.%s", $1, $3);
@@ -3951,7 +3856,7 @@ ClosePortalStmt:
  *****************************************************************************/
 
 CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
-			copy_from copy_file_name copy_delimiter opt_noescaping OptCopyLogError OptCopyRejectLimit opt_with copy_options
+			copy_from copy_file_name copy_delimiter opt_noescaping OptCopyLogError OptCopyRejectLimit opt_with copy_options 
 			opt_processed
 				{
 					CopyStmt *n = makeNode(CopyStmt);
@@ -4302,8 +4207,8 @@ OptCopyColExpr:
  *
  *
  *****************************************************************************/
-
-CreateStreamStmt:
+ 
+CreateStreamStmt: 
         CREATE STREAM qualified_name '(' OptTableElementList ')'
             {
                 CreateForeignTableStmt *n = makeNode(CreateForeignTableStmt);
@@ -4334,7 +4239,7 @@ CreateStreamStmt:
  *
  *****************************************************************************/
 PurgeStmt:
-	PURGE TABLE qualified_name
+	PURGE TABLE qualified_name 
 		{
 			TcapFeatureEnsure();
 			PurgeStmt *n = makeNode(PurgeStmt);
@@ -4382,9 +4287,9 @@ PurgeStmt:
  *          TIMECAPSULE TABLE { table_name } TO BEFORE TRUNCATE [ FORCE ]
  *
  *****************************************************************************/
-
+ 
 TimeCapsuleStmt:
-	TIMECAPSULE TABLE qualified_name TO opt_timecapsule_clause
+	TIMECAPSULE TABLE qualified_name TO opt_timecapsule_clause 
 		{
 			TcapFeatureEnsure();
 			TimeCapsuleStmt *n = makeNode(TimeCapsuleStmt);
@@ -4651,7 +4556,7 @@ hash_partitioning_clause:
 				}
 				if (strcmp($3, "hash") != 0) {
 					ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-						errmsg("unrecognized option \"%s\"", $3)));
+						errmsg("unrecognized option \"%s\"", $3)));	
 				}
 				if (list_length($8) > 64) {
 					ereport(ERROR,
@@ -4805,7 +4710,7 @@ list_partition_item:
 				ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("Un-support feature"),
-						errdetail("The default list's partition is not supported currently.")));
+						errdetail("The default list's partition is not supported currently."))); 
 				ListPartitionDefState *n = makeNode(ListPartitionDefState);
 				n->partitionName = $2;
 				Const *n_default = makeNode(Const);
@@ -4839,7 +4744,7 @@ range_less_than_item:
 				$$ = (Node *)n;
 			}
 		;
-
+		
 range_start_end_list:
 		range_start_end_item
 			{
@@ -4850,7 +4755,7 @@ range_start_end_list:
 				$$ = lappend($1, $3);
 			}
 		;
-
+	
 range_start_end_item:
 		PARTITION name START '(' maxValueList ')'  END_P '(' maxValueList ')' opt_range_every_list OptTableSpace
 			{
@@ -4888,12 +4793,12 @@ range_start_end_item:
 		;
 
 opt_range_every_list:
-		EVERY '(' maxValueList ')'
+		EVERY '(' maxValueList ')' 
 			{
 				$$ = $3;
 			}
 		| /* empty */ { $$ = NIL; }
-
+		
 partition_name:
 		ColId
 			{
@@ -5110,10 +5015,10 @@ ColConstraint:
 					$$ = (Node *) n;
 				}
 			| ENCRYPTED with_algorithm
-				{
+				{ 
 					$$=$2;
 				}
-		;
+		;	
 with_algorithm:
                        WITH '(' algorithm_desc ')'
                        {
@@ -5168,12 +5073,12 @@ CreateKeyStmt:
         | CreateColumnKeyStmt          { $$ = $1; }
         ;
 
-CreateMasterKeyStmt:
+CreateMasterKeyStmt: 
         CREATE CLIENT MASTER KEY setting_name WITH '(' master_key_params ')'
-        {
+        {   
             CreateClientLogicGlobal *n = makeNode(CreateClientLogicGlobal);
             n->global_key_name = $5;
-
+            
             ClientLogicGlobalParam *n1 = makeNode (ClientLogicGlobalParam);
             n1->key = ClientLogicGlobalProperty::CLIENT_GLOBAL_FUNCTION;
             n1->value = "encryption";
@@ -5189,7 +5094,7 @@ master_key_params:
         | master_key_params ',' master_key_elem { $$ = lappend($1, $3); }
         ;
 
-master_key_elem:
+master_key_elem: 
         KEY_STORE '=' ColId
         {
             ClientLogicGlobalParam *n = makeNode (ClientLogicGlobalParam);
@@ -5237,14 +5142,14 @@ column_key_params:
         | column_key_params ',' column_key_elem { $$ = lappend($1, $3); }
         ;
 
-column_key_elem:
-        CLIENT_MASTER_KEY '=' setting_name  {
+column_key_elem: 
+        CLIENT_MASTER_KEY '=' setting_name  {   
             ClientLogicColumnParam *n = makeNode (ClientLogicColumnParam);
             n->key = ClientLogicColumnProperty::CLIENT_GLOBAL_SETTING;
             n->value = NULL;
             n->qualname = $3;
             $$ = (Node*) n;
-        }
+        }  
         | ALGORITHM '=' ColId
         {
             ClientLogicColumnParam *n = makeNode (ClientLogicColumnParam);
@@ -5265,7 +5170,7 @@ column_key_elem:
 
 datatypecl:
 	DATATYPE_CL  '=' client_logic_type','
-	{
+	{   
     	    $$ = $3;
 	}
 	| {$$= NULL;}
@@ -5447,7 +5352,7 @@ ColConstraintElem:
 					ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("REFERENCES constraint is not yet supported.")));
-#endif
+#endif						
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_FOREIGN;
 					n->location = @1;
@@ -5534,15 +5439,15 @@ TableLikeClause:
 					TableLikeClause *n = makeNode(TableLikeClause);
 					n->relation = $2;
 					n->options = $3;
-#ifndef ENABLE_MULTIPLE_NODES
+#ifndef ENABLE_MULTIPLE_NODES					
 					if (IS_SINGLE_NODE && (n->options & CREATE_TABLE_LIKE_DISTRIBUTION))
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("Un-support feature"),
-									errdetail("The distributed capability is not supported currently.")));
+									errmsg("Un-support feature"),                                          
+									errdetail("The distributed capability is not supported currently."))); 
 					}
-#endif
+#endif					
 					$$ = (Node *)n;
 				}
 			| LIKE qualified_name INCLUDING_ALL excluding_option_list
@@ -5550,12 +5455,12 @@ TableLikeClause:
 					TableLikeClause *n = makeNode(TableLikeClause);
 					n->relation = $2;
 					n->options = CREATE_TABLE_LIKE_ALL & ~$4;
-#ifndef ENABLE_MULTIPLE_NODES
-					if (IS_SINGLE_NODE)
+#ifndef ENABLE_MULTIPLE_NODES					
+					if (IS_SINGLE_NODE) 
 					{
 						n->options = n->options & ~CREATE_TABLE_LIKE_DISTRIBUTION;
 					}
-#endif
+#endif					
 					$$ = (Node *)n;
 				}
 		;
@@ -5598,7 +5503,7 @@ TableLikeExcludingOption:
 				| ALL				{ $$ = CREATE_TABLE_LIKE_ALL; }
 		;
 
-opt_internal_data:
+opt_internal_data: 
             INTERNAL DATA_P 	internal_data_body		{$$ = $3;}
 			| /* EMPTY */      	{$$ = NULL;}
 		;
@@ -5760,11 +5665,11 @@ ConstraintElem:
 			| FOREIGN KEY '(' columnList ')' REFERENCES qualified_name
 				opt_column_list key_match key_actions ConstraintAttributeSpec
 				{
-#ifdef 			ENABLE_MULTIPLE_NODES
+#ifdef 			ENABLE_MULTIPLE_NODES				
 					ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("FOREIGN KEY ... REFERENCES constraint is not yet supported.")));
-#endif
+#endif						
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_FOREIGN;
 					n->location = @1;
@@ -5956,15 +5861,15 @@ OptDistributeType: IDENT							{ $$ = $1; }
 OptDistributeByInternal:  DISTRIBUTE BY OptDistributeType '(' name_list ')'
 				{
 					DistributeBy *n = makeNode(DistributeBy);
-#ifndef ENABLE_MULTIPLE_NODES
+#ifndef ENABLE_MULTIPLE_NODES					
 					if (IS_SINGLE_NODE)
 					{
-						ereport(ERROR,
+						ereport(ERROR,          
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("Un-support feature"),
-								errdetail("The distributed capability is not supported currently.")));
+								errdetail("The distributed capability is not supported currently.")));			
 					}
-#endif
+#endif					
 					if (strcmp($3, "modulo") == 0)
 						n->disttype = DISTTYPE_MODULO;
 					else if (strcmp($3, "hash") == 0)
@@ -5990,15 +5895,15 @@ OptDistributeByInternal:  DISTRIBUTE BY OptDistributeType '(' name_list ')'
 			| DISTRIBUTE BY OptDistributeType
 				{
 					DistributeBy *n = makeNode(DistributeBy);
-#ifndef ENABLE_MULTIPLE_NODES
+#ifndef ENABLE_MULTIPLE_NODES					
 					if (IS_SINGLE_NODE)
 					{
-						ereport(ERROR,
+						ereport(ERROR,          
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("Un-support feature"),
-								errdetail("The distributed capability is not supported currently.")));
+								errdetail("The distributed capability is not supported currently.")));			
 					}
-#endif
+#endif					
 					if (strcmp($3, "replication") == 0)
                         n->disttype = DISTTYPE_REPLICATION;
 					else if (strcmp($3, "roundrobin") == 0)
@@ -6026,19 +5931,19 @@ OptDistributeByInternal:  DISTRIBUTE BY OptDistributeType '(' name_list ')'
 distribute_by_list_clause: /* distribute by list ..., or distribute by list ... slice reference base_table */
 			DISTRIBUTE BY LIST '(' name_list ')' OptListDistribution
 				{
-#ifndef ENABLE_MULTIPLE_NODES
+#ifndef ENABLE_MULTIPLE_NODES					
 
-					ereport(ERROR,
+					ereport(ERROR,          
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("Un-support feature"),
-							errdetail("The distributed capability is not supported currently.")));
+							errdetail("The distributed capability is not supported currently.")));			
 
-#endif
+#endif					
 
 					DistributeBy *n = makeNode(DistributeBy);
 					n->disttype = DISTTYPE_LIST;
 					n->colname = $5;
-					n->distState = (DistState *)$7;
+					n->distState = (DistState *)$7; 
 
 					if (list_length(n->colname) > 4)
 					{
@@ -6051,10 +5956,10 @@ distribute_by_list_clause: /* distribute by list ..., or distribute by list ... 
 				}
 		;
 
-OptListDistribution:
+OptListDistribution: 
 		'(' list_dist_state ')'
-			{
-				$$ = $2;
+			{ 
+				$$ = $2; 
 			}
 		| SliceReferenceClause
 			{
@@ -6102,7 +6007,7 @@ list_dist_value:
 				m->location = @1;
 
 				ListSliceDefState *n = makeNode(ListSliceDefState);
-				List *boundary = list_make1((void *)m);
+				List *boundary = list_make1((void *)m); 
 				n->boundaries = list_make1((void *)boundary);
 				n->name = $2;
 				n->datanode_name = $7;
@@ -6113,7 +6018,7 @@ list_dist_value:
 list_distribution_rule_row:  /* ListSliceDefState Struct for LIST distribution syntax */
 		list_distribution_rule_single
 			{
-				$$ = list_make1($1);
+				$$ = list_make1($1); 
 			}
 		| list_distribution_rule_row ',' list_distribution_rule_single
 			{
@@ -6122,7 +6027,7 @@ list_distribution_rule_row:  /* ListSliceDefState Struct for LIST distribution s
 		;
 
 list_distribution_rule_single:
-		'(' expr_list ')'
+		'(' expr_list ')' 
 			{
 				$$ = $2;
 			}
@@ -6137,11 +6042,11 @@ list_distribution_rule_single:
 distribute_by_range_clause:
 		DISTRIBUTE BY RANGE '(' name_list ')'  '(' range_slice_definition_list ')'
 			{
-#ifndef ENABLE_MULTIPLE_NODES
+#ifndef ENABLE_MULTIPLE_NODES					
 					ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("Un-support feature"),
-							errdetail("The distributed capability is not supported currently.")));
+							errdetail("The distributed capability is not supported currently.")));			
 #endif
 				DistributeBy *n = makeNode(DistributeBy);
 				n->disttype = DISTTYPE_RANGE;
@@ -6161,11 +6066,11 @@ distribute_by_range_clause:
 			}
 		| DISTRIBUTE BY RANGE '(' name_list ')' SliceReferenceClause
 			{
-#ifndef ENABLE_MULTIPLE_NODES
+#ifndef ENABLE_MULTIPLE_NODES					
 				ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("Un-support feature"),
-						errdetail("The distributed capability is not supported currently.")));
+						errdetail("The distributed capability is not supported currently.")));			
 #endif
 				DistributeBy *n = makeNode(DistributeBy);
 				n->disttype = DISTTYPE_RANGE;
@@ -7274,7 +7179,7 @@ DropDirectoryStmt: DROP DIRECTORY name
 					$$ = (Node *) n;
 				}
 		 | DROP DIRECTORY IF_P EXISTS name
-                                {
+                                { 
 					DropDirectoryStmt *n = makeNode(DropDirectoryStmt);
 					n->directoryname = $5;
 					n->missing_ok = true;
@@ -7553,7 +7458,7 @@ opt_vals:               WITH VALUES                                            {
 			   ;
 
 weak_password_string_list:  '(' password_string ')'                                 { $$ = list_make1(makeString($2)); }
-                       | weak_password_string_list ',' '(' password_string ')'      { $$ = lappend($1, makeString($4)); }
+                       | weak_password_string_list ',' '(' password_string ')'      { $$ = lappend($1, makeString($4)); } 
                ;
 
 /*****************************************************************************
@@ -7564,13 +7469,13 @@ weak_password_string_list:  '(' password_string ')'                             
  *****************************************************************************/
 
 DropWeakPasswordDictionaryStmt:
-			DROP WEAK PASSWORD DICTIONARY
+			DROP WEAK PASSWORD DICTIONARY 
 				{
 					DropWeakPasswordDictionaryStmt *n = makeNode(DropWeakPasswordDictionaryStmt);
 					$$ = (Node *)n;
 				}
 		;
-
+					
 /*****************************************************************************
  *
  *		QUERY:
@@ -8061,13 +7966,13 @@ ForeignPosition:
 		;
 
 ForeignTableLikeClause:
-			LIKE qualified_name
-				{
+			LIKE qualified_name				
+				{					
 					TableLikeClause *n = makeNode(TableLikeClause);
 					n->relation = $2;
 					$$ = (Node *)n;
 				}
-		;
+		;	
 
 OptForeignTableLogError:
 			LOG_P INTO qualified_name 	{ $$ = (Node*)$3; }
@@ -8270,7 +8175,7 @@ CreateModelStmt:
 
 		// The clause will be constructed in tranform
 		SelectStmt *s = makeNode(SelectStmt);
-		s->fromClause = $8;
+		s->fromClause = $8;	
 
 		n->select_query = (Node*) s;
 		n->hyperparameters  = $9;
@@ -8291,7 +8196,7 @@ features_clause:
 			Node* node = list_length(l) > 0 ? linitial_node(Node, l) : NULL;
 			if (node != NULL && IsA(node, A_Star)){
 				elog(ERROR, "FEATURES clause cannot be *");
-			}
+			}		
 		}
 
 		$$ = result;
@@ -8576,7 +8481,7 @@ DropSynonymStmt:
  *
  *****************************************************************************/
 
-CreateDataSourceStmt: CREATE DATA_P SOURCE_P name opt_data_source_type
+CreateDataSourceStmt: CREATE DATA_P SOURCE_P name opt_data_source_type 
 				opt_data_source_version create_generic_options
 				{
 					CreateDataSourceStmt *n = makeNode(CreateDataSourceStmt);
@@ -10458,8 +10363,8 @@ grantee:	RoleId
 
 
 opt_grant_grant_option:
-			WITH GRANT OPTION
-				{
+			WITH GRANT OPTION 
+				{ 
 					if (isSecurityMode)
 					{
 						/* Do not support this grammar in security mode.*/
@@ -11167,17 +11072,17 @@ pkg_subprogram:	{
 				yyextra->core_yy_extra.in_slash_proc_body = false;
 				yyextra->core_yy_extra.dolqstart = NULL;
 				/*
-				* Add the end location of slash proc to the locationlist for the multi-query
+				* Add the end location of slash proc to the locationlist for the multi-query 
 				* processed.
 				*/
-				yyextra->core_yy_extra.query_string_locationlist =
+				yyextra->core_yy_extra.query_string_locationlist = 
 					lappend_int(yyextra->core_yy_extra.query_string_locationlist, yylloc);
-				$$ = list_concat(list_make1(makeDefElem("decl", (Node *)makeString(pkg_spec_str))),
+				$$ = list_concat(list_make1(makeDefElem("decl", (Node *)makeString(pkg_spec_str))), 
 					     list_make1(makeDefElem("name", (Node *)makeString(pkg_name_str))));
 			}
 			;
 
-
+			
 pkg_body_subprogram: {
                 int proc_b  = 0;
                 int proc_e  = 0;
@@ -11222,7 +11127,7 @@ pkg_body_subprogram: {
                             instantiation_start = yylloc;
                         }
                     }
-
+					
                     if (tok == END_P)
                     {
 						pg_yyget_extra(yyscanner)->core_yy_extra.include_ora_comment = false;
@@ -11275,20 +11180,20 @@ pkg_body_subprogram: {
                             int proc_end_all = proc_e;
                             proc_e = instantiation_start;
                             pkg_body_len = proc_e - proc_b + 1;
-                            pkg_body_str = (char *)palloc0(pkg_body_len + DECLARE_LEN + PACKAGE_LEN + END_LEN + 2);
+                            pkg_body_str = (char *)palloc0(pkg_body_len + DECLARE_LEN + PACKAGE_LEN + END_LEN + 2); 
                             strncpy_s(pkg_body_str, PACKAGE_LEN + 1, PACKAGE_STR, PACKAGE_LEN);
                             strncpy_s(pkg_body_str + PACKAGE_LEN, DECLARE_LEN + 1, DECLARE_STR, DECLARE_LEN);
                             strncpy_s(pkg_body_str + DECLARE_LEN + PACKAGE_LEN, pkg_body_len + 1,
                             yyextra->core_yy_extra.scanbuf + proc_b - 1, pkg_body_len);
                             strncpy_s(pkg_body_str + DECLARE_LEN + PACKAGE_LEN + pkg_body_len, END_LEN + 1,
                             END_STR, END_LEN);
-                            pkg_body_str[pkg_body_len + DECLARE_LEN + PACKAGE_LEN + END_LEN] = '\0';
+                            pkg_body_str[pkg_body_len + DECLARE_LEN + PACKAGE_LEN + END_LEN] = '\0'; 
                             proc_b = proc_end_all;
                             proc_e = yylloc;
-                            if (proc_e == 0)
+                            if (proc_e == 0) 
                                 parser_yyerror("variable declare in package spec is not ended correctly");
-                            pkg_name_len = proc_e - proc_b + 1 ;
-                            pkg_name_str = (char *)palloc0(pkg_name_len + 1);
+                            pkg_name_len = proc_e - proc_b + 1 ; 
+                            pkg_name_str = (char *)palloc0(pkg_name_len + 1); 
                             strncpy_s(pkg_name_str, pkg_name_len + 1,
                             yyextra->core_yy_extra.scanbuf + proc_b - 1, pkg_name_len);
                             pkg_name_str[pkg_name_len] = '\0';
@@ -11298,9 +11203,9 @@ pkg_body_subprogram: {
                             truncate_identifier(pkg_name_str, strlen(pkg_name_str), false);
                             instantiation_end = pre_tok_loc;
                             int pkg_instantiation_len = instantiation_end - instantiation_start;
-                            instantiation_str = (char *)palloc0(INSTANTIATION_LEN + pkg_instantiation_len + END_LEN + 2);
+                            instantiation_str = (char *)palloc0(INSTANTIATION_LEN + pkg_instantiation_len + END_LEN + 2); 
                             strncpy_s(instantiation_str, INSTANTIATION_LEN + 1, INSTANTIATION_STR, INSTANTIATION_LEN);
-                            strncpy_s(instantiation_str +  INSTANTIATION_LEN, pkg_instantiation_len + 1,
+                            strncpy_s(instantiation_str +  INSTANTIATION_LEN, pkg_instantiation_len + 1,  
                                 yyextra->core_yy_extra.scanbuf + instantiation_start - 1, pkg_instantiation_len);
                             strncpy_s(instantiation_str  + INSTANTIATION_LEN + pkg_instantiation_len, END_LEN + 1 , END_STR, END_LEN);
                             instantiation_str[INSTANTIATION_LEN + pkg_instantiation_len + END_LEN] = '\0';
@@ -11322,13 +11227,13 @@ pkg_body_subprogram: {
                 yyextra->core_yy_extra.in_slash_proc_body = false;
                 yyextra->core_yy_extra.dolqstart = NULL;
                 /*
-                * Add the end location of slash proc to the locationlist for the multi-query
+                * Add the end location of slash proc to the locationlist for the multi-query 
                 * processed.
                 */
-                yyextra->core_yy_extra.query_string_locationlist =
+                yyextra->core_yy_extra.query_string_locationlist = 
                     lappend_int(yyextra->core_yy_extra.query_string_locationlist, yylloc);
-
-                result_list = list_concat(list_make1(makeDefElem("decl", (Node *)makeString(pkg_body_str))),
+            
+                result_list = list_concat(list_make1(makeDefElem("decl", (Node *)makeString(pkg_body_str))), 
                          list_make1(makeDefElem("name", (Node *)makeString(pkg_name_str))));
                 if (instantiation_start != 0)  {
                     result_list = list_concat(result_list,list_make1(makeDefElem(("init"), (Node *)makeString(instantiation_str))));
@@ -11384,10 +11289,10 @@ CreatePackageBodyStmt:
 					}
 					n->pkgbody = strVal(def->arg);
                     def = (DefElem *)lthird($8);
-                    if (strcmp(def->defname,"init") != 0)
-                    {
+                    if (strcmp(def->defname,"init") != 0) 
+                    {     
                         parser_yyerror("internal grammer error!");
-                    }
+                    } 
                     if (def->arg) {
                         n->pkginit = strVal(def->arg);
                     } else {
@@ -11843,10 +11748,10 @@ subprogram_body: 	{
 				yyextra->core_yy_extra.dolqstart = NULL;
 
 				/*
-				 * Add the end location of slash proc to the locationlist for the multi-query
+				 * Add the end location of slash proc to the locationlist for the multi-query 
 				 * processed.
 				 */
-				yyextra->core_yy_extra.query_string_locationlist =
+				yyextra->core_yy_extra.query_string_locationlist = 
 					lappend_int(yyextra->core_yy_extra.query_string_locationlist, yylloc);
 
 				funSrc = (FunctionSources*)palloc0(sizeof(FunctionSources));
@@ -11893,7 +11798,7 @@ table_func_column_list:
  *****************************************************************************/
 
  RemovePackageStmt:
-				DROP PACKAGE pkg_name
+				DROP PACKAGE pkg_name 
 				{
 					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_PACKAGE;
@@ -11917,7 +11822,7 @@ table_func_column_list:
 					n->isProcedure = false;
 					$$ = (Node *)n;
 				}
-				| DROP PACKAGE BODY_P pkg_name
+				| DROP PACKAGE BODY_P pkg_name 
 				{
 					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_PACKAGE_BODY;
@@ -12016,24 +11921,24 @@ RemoveFuncStmt:
                     n->removeType = OBJECT_FUNCTION;
                     n->objects = list_make1($3);
                     n->arguments = list_make1(extractArgTypes($4));
-                    n->behavior = $5;
+                    n->behavior = $5; 
                     n->missing_ok = false;
                     n->concurrent = false;
                     n->isProcedure = true;
                     $$ = (Node *)n;
-                }
+                }     
             | DROP PROCEDURE IF_P EXISTS func_name func_args opt_drop_behavior
                 {
                     DropStmt *n = makeNode(DropStmt);
                     n->removeType = OBJECT_FUNCTION;
                     n->objects = list_make1($5);
                     n->arguments = list_make1(extractArgTypes($6));
-                    n->behavior = $7;
-                    n->missing_ok = true;
+                    n->behavior = $7; 
+                    n->missing_ok = true; 
                     n->concurrent = false;
                     n->isProcedure = true;
                     $$ = (Node *)n;
-                }
+                } 
 			| DROP PROCEDURE func_name_opt_arg
 				{
 					DropStmt *n = makeNode(DropStmt);
@@ -13414,7 +13319,7 @@ event:		SELECT									{ $$ = CMD_SELECT; }
 			| DELETE_P								{ $$ = CMD_DELETE; }
 			| INSERT								{ $$ = CMD_INSERT; }
 			| COPY									{ $$ = CMD_UTILITY; }
-			| ALTER									{ $$ = CMD_UTILITY; }
+			| ALTER									{ $$ = CMD_UTILITY; }                           
 		 ;
 
 opt_instead:
@@ -13664,7 +13569,7 @@ transaction_mode_list_or_empty:
  *
  *	CONTVIEW:
  *		CREATE [ OR REPLACE ] CONTVIEW <contquery_name> [WITH ([,...])]
- *			AS <query>
+ *			AS <query> 
  *
  *****************************************************************************/
 
@@ -14682,22 +14587,22 @@ pgxcgroup_parent:
 			| /*EMPTY*/ 				{ $$ = NULL;}
 		;
 
-opt_vcgroup:
+opt_vcgroup: 
             		VCGROUP			{$$ = TRUE;}
 			| /* EMPTY */		{$$ = FALSE;}
 		;
 
-opt_to_elastic_group:
+opt_to_elastic_group: 
             TO ELASTIC GROUP_P	{$$ = TRUE;}
 			| /* EMPTY */		{$$ = FALSE;}
 		;
 
-opt_redistributed:
+opt_redistributed: 
 			DISTRIBUTE FROM  ColId  {$$ = $3;}
 			| /* EMPTY */      	{$$ = NULL;}
 		;
 
-opt_set_vcgroup:
+opt_set_vcgroup: 
             		SET VCGROUP		{$$ = AG_SET_VCGROUP;}
             		| SET NOT VCGROUP	{$$ = AG_SET_NOT_VCGROUP;}
 			| /* EMPTY */		{$$ = AG_SET_RENAME;}
@@ -14740,10 +14645,10 @@ AlterCoordinatorStmt: ALTER COORDINATOR pgxcnode_name SET opt_boolean_or_string 
 					n->node_name = $3;
 					n->set_value = $5;
 					n->coor_nodes = $7;
-					$$ = (Node *)n;
+					$$ = (Node *)n;	
 				}
 		;
-
+	
 
 /*****************************************************************************
  *
@@ -15083,7 +14988,7 @@ policy_filter_opt:
 policy_filter_value:
         filter_expr     { $$ = $1; }
         | filter_set    { $$ = $1; }
-        ;
+        ; 
 
 filter_set:
         filter_paren                { $$ = $1; }
@@ -15091,7 +14996,7 @@ filter_set:
         | filter_expr_list          { $$ = $1; }
         ;
 
-filter_expr_list:
+filter_expr_list: 
         filter_expr ',' filter_expr
             {
                 PolicyFilterNode *n = makeNode(PolicyFilterNode);
@@ -15164,7 +15069,7 @@ AlterAuditPolicyStmt:
                     n->policy_comments = $5;
                     $$ = (Node *) n;
                 }
-        |
+        |        
         ALTER AUDIT POLICY IF_P EXISTS policy_name policy_comments_alter_clause
                 {
                     AlterAuditPolicyStmt *n = makeNode(AlterAuditPolicyStmt);
@@ -15174,7 +15079,7 @@ AlterAuditPolicyStmt:
                     n->policy_comments = $7;
                     $$ = (Node *) n;
                 }
-        |
+        |        
         /* alter add/remove privilege */
         ALTER AUDIT POLICY policy_name alter_policy_action_clause alter_policy_privileges_list
                 {
@@ -15291,7 +15196,7 @@ alter_policy_access_list:
 alter_policy_privileges_list:
         PRIVILEGES '(' policy_privileges_list ')' {$$ = $3;}
         ;
-
+        
 alter_policy_filter_list:
         FILTER ON policy_filter_value
         {
@@ -15300,19 +15205,19 @@ alter_policy_filter_list:
 
 alter_policy_action_clause:
         ADD_P   { $$ = "add";  }
-        | REMOVE  { $$ = "remove"; }
+        | REMOVE  { $$ = "remove"; } 
         ;
 
 policy_status_alter_clause:
-        ENABLE_P        { $$ = makeDefElem("status", (Node *)makeString("enable")); }
+        ENABLE_P        { $$ = makeDefElem("status", (Node *)makeString("enable")); } 
         | DISABLE_P     { $$ = makeDefElem("status", (Node *)makeString("disable")); }
         ;
 
 policy_comments_alter_clause:
         COMMENTS Sconst   { $$ = $2; }
         ;
-
-
+    
+    
 
 /*****************************************************************************
  *
@@ -15364,7 +15269,7 @@ CreateMaskingPolicyStmt:
         ;
 
 masking_clause:
-        masking_clause_elem
+        masking_clause_elem 
             {
                 $$ = list_make1($1);
             }
@@ -15400,11 +15305,11 @@ masking_func_params_opt:
 
 masking_func_params_list:
         masking_func_param
-            {
+            { 
                  $$ = list_make1($1);
             }
         | masking_func_params_list ',' masking_func_param
-            {
+            { 
                 $$ = lappend($1, $3);
             }
         ;
@@ -15442,9 +15347,9 @@ alter_policy_condition:
                 n->arg = $5;
                 $$ = (Node *) n;
             }
-
+            
 policy_condition_opt:
-
+	
 		    CONDITION '(' policy_label_item masking_policy_condition_operator masking_policy_condition_value ')'
             {
                 MaskingPolicyCondition *n = makeNode(MaskingPolicyCondition);
@@ -15454,7 +15359,7 @@ policy_condition_opt:
                 $$ = (Node *) n;
             }
 			;
-
+	
         | /* EMPTY */
         {
             $$ = NULL;
@@ -15471,11 +15376,11 @@ masking_policy_condition_operator:
 
 masking_policy_condition_value:
 		opt_boolean_or_string
-			{
+			{ 
 				$$ = makeStringConst($1, @1);
 			}
 		| NumericOnly
-			{
+			{ 
 				$$ = makeAConst($1, @1);
 			}
 		| CURRENT_USER
@@ -15570,7 +15475,7 @@ AlterMaskingPolicyStmt:
                 $$ = (Node *) n;
             }
 		|
-
+		
         /* alter modify/add/remove policy actions */
         ALTER MASKING POLICY policy_name alter_masking_policy_action_clause alter_masking_policy_func_items_list
         {
@@ -15644,7 +15549,7 @@ alter_masking_policy_func_items_list:
         ;
 
 alter_masking_policy_func_item:
-         masking_clause_elem
+         masking_clause_elem 
         	{
                 $$ = $1;
             }
@@ -15654,7 +15559,7 @@ alter_masking_policy_func_item:
  *
  *     QUERY:
  *
- *     DROP MASKING POLICY policy_name
+ *     DROP MASKING POLICY policy_name 
  *
  *****************************************************************************/
 DropMaskingPolicyStmt:
@@ -15678,7 +15583,7 @@ DropMaskingPolicyStmt:
  *
  *     QUERY:
  *
- *     CREATE RESOURCE LABEL label_name
+ *     CREATE RESOURCE LABEL label_name 
  *
  *****************************************************************************/
 CreatePolicyLabelStmt:
@@ -15686,7 +15591,7 @@ CreatePolicyLabelStmt:
                 {
                     CreatePolicyLabelStmt *n = makeNode(CreatePolicyLabelStmt);
                     n->label_type = "resource";
-                    n->if_not_exists = false;
+                    n->if_not_exists = false; 
                     IsValidIdent($4);
                     n->label_name = $4;
                     n->label_items = $5;
@@ -15753,7 +15658,7 @@ filters_to_label_list_item:
         policy_label_filter_type  '(' policy_label_items ')' { $$ = makeDefElem($1, (Node *)$3); }
         ;
 
-policy_label_filter_type:
+policy_label_filter_type: 
           IP            { $$ = "ip"; }
         | APP           { $$ = "app"; }
         | ROLES         { $$ = "roles"; }
@@ -16161,11 +16066,11 @@ explain_option_arg:
  *
  *****************************************************************************/
 
-ExecDirectStmt:
+ExecDirectStmt: 
 		EXECUTE DIRECT ON pgxcnodes DirectStmt
 			{
 				ExecDirectStmt *n = makeNode(ExecDirectStmt);
-
+			
 				n->node_names = $4;
 				n->exec_option = EXEC_DIRECT_ON_LIST;
 				n->query = $5;
@@ -16176,7 +16081,7 @@ ExecDirectStmt:
 		| EXECUTE DIRECT ON COORDINATORS DirectStmt
 			{
 				ExecDirectStmt *n = makeNode(ExecDirectStmt);
-
+				
 				n->exec_option = EXEC_DIRECT_ON_ALL_CN;
 				n->query = $5;
 				n->location = @5;
@@ -16186,7 +16091,7 @@ ExecDirectStmt:
 		| EXECUTE DIRECT ON DATANODES DirectStmt
 			{
 				ExecDirectStmt *n = makeNode(ExecDirectStmt);
-
+			
 				n->exec_option = EXEC_DIRECT_ON_ALL_DN;
 				n->query = $5;
 				n->location = @5;
@@ -16196,7 +16101,7 @@ ExecDirectStmt:
 		| EXECUTE DIRECT ON ALL DirectStmt
 			{
 				ExecDirectStmt *n = makeNode(ExecDirectStmt);
-
+				
 				n->exec_option = EXEC_DIRECT_ON_ALL_NODES;
 				n->query = $5;
 				n->location = @5;
@@ -16403,9 +16308,9 @@ InsertStmt: opt_with_clause INSERT hint_string INTO qualified_name insert_rest r
 					}
 
 					if (u_sess->attr.attr_sql.enable_upsert_to_merge
-#ifdef ENABLE_MULTIPLE_NODES
+#ifdef ENABLE_MULTIPLE_NODES					
 					    ||t_thrd.proc->workingVersionNum < UPSERT_ROW_STORE_VERSION_NUM
-#endif
+#endif						
 					    ) {
 
 						if ($6 != NULL && $6->cols != NIL) {
@@ -16432,7 +16337,7 @@ InsertStmt: opt_with_clause INSERT hint_string INTO qualified_name insert_rest r
 						$6->relation = $5;
 						$6->returningList = $8;
 						$6->withClause = $1;
-#ifdef ENABLE_MULTIPLE_NODES
+#ifdef ENABLE_MULTIPLE_NODES						
 						if (t_thrd.proc->workingVersionNum >= UPSERT_ROW_STORE_VERSION_NUM) {
 							UpsertClause *uc = makeNode(UpsertClause);
 							if ($7 == NULL)
@@ -16441,7 +16346,7 @@ InsertStmt: opt_with_clause INSERT hint_string INTO qualified_name insert_rest r
 								uc->targetList = ((MergeWhenClause *)$7)->targetList;
 							$6->upsertClause = uc;
 						}
-#endif
+#endif						
 						m->insert_stmt = (Node *)copyObject($6);
 
 						/* fill a MERGE statement*/
@@ -16531,9 +16436,9 @@ upsert_clause:
 			ON DUPLICATE KEY UPDATE set_clause_list
 				{
 					if (u_sess->attr.attr_sql.enable_upsert_to_merge
-#ifdef ENABLE_MULTIPLE_NODES
+#ifdef ENABLE_MULTIPLE_NODES					
 					    || t_thrd.proc->workingVersionNum < UPSERT_ROW_STORE_VERSION_NUM
-#endif
+#endif					    
 						) {
 						MergeWhenClause *n = makeNode(MergeWhenClause);
 						n->matched = true;
@@ -16593,7 +16498,7 @@ DeleteStmt: opt_with_clause DELETE_P hint_string FROM relation_expr_opt_alias
 					n->limitClause = (Node*)list_nth($8, 1);
 					n->returningList = $9;
 					n->withClause = $1;
-					n->hintState = create_hintstate($3);
+					n->hintState = create_hintstate($3);					
 					$$ = (Node *)n;
 				}
 		| opt_with_clause DELETE_P hint_string relation_expr_opt_alias
@@ -16606,7 +16511,7 @@ DeleteStmt: opt_with_clause DELETE_P hint_string FROM relation_expr_opt_alias
 					n->limitClause = (Node*)list_nth($7, 1);
 					n->returningList = $8;
 					n->withClause = $1;
-					n->hintState = create_hintstate($3);
+					n->hintState = create_hintstate($3);				
 					$$ = (Node *)n;
 				}
 		;
@@ -17151,7 +17056,7 @@ hint_string:
 				$$ = $1;
 			}
 		|
-			{
+			{ 
 				$$ = NULL;
 			}
 		;
@@ -19198,9 +19103,9 @@ a_expr:		c_expr									{ $$ = $1; }
 					PredictByFunction * n = makeNode(PredictByFunction);
 					n->model_name = $3;
 					n->model_name_location = @3;
-					n->model_args = $6;
+					n->model_args = $6;	
 					n->model_args_location = @6;
-					$$ = (Node*) n;
+					$$ = (Node*) n;				
 				}
 		;
 
@@ -19572,12 +19477,12 @@ func_expr:	func_application within_group_clause over_clause
 							}
 						}
 						n->agg_order = $2;
-
+						
 						WindowDef *wd = (WindowDef*) $3;
 						if (wd != NULL)
-							wd->frameOptions = FRAMEOPTION_NONDEFAULT | FRAMEOPTION_ROWS |
+							wd->frameOptions = FRAMEOPTION_NONDEFAULT | FRAMEOPTION_ROWS | 
 												FRAMEOPTION_START_UNBOUNDED_PRECEDING |
-												(FRAMEOPTION_START_UNBOUNDED_FOLLOWING << 1) |
+												(FRAMEOPTION_START_UNBOUNDED_FOLLOWING << 1) | 
 												FRAMEOPTION_BETWEEN;
 						n->over = wd;
 					}
@@ -19761,7 +19666,7 @@ func_expr_common_subexpr:
 					/*
 					 * Translate as "text_date('now'::text)".
 					 *
-					 * Notice that we cannot use 'now'::text::date because when
+					 * Notice that we cannot use 'now'::text::date because when 
 					 * we go FQS plan, it will deparsed as 'now'::text::date which is
 					 * equal to 'now'::text::timestamp under A_FORMAT.
 					 *
@@ -19911,7 +19816,7 @@ func_expr_common_subexpr:
 					n->call_func = false;
 					$$ = (Node *)n;
 				}
-			| ROWNUM
+			| ROWNUM 
 				{
 #ifdef ENABLE_MULTIPLE_NODES
     					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -19920,7 +19825,7 @@ func_expr_common_subexpr:
 					Rownum *r = makeNode(Rownum);
 				    	r->location = @1;
 					$$ = (Node *)r;
-				}
+				}			
 			| CURRENT_ROLE
 				{
 					FuncCall *n = makeNode(FuncCall);
@@ -21539,7 +21444,7 @@ unreserved_keyword:
 			| EACH
 			| ENABLE_P
 			| ENCODING
-			| ENCRYPTED
+			| ENCRYPTED       
             | ENCRYPTED_VALUE
 			| ENCRYPTION
             | ENCRYPTION_TYPE
@@ -21813,7 +21718,7 @@ unreserved_keyword:
 			| TRUSTED
 			| TSFIELD
 			| TSTAG
-			| TSTIME
+			| TSTIME 
 			| TYPE_P
 			| TYPES_P
 			| UNBOUNDED
@@ -22864,98 +22769,6 @@ parser_init(base_yy_extra_type *yyext)
 	yyext->core_yy_extra.paren_depth = 0;
 }
 
-static void
-raise_feature_not_supported_signal(int pos, core_yyscan_t yyscanner, const char *msg, int issue, int signal_level)
-{
-	if (issue > 0)
-	{
-		ereport(signal_level,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("%s", msg),
-				 errhint("See https://github.com/futurewei-cloud/chogori-sql/issues/%d. "
-						 "Click '+' on the description to raise its priority", issue),
-				 parser_errposition(pos)));
-
-	}
-	else
-	{
-		ereport(signal_level,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("%s", msg),
-				 errhint("%s", ""),
-				 parser_errposition(pos)));
-	}
-}
-
-static void
-raise_feature_not_supported(int pos, core_yyscan_t yyscanner, const char *msg, int issue)
-{
-	raise_feature_not_supported_signal(pos, yyscanner, msg, issue, K2PgUnsupportedFeatureSignalLevel());
-}
-
-static void
-k2pg_not_support_signal(int pos, core_yyscan_t yyscanner, const char *msg, int issue, int signal_level)
-{
-	static int use_k2pg_parser = -1;
-	if (use_k2pg_parser == -1)
-	{
-		use_k2pg_parser = IsUsingK2PGParser();
-	}
-
-	if (use_k2pg_parser)
-	{
-		raise_feature_not_supported_signal(pos, yyscanner, msg, issue, signal_level);
-	}
-}
-
-static void
-k2pg_not_support(int pos, core_yyscan_t yyscanner, const char *msg, int issue)
-{
-	k2pg_not_support_signal(pos, yyscanner, msg, issue, K2PgUnsupportedFeatureSignalLevel());
-}
-
-static void
-k2pg_not_support_in_templates(int pos, core_yyscan_t yyscanner, const char *msg)
-{
-	static int restricted = -1;
-	if (restricted == -1)
-	{
-		restricted = IsUsingK2PGParser() && K2PgIsPreparingTemplates();
-	}
-
-	if (restricted)
-	{
-		raise_feature_not_supported(pos, yyscanner, msg, -1);
-	}
-}
-
-static bool
-beta_features_enabled()
-{
-	static int beta_enabled = -1;
-	if (beta_enabled == -1)
-	{
-		beta_enabled = K2PgIsEnvVarTrueWithDefault("FLAGS_psql_beta_features", true);
-	}
-	return beta_enabled;
-}
-
-static void
-check_beta_feature(int pos, core_yyscan_t yyscanner, const char *flag, const char *feature)
-{
-	if (IsUsingK2PGParser() && !(beta_features_enabled() || K2PgIsEnvVarTrue(flag)))
-	{
-		int signal_level = K2PgUnsupportedFeatureSignalLevel();
-		ereport(signal_level,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("'%s' is a beta feature and beta features are disabled.", feature),
-				 errhint("To enable beta features, set the 'psql_beta_features' yb-tserver gflag to 'true'."),
-				 parser_errposition(pos)));
-	}
-}
-
-
-
 static Expr *
 makeNodeDecodeCondtion(Expr* firstCond,Expr* secondCond)
 {
@@ -23231,8 +23044,8 @@ get_arg_mode_by_name(const char *argname, const char * const *argnames,
 	}
 
 	if (unlikely(argname == NULL)) {
-		ereport(ERROR,
-			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+		ereport(ERROR, 
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE), 
 			errmsg("argname should not be null")));
 	}
 
@@ -23576,7 +23389,7 @@ IsValidGroupname(const char *input)
 			ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				errmsg("node group name is not allowed to contain multibyte characters")));
-		}
+		}	
 	}
 	return true;
 }
@@ -23805,7 +23618,7 @@ static char *ParseFunctionArgSrc(core_yyscan_t yyscanner)
 
 static void parameter_check_execute_direct(const char* query)
 {
-#ifndef ENABLE_MULTIPLE_NODES
+#ifndef ENABLE_MULTIPLE_NODES					
     if (IS_SINGLE_NODE) {
 		ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
