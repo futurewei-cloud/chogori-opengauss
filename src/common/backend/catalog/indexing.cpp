@@ -16,6 +16,7 @@
 #include "postgres.h"
 #include "knl/knl_variable.h"
 
+#include "access/k2/k2pg_aux.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "executor/executor.h"
@@ -144,10 +145,11 @@ void CatalogIndexInsert(CatalogIndexState indstate, HeapTuple heapTuple)
         /*
          * The index AM does the rest.
          */
+        ItemPointer t_self = IsK2PgRelation(relationDescs[i]) ? (ItemPointer)(heapTuple->t_k2pgctid) : &(heapTuple->t_self);
         (void)index_insert(relationDescs[i], /* index relation */
             values,                    /* array of index Datums */
             isnull,                    /* is-null flags */
-            &(heapTuple->t_self),      /* tid of heap tuple */
+            t_self,      /* tid of heap tuple */
             heapRelation,
             relationDescs[i]->rd_index->indisunique ? UNIQUE_CHECK_YES : UNIQUE_CHECK_NO);
     }
