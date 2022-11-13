@@ -220,6 +220,9 @@ bool errstart(int elevel, const char* filename, int lineno, const char* funcname
         return false;
 #endif
 
+    if (elevel >= WARNING) {
+        printf("errstart level: %d, %s %d %s\n", elevel, filename, lineno, funcname);
+    }
     /*
      * Check some cases in which we want to promote an error into a more
      * severe error.  None of this logic applies for non-error messages.
@@ -536,7 +539,7 @@ void errfinish(int dummy, ...)
     }
 #endif
 
-    /* 
+    /*
      * Make sure reset create schema flag if error happen,
      * even in pg_try_catch case and procedure exception case.
      * Top transaction memcxt will release the memory, just set NULL.
@@ -2955,7 +2958,7 @@ static void send_message_to_server_log(ErrorData* edata)
             if (mask_string != NULL) {
                 truncate_identified_by(mask_string, strlen(mask_string));
             } else {
-                mask_string = mask_error_password(t_thrd.postgres_cxt.debug_query_string, 
+                mask_string = mask_error_password(t_thrd.postgres_cxt.debug_query_string,
                     strlen(t_thrd.postgres_cxt.debug_query_string));
             }
         }
@@ -3420,8 +3423,8 @@ static void send_message_to_frontend(ErrorData* edata)
      * If u_sess->utils_cxt.qunit_case_number != 0, it(CN/DN) serves as a QUNIT backend thread, and it(CN/DN)
      * needs to send all ERROR messages to the client(gsql).
      */
-    if ((IsConnFromCoord() || StreamThreadAmI() || 
-        (t_thrd.proc_cxt.MyProgName != NULL && strcmp(t_thrd.proc_cxt.MyProgName, "BackgroundWorker") == 0)) && 
+    if ((IsConnFromCoord() || StreamThreadAmI() ||
+        (t_thrd.proc_cxt.MyProgName != NULL && strcmp(t_thrd.proc_cxt.MyProgName, "BackgroundWorker") == 0)) &&
         edata->elevel < ERROR && !edata->handle_in_client
 
 #ifdef ENABLE_QUNIT
@@ -4030,7 +4033,7 @@ static char* mask_error_password(const char* query_string, int str_len)
     pfree_ext(tmp_string);
 
     return mask_string;
-} 
+}
 
 static char* mask_execute_direct_cmd(const char* query_string)
 {
@@ -4057,7 +4060,7 @@ static char* mask_execute_direct_cmd(const char* query_string)
     }
     /* Parsing execute direct on detail content */
     parse_query = (char*)palloc0(query_len - position);
-    rc = memcpy_s(parse_query, (query_len - position), 
+    rc = memcpy_s(parse_query, (query_len - position),
                 (query_string + position), (query_len - position - delete_position));
     securec_check(rc, "\0", "\0");
     rc = strcat_s(parse_query, (query_len - position), ";\0");
@@ -4068,7 +4071,7 @@ static char* mask_execute_direct_cmd(const char* query_string)
     tmp_string = (char*)palloc0(mask_len + 1 + position + 1);
     rc = memcpy_s(tmp_string, (mask_len + 1 + position + 1), exe_direct, exe_len);
     securec_check(rc, "\0", "\0");
-    rc = memcpy_s((tmp_string + exe_len), (mask_len + 1 + position + 1), 
+    rc = memcpy_s((tmp_string + exe_len), (mask_len + 1 + position + 1),
                 (query_string + exe_len), (position - exe_len));
     securec_check(rc, "\0", "\0");
     rc = memcpy_s((tmp_string + position), (mask_len + 1 + position + 1), mask_query, (mask_len - 1));
@@ -4076,7 +4079,7 @@ static char* mask_execute_direct_cmd(const char* query_string)
     rc = strcat_s(tmp_string, (mask_len + 1 + position + 1), "';\0");
     securec_check(rc, "\0", "\0");
     mask_string = MemoryContextStrdup(SESS_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_SECURITY), tmp_string);
-    
+
     pfree_ext(parse_query);
     pfree_ext(tmp_string);
     return mask_string;
@@ -4317,11 +4320,11 @@ static char* mask_Password_internal(const char* query_string)
                     }
                     int maskLen = u_sess->attr.attr_security.Password_min_length;
                     for (i = 0; i < idx; ++i) {
-                        /* 
-                         *  while masking password, if password is't quoted by \' or \", 
-                         *  the len of password may be shorter than actual, 
+                        /*
+                         *  while masking password, if password is't quoted by \' or \",
+                         *  the len of password may be shorter than actual,
                          *  we need to find the start position of password word by looking forward.
-                         */ 
+                         */
                         char wordHead = position[i] > 0 ? query_string[position[i] - 1] : '\0';
                         if (isPassword && wordHead != '\0' && wordHead != '\'' && wordHead != '\"') {
                             while (position[i] > 0 && !isspace(wordHead) && wordHead != '\'' && wordHead != '\"') {
@@ -4534,7 +4537,7 @@ static char* mask_Password_internal(const char* query_string)
                                 mask_string = MemoryContextStrdup(
                                     SESS_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_SECURITY), query_string);
                             }
-                            
+
                             if (yylloc > position_crypt) {
                                 int len_mask_string = strlen(mask_string);
                                 rc = memset_s(mask_string + position_crypt,
@@ -4542,7 +4545,7 @@ static char* mask_Password_internal(const char* query_string)
                                     '*',
                                     yylloc - position_crypt);
                                 securec_check(rc, "\0", "\0");
-                                if ((mask_string[yylloc + 1] == ';') || 
+                                if ((mask_string[yylloc + 1] == ';') ||
                                     (mask_string[yylloc + 1] == '\0')) {
                                     const int maskLen = 8; /* for funCrypt, we will mask all contents in () with 8 '*' */
                                     if (yylloc - position_crypt > maskLen) {
@@ -4563,7 +4566,7 @@ static char* mask_Password_internal(const char* query_string)
                         }
                         break;
                     }
-                    
+
                     if (curStmtType == 8) {
                         if (NULL == mask_string) {
                             mask_string = MemoryContextStrdup(

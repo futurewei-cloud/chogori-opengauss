@@ -1718,3 +1718,4 @@ void PrintGMemContextLeakWarning(MemoryContext memcontext)
     char *name = memcontext->name;
     ereport(WARNING, (errmsg("global memory context: %s leak", name)));
 }
+
