@@ -240,31 +240,36 @@ FetchUniqueConstraintName(Oid relation_id, char* dest, size_t max_size)
 	RelationClose(rel);
 }
 
-void
-K2PgInitPostgresBackend(
-	const char *program_name,
-	const char *db_name,
-	const char *user_name)
+void K2PgInitPostgresBackend(const char *program_name)
 {
-	HandleK2PgStatus(K2PgInit(program_name, (K2PgPAllocFn)palloc, (K2PgCStringToTextWithLenFn)cstring_to_text_with_len));
-
+	if (K2PgIsEnabledInPostgresEnvVar() && !g_instance.k2_cxt.isK2ModelEnabled) {
+		g_instance.k2_cxt.isK2ModelEnabled = true;
+	}
 	/*
-	 * Enable "K2PG mode" for PostgreSQL so that we will initiate a connection
-	 * to the K2 platform cluster right away from every backend process. We only
-
-	 * do this if this env variable is set, so we can still run the regular
-	 * PostgreSQL "make check".
+	 * Enable "K2PG mode" for PostgreSQL globally, the session will be initialized by each individual thread
 	 */
-	if (K2PgIsEnabledInPostgresEnvVar())
-	{
-		PgGate_InitPgGate();
+	if (g_instance.k2_cxt.isK2ModelEnabled) {
+		elog(INFO, "Initializing K2PG backend for %s", program_name);
+	    HandleK2PgStatus(K2PgInit(program_name, (K2PgPAllocFn)palloc, (K2PgCStringToTextWithLenFn)cstring_to_text_with_len));
+        PgGate_InitPgGate();
+	}
+}
 
-		/*
-		 * For each process, we create one K2PG session for PostgreSQL to use
-		 * when accessing K2PG storage.
-		 *
-		 */
-        HandleK2PgStatus(PgGate_InitSession(db_name ? db_name : user_name));
+void K2PgInitSession(const char *db_name) {
+	/*
+	 * For each process, we create one K2PG session for PostgreSQL to use
+	 * when accessing K2PG storage.
+	 *
+	*/
+	if (IsK2PgEnabled()) {
+		if (db_name != NULL) {
+			elog(INFO, "Initialize K2PG session for database: %s", db_name);
+    		HandleK2PgStatus(PgGate_InitSession(db_name));
+		} else {
+			elog(INFO, "database name is null when Initialize K2PG session, skipping...");
+		}
+	} else {
+		ereport(ERROR, (errmsg("K2PG backend has not been initialized for database: %s", db_name)));
 	}
 }
 

@@ -123,6 +123,7 @@
 #include "common/config/cm_config.h"
 #include "catalog/pg_namespace.h"
 #include "storage/lmgr.h"
+#include "access/k2/k2pg_aux.h"
 
 /* struct to keep tuples stat that fetchs from DataNode */
 typedef struct avw_info {
@@ -268,6 +269,7 @@ NON_EXEC_STATIC void AutoVacLauncherMain()
     InitProcess();
 #endif
 
+    K2PgInitPostgresBackend("AutoVacLauncherMain");
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser(NULL, InvalidOid, NULL);
     t_thrd.proc_cxt.PostInit->InitAutoVacLauncher();
 

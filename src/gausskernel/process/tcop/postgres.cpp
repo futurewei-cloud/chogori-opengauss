@@ -7316,6 +7316,10 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
     /* Initialize the memory tracking information */
     MemoryTrackingInit();
 
+    /* Connect to K2PG cluster. */
+    K2PgInitPostgresBackend("PostgresMain");
+    K2PgInitSession(dbname);
+
     /*
      * General initialization.
      *
@@ -7324,9 +7328,6 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
      * involves database access should be there, not here.
      */
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser(dbname, InvalidOid, username);
-
-    /* Connect to K2PG cluster. */
-	K2PgInitPostgresBackend("postgres", dbname, username);
 
     /*
      * PostgresMain thread can be user for wal sender, which will call

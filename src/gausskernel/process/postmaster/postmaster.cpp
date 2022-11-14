@@ -11264,6 +11264,8 @@ int GaussDbThreadMain(knl_thread_arg* arg)
      */
     process_shared_preload_libraries();
 
+    K2PgInitPostgresBackend("GaussDbThreadMain");
+
     switch (thread_role) {
         case STREAM_WORKER:
         case THREADPOOL_STREAM: {

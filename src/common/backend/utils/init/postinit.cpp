@@ -1919,6 +1919,8 @@ void PostgresInitializer::InitThread()
 
 void PostgresInitializer::InitSession()
 {
+    K2PgInitSession(m_dbname);
+
     /* Init rel cache for new session. */
     InitSysCache();
 
@@ -2062,6 +2064,8 @@ void PostgresInitializer::CheckAtLeastOneRoles()
 
 void PostgresInitializer::SetSuperUserAndDatabase()
 {
+    K2PgInitSession(m_indbname);
+
     /*
      * In the wlm worker thread, we set the user is super user
      * and the database is default database, we will send the query
