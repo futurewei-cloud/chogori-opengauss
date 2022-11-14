@@ -34,7 +34,7 @@
 #include "workload/workload.h"
 #include "pgstat.h"
 
-#include "access/k2/pg_gate_api.h"
+#include "access/k2/k2pg_aux.h"
 
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
@@ -274,6 +274,13 @@ void MemoryContextReset(MemoryContext context)
     MemoryContextCheck(context, context->session_id > 0);
 #endif
 
+	/*
+	 * Reset K2PG context also.
+	 */
+	if (context->k2pg_memctx != NULL) {
+		HandleK2PgStatus(PgGate_ResetMemctx(context->k2pg_memctx));
+	}
+
     /* Nothing to do if no pallocs since startup or last reset */
     if (!context->isReset) {
         RemoveMemoryContextInfo(context);
@@ -419,6 +426,14 @@ void MemoryContextDelete(MemoryContext context)
     /* u_sess->top_mem_cxt may be reused by other threads, set it null before the memory it points to be freed. */
     if (context == u_sess->top_mem_cxt) {
         u_sess->top_mem_cxt = NULL;
+    }
+
+	/*
+	 * Destroy K2PG memory context.
+	 */
+    if (context->k2pg_memctx != NULL) {
+	    HandleK2PgStatus(PgGate_DestroyMemctx(context->k2pg_memctx));
+	    context->k2pg_memctx = NULL;
     }
 
     FreeMemoryContextList(&context_list);
