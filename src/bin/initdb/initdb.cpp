@@ -4555,7 +4555,7 @@ int main(int argc, char* argv[])
     (void)fflush(stdout);
     setup_depend();
 
-    printf(_("Load plpgsql, and system views ... \n"));
+    printf(_("Load plpgsql ... \n"));
     (void)fflush(stdout);
     load_plpgsql();
 

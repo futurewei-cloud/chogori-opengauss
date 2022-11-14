@@ -3017,7 +3017,7 @@ static int ServerLoop(void)
          *
          * Before GRAND VERSION NUM 81000, we do not support scheduled job.
          */
-        if (g_instance.pid_cxt.PgJobSchdPID == 0 && pmState == PM_RUN &&
+        if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.PgJobSchdPID == 0 && pmState == PM_RUN &&
             (g_instance.attr.attr_sql.job_queue_processes || t_thrd.postmaster_cxt.start_job_scheduler) &&
             u_sess->attr.attr_common.upgrade_mode != 1) {
             g_instance.pid_cxt.PgJobSchdPID = initialize_util_thread(JOB_SCHEDULER);
@@ -5455,7 +5455,7 @@ static void reaper(SIGNAL_ARGS)
                 g_instance.pid_cxt.AutoVacPID = initialize_util_thread(AUTOVACUUM_LAUNCHER);
 
             /* Before GRAND VERSION NUM 81000, we do not support scheduled job. */
-            if (g_instance.pid_cxt.PgJobSchdPID == 0 &&
+            if (!g_instance.k2_cxt.isK2ModelEnabled && g_instance.pid_cxt.PgJobSchdPID == 0 &&
                 g_instance.attr.attr_sql.job_queue_processes && u_sess->attr.attr_common.upgrade_mode != 1)
                 g_instance.pid_cxt.PgJobSchdPID = initialize_util_thread(JOB_SCHEDULER);
 
@@ -8175,8 +8175,10 @@ static void sigusr1_handler(SIGNAL_ARGS)
         StartCleanStatement();
     }
 
-    if (CheckPostmasterSignal(PMSIGNAL_START_JOB_SCHEDULER)) {
+    if (!g_instance.k2_cxt.isK2ModelEnabled && CheckPostmasterSignal(PMSIGNAL_START_JOB_SCHEDULER)) {
         t_thrd.postmaster_cxt.start_job_scheduler = true;
+    } else {
+        t_thrd.postmaster_cxt.start_job_scheduler = false;
     }
 
     if (CheckPostmasterSignal(PMSIGNAL_START_JOB_WORKER) &&
