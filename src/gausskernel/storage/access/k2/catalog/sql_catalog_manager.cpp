@@ -334,6 +334,13 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
 
     // step 3/3: If source database(database) is present in the request, copy all the rest of tables from source database(database)
     if (!request.sourceDatabaseId.empty()) {
+        // Commit txn so that operations on new collection are done with a timestamp > collection create time
+        auto [commit_status] = k2pg::TXMgr.endTxn(skv::http::dto::EndAction::Commit).get();
+        if (!commit_status.is2xxOK()) {
+            K2LOG_E(log::catalog, "Failed to commit txn due to {}", commit_status);
+            return std::make_tuple(commit_status, std::shared_ptr<DatabaseInfo>());
+        }
+
         K2LOG_D(log::catalog, "Creating database from source database {}", request.sourceDatabaseId);
         // get the source table ids
         K2LOG_D(log::catalog, "Listing table ids from source database {}", request.sourceDatabaseId);
