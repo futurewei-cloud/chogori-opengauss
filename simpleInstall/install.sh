@@ -220,7 +220,7 @@ function single_install() {
         sed -i "/^#port =/c\port = $port" $app/data/single_node/postgresql.conf
     fi
     info "[step 7]: start datanode"
-    gs_ctl start -D $app/data/single_node -Z single_node
+    #gs_ctl start -D $app/data/single_node -Z single_node
 }
 
 function init_db() {
