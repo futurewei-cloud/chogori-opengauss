@@ -4551,11 +4551,18 @@ int main(int argc, char* argv[])
     setup_auth();
     get_set_pwd();
 
-    printf(_("Setup depend,load plpgsql, and system views ... \n"));
+    printf(_("Setup depend ... \n"));
     (void)fflush(stdout);
     setup_depend();
+
+    printf(_("Load plpgsql ... \n"));
+    (void)fflush(stdout);
     load_plpgsql();
+
+    printf(_("Setup system views ... \n"));
+    (void)fflush(stdout);
     setup_sysviews();
+
 #ifdef ENABLE_PRIVATEGAUSS
     setup_privsysviews();
 #endif

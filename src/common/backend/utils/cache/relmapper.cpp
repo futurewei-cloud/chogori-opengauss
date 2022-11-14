@@ -55,6 +55,7 @@
 #include "storage/lock/lwlock.h"
 #include "utils/inval.h"
 #include "utils/relmapper.h"
+#include "access/k2/k2pg_aux.h"
 
 /* non-export function prototypes */
 static void apply_map_update(RelMapFile* map, Oid relationId, Oid fileNode, bool add_okay);
@@ -318,6 +319,9 @@ void RelationMapRemoveMapping(Oid relationId)
  */
 void RelationMapInvalidate(bool shared)
 {
+    if (g_instance.k2_cxt.isK2ModelEnabled) {
+        return;
+    }
     if (shared) {
         if (IS_MAGIC_EXIST(u_sess->relmap_cxt.shared_map->magic)) {
             LWLockAcquire(RelationMappingLock, LW_SHARED);
@@ -342,6 +346,9 @@ void RelationMapInvalidate(bool shared)
  */
 void RelationMapInvalidateAll(void)
 {
+    if (g_instance.k2_cxt.isK2ModelEnabled) {
+        return;
+    }
     LWLockAcquire(RelationMappingLock, LW_SHARED);
     if (IS_MAGIC_EXIST(u_sess->relmap_cxt.shared_map->magic)) {
         load_relmap_file(true);
@@ -512,7 +519,7 @@ void RelationMapInitializePhase2(void)
     /*
      * In bootstrap mode, the map file isn't there yet, so do nothing.
      */
-    if (IsBootstrapProcessingMode()) {
+    if (IsBootstrapProcessingMode() || g_instance.k2_cxt.isK2ModelEnabled) {
         return;
     }
     /*
@@ -534,7 +541,7 @@ void RelationMapInitializePhase3(void)
     /*
      * In bootstrap mode, the map file isn't there yet, so do nothing.
      */
-    if (IsBootstrapProcessingMode()) {
+    if (IsBootstrapProcessingMode() || g_instance.k2_cxt.isK2ModelEnabled) {
         return;
     }
     /*
@@ -846,6 +853,10 @@ static void perform_relmap_update(bool shared, const RelMapFile* updates)
 {
     RelMapFile new_map;
     errno_t rc;
+
+    if (g_instance.k2_cxt.isK2ModelEnabled) {
+        return;
+    }
 
     /*
      * Anyone updating a relation's mapping info should take exclusive lock on
