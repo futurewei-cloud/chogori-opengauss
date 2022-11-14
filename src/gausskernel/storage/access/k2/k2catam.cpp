@@ -251,8 +251,6 @@ static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan
 	bool      has_data = false;
 	TupleDesc tupdesc  = camScan->target_desc;
 
-    MemoryContext oldcontext = MemoryContextSwitchTo(camScan->k2_ctx);
-
 	Datum *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
 	bool *nulls  = (bool *) palloc0(tupdesc->natts * sizeof(bool));
 	K2PgSysColumns syscols{};
@@ -291,8 +289,6 @@ static HeapTuple camFetchNextHeapTuple(CamScanDesc camScan, bool is_forward_scan
 	pfree(values);
 	pfree(nulls);
 
-    (void)MemoryContextSwitchTo(oldcontext);
-
 	return tuple;
 }
 
@@ -301,8 +297,6 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	IndexTuple tuple    = NULL;
 	bool       has_data = false;
 	TupleDesc  tupdesc  = camScan->target_desc;
-
-    MemoryContext oldcontext = MemoryContextSwitchTo(camScan->k2_ctx);
 
 	Datum           *values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
 	bool            *nulls = (bool *) palloc0(tupdesc->natts * sizeof(bool));
@@ -360,8 +354,6 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
 	}
 	pfree(values);
 	pfree(nulls);
-
-	(void)MemoryContextSwitchTo(oldcontext);
 
 	return tuple;
 }
@@ -1054,11 +1046,6 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	camScan->key   = key;
 	camScan->nkeys = nkeys;
 	camScan->tableOid = RelationGetRelid(relation);
-    camScan->k2_ctx = AllocSetContextCreate(CurrentMemoryContext, "k2 scan context",
-        ALLOCSET_SMALL_MINSIZE, ALLOCSET_SMALL_INITSIZE, ALLOCSET_SMALL_MAXSIZE);
-
-    /* switch MemoryContext */
-    MemoryContext oldcontext = MemoryContextSwitchTo(camScan->k2_ctx);
 
 	/* Setup the scan plan */
 	CamScanPlanData	scan_plan;
@@ -1090,18 +1077,11 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	bms_free(scan_plan.primary_key);
 	bms_free(scan_plan.sk_cols);
 
-   /* release memory */
-    (void)MemoryContextSwitchTo(oldcontext);
-
 	return camScan;
 }
 
 void camEndScan(CamScanDesc camScan)
 {
-	if (NULL != camScan->k2_ctx && camScan->k2_ctx != CurrentMemoryContext) {
-	    MemoryContextDelete(camScan->k2_ctx);
-	}
-
 	pfree(camScan);
 }
 
@@ -1348,6 +1328,7 @@ void cam_systable_endscan(SysScanDesc scan_desc)
 {
 	Assert(PointerIsValid(scan_desc->k2scan));
 	camEndScan(scan_desc->k2scan);
+	pfree(scan_desc);
 }
 
 HeapScanDesc cam_heap_beginscan(Relation relation,

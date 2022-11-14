@@ -93,7 +93,6 @@ struct K2FdwPushDownState {
 
 struct K2FdwExecState {
     /* The handle for the internal K2PG Select statement. */
-    MemoryContext k2_ctx;
 
     // parameters required for call to ExecSelect
     std::vector<K2PgConstraintDef> constraints;
@@ -331,8 +330,6 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
 	K2FdwExecState *k2pg_state = new K2FdwExecState();
 
     node->fdw_state = (void *)k2pg_state;
-    k2pg_state->k2_ctx = AllocSetContextCreate(node->scanMcxt, "k2 FDW scan context",
-        ALLOCSET_SMALL_MINSIZE, ALLOCSET_SMALL_INITSIZE, ALLOCSET_SMALL_MAXSIZE);
 
     ListCell *lc{0};
     // go over the target attribute numbers we stored before in the fdw_private
@@ -379,9 +376,6 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
     k2pg_state->limit_params.limit_offset = 0;    // TODO the value of SELECT ... OFFSET
     k2pg_state->limit_params.limit_use_default = true;
 
-    /* switch MemoryContext */
-    MemoryContext oldcontext = MemoryContextSwitchTo(k2pg_state->k2_ctx);
-
     HandleK2PgStatus(PgGate_NewSelect(K2PgGetDatabaseOid(relation), RelationGetRelid(relation),
                                       std::move(index_params), &k2pg_state->k2_handle));
 
@@ -390,9 +384,6 @@ k2BeginForeignScan(ForeignScanState *node, int eflags)
     // HandleK2PgStatus(PgGate_SetCatalogCacheVersion(k2pg_state->k2_handle,
     //                                                    k2pg_catalog_cache_version));
     K2LOG_D(log::fdw, "foreign_scan for relation {}, fdw_exprs: {}", relation->rd_id, list_length(foreignScan->fdw_exprs));
-
-   /* release memory */
-    (void)MemoryContextSwitchTo(oldcontext);
 
     K2LOG_D(log::fdw, "BeginForeignScan done");
 }
@@ -409,8 +400,6 @@ k2IterateForeignScan(ForeignScanState *node)
     TupleTableSlot *slot= nullptr;
     K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
     Relation relation = node->ss.ss_currentRelation;
-
-    MemoryContext oldcontext = MemoryContextSwitchTo(k2pg_state->k2_ctx);
 
     HandleK2PgStatus(PgGate_ExecSelect(k2pg_state->k2_handle, k2pg_state->constraints,
                     k2pg_state->targets_attrnum, k2pg_state->forward_scan, k2pg_state->limit_params));
@@ -447,8 +436,6 @@ k2IterateForeignScan(ForeignScanState *node)
         slot->tts_k2pgctid = PointerGetDatum(syscols.k2pgctid);
     }
 
-    (void)MemoryContextSwitchTo(oldcontext);
-
     return slot;
 }
 
@@ -457,11 +444,7 @@ k2IterateForeignScan(ForeignScanState *node)
  */
 void k2EndForeignScan(ForeignScanState *node) {
     K2FdwExecState *k2pg_state = (K2FdwExecState *) node->fdw_state;
-
     if (k2pg_state != NULL) {
-	    if (NULL != k2pg_state->k2_ctx && k2pg_state->k2_ctx != CurrentMemoryContext) {
-	        MemoryContextDelete(k2pg_state->k2_ctx);
-	    }
 	    delete k2pg_state;
     }
 
