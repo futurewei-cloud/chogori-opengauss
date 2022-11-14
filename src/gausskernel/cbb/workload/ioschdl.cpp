@@ -49,6 +49,8 @@
 #include "pgxc/poolutils.h"
 #endif
 
+#include "access/k2/k2pg_aux.h"
+
 static void WLMmonitor_MainLoop(void);
 static void WLMmonitor_worker(int type);
 
@@ -1191,6 +1193,7 @@ NON_EXEC_STATIC void WLMmonitorMain(void)
     /* Early initialization */
     BaseInit();
 
+    K2PgInitPostgresBackend("WLMmonitorMain");
     WLMInitPostgres();
 
     SetProcessingMode(NormalProcessing);
@@ -1514,6 +1517,7 @@ NON_EXEC_STATIC void WLMarbiterMain(void)
 
     /* Early initialization */
     BaseInit();
+    K2PgInitPostgresBackend("WLMarbiterMain");
     WLMInitPostgres();
 
     SetProcessingMode(NormalProcessing);

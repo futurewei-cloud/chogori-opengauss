@@ -45,6 +45,7 @@
 #include "pgxc/poolutils.h"
 #include "instruments/percentile.h"
 #include "utils/postinit.h"
+#include "access/k2/k2pg_aux.h"
 
 extern void destroy_handles();
 const int SLEEP_INTERVAL = 10;
@@ -186,6 +187,8 @@ NON_EXEC_STATIC void PercentileMain()
 #ifndef EXEC_BACKEND
     InitProcess();
 #endif
+
+    K2PgInitPostgresBackend("PercentileMain");
 
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser((char*)pstrdup(DEFAULT_DATABASE), InvalidOid, username);
     t_thrd.proc_cxt.PostInit->InitPercentileWorker();

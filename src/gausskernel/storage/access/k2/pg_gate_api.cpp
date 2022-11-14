@@ -79,26 +79,35 @@ namespace {
 
     // use anonymous namespace to define a static variable that is not exposed outside of this file
     std::shared_ptr<PgGate> pg_gate;
+    std::atomic<bool> pg_gate_initialized{false};
 } // anonymous namespace
 
 void PgGate_InitPgGate() {
-    assert(pg_gate == nullptr && "PgGate should only be initialized once");
-    elog(INFO, "K2 PgGate open");
-    pg_gate = std::make_shared<PgGate>();
+    if (!pg_gate_initialized) {
+        pg_gate_initialized.exchange(true);
+        assert(pg_gate == nullptr && "PgGate should only be initialized once");
+        elog(INFO, "K2 PgGate open");
+        pg_gate = std::make_shared<PgGate>();
+    } else {
+        elog(INFO, "K2 PgGate has already been initialized");
+    }
 }
 
 void PgGate_DestroyPgGate() {
-    if (pg_gate == nullptr) {
-      elog(ERROR, "PgGate is destroyed or not initialized");
-    } else {
-      pg_gate = nullptr;
-      elog(INFO, "K2 PgGate destroyed");
+    if (pg_gate_initialized) {
+        if (pg_gate == nullptr) {
+            elog(ERROR, "PgGate is destroyed or not initialized");
+        } else {
+            // no need to destroy pg_gate shared pointer since it won't be exit until the end of the process
+            elog(INFO, "K2 PgGate destroyed");
+        }
     }
 }
 
 // Initialize a session to process statements that come from the same client connection.
 K2PgStatus PgGate_InitSession(const char *database_name) {
     elog(LOG, "PgGateAPI: PgGate_InitSession %s", database_name);
+    assert(pg_gate != nullptr && "PgGate must be initialized");
 
     k2pg::TXMgr.endTxn(skv::http::dto::EndAction::Abort).get();
 
@@ -1160,7 +1169,7 @@ void PgGate_ClearForeignKeyReferenceCache() {
 }
 
 bool PgGate_IsK2PgEnabled() {
-    return pg_gate != nullptr;
+    return pg_gate_initialized && pg_gate != nullptr;
 }
 
 // Sets the specified timeout in the rpc service.
