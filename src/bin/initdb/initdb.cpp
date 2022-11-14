@@ -4544,7 +4544,7 @@ int main(int argc, char* argv[])
     (void)fflush(stdout);
     CreatePGDefaultTempDir();
 
-    //exit(0);
+    exit(0);
     /* Create the stuff we don't need to use bootstrap mode for */
 
     printf(_("Setup auth ... \n"));
