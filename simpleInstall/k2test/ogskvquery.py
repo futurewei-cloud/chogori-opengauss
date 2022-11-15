@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # pip install msgpack, requests
 import argparse, unittest, sys
 import types
@@ -6,6 +7,26 @@ from skvclient import (CollectionMetadata, CollectionCapacity, SKVClient,
                        Operation, Value, Expression, TxnOptions, Txn)
 import logging
 from ast import literal_eval
+
+helpmsg = """
+Examples:
+
+python3 ogskvquery.py get-databases # get all database info
+
+python3 ogskvquery.py get-clusters # get all cluster info
+
+python3 ogskvquery.py get-tables # get all tables
+
+python3 ogskvquery.py get-schema  --toid 1233 # get schema by table oid
+
+python3 ogskvquery.py get-schema  --table pg_depend # get schema by table name
+
+python3 ogskvquery.py query  --table pg_depend # query by table name
+
+python3 ogskvquery.py query  --toid 1233 # query by table oid
+
+To specify remote sever use --http 'http://remote_server:port' option
+"""
 
 def query(coll=None, schema=None, table_oid=None, table_name=None, database=None, txnarg = None):
     if txnarg:
@@ -87,7 +108,7 @@ def get_tables(coll=None, db_name=None):
 def print_records(records):
     for r in records:
         print(r.data)
-            
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("command", help="Command")
@@ -120,6 +141,8 @@ if __name__ == '__main__':
     elif args.command == "get-tables":
         tables = get_tables(coll=args.coll, db_name=args.db)
         print_records(tables)
+    elif args.command == "usage":
+        print(helpmsg)
     else:
         raise Exception(f"Invalid command {args.command}")
 
