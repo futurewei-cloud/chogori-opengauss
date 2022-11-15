@@ -992,12 +992,7 @@ TupleTableSlot* ExecInsertT(ModifyTableState* state, TupleTableSlot* slot, Tuple
                                 searchHBucketFakeRelation(estate->esfRelations, estate->es_query_cxt,
                                     result_relation_desc, bucket_id, target_rel);
                             }
-                            
-                            if (IsK2PgRelation(target_rel)) {
-                                new_id = K2PgExecuteInsert(target_rel, RelationGetDescr(target_rel), (HeapTuple)tuple);
-                            } else {
-                                new_id = tableam_tuple_insert(target_rel, tuple, estate->es_output_cid, 0, NULL);
-                            }
+                            new_id = tableam_tuple_insert(target_rel, tuple, estate->es_output_cid, 0, NULL);
 
                             if (rel_isblockchain) {
                                 MemoryContext old_context = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
