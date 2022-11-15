@@ -2791,10 +2791,7 @@ Oid heap_insert(Relation relation, HeapTuple tup, CommandId cid, int options, Bu
 
     if (IsK2PgRelation(relation))
     {
-	    ereport(ERROR,
-		    (errcode(ERRCODE_INTERNAL_ERROR), errmsg(
-		    "Operation not allowed in K2PG mode %s",
-				      __func__)));
+        return K2PgExecuteInsert(relation, RelationGetDescr(relation), tup);
     }
     /*
      * Fill in tuple header fields, assign an OID, and toast the tuple if
