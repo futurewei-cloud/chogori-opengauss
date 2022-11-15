@@ -56,7 +56,7 @@ PgMemctx *PgMemctx::Create() {
 }
 
 Status PgMemctx::Destroy(PgMemctx *handle) {
-  if (handle) {
+  if (handle != NULL) {
     if(postgres_process_memctxs.find(handle) == postgres_process_memctxs.end()) {
         Status status {
             .pg_code = ERRCODE_INTERNAL_ERROR,
@@ -68,13 +68,14 @@ Status PgMemctx::Destroy(PgMemctx *handle) {
     }
 
     postgres_process_memctxs.erase(handle);
+    handle = NULL;
   }
 
   return Status::OK;
 }
 
 Status PgMemctx::Reset(PgMemctx *handle) {
-  if (handle) {
+  if (handle != NULL) {
     if (postgres_process_memctxs.find(handle) == postgres_process_memctxs.end()) {
         Status status {
             .pg_code = ERRCODE_INTERNAL_ERROR,
