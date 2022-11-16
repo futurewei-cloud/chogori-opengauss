@@ -631,7 +631,6 @@ List *HeapamTopsExecUpdateIndexTuples(TupleTableSlot *slot, TupleTableSlot *olds
     /*
      * insert index entries for tuple
      */
-    // why tupleid is not used here?
     ItemPointer item;
     if (IsK2PgRelation(relation))
     {
