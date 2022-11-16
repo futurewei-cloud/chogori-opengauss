@@ -862,6 +862,8 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
                                            skv::http::dto::SKVRecord& record,
                                            std::shared_ptr<k2pg::PgTableDesc> pg_table) {
     std::unordered_map<int, uint32_t> attr_to_offset;
+    uint32_t base_table_oid = pg_table->base_table_oid();
+
     for (const auto& column : columns) {
         k2pg::PgColumn *pg_column = pg_table->FindColumn(column.attr_num);
         if (pg_column == NULL) {
@@ -875,9 +877,35 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
         }
         // we have two extra fields, i.e., table_id and index_id, in skv key
         attr_to_offset[column.attr_num] = pg_column->index() + 2;
+
+        if (column.attr_num == (int)PgSystemAttrNum::kPgIdxBaseTupleId) {
+            try {
+                std::unique_ptr<skv::http::dto::SKVRecordBuilder> base_builder;
+                K2PgStatus bstatus = getSKVBuilder(database_oid, base_table_oid, base_builder);
+
+                std::vector<K2PgAttributeDef> base_attr = {column};
+                base_attr[0].attr_num = (int)K2PgTupleIdAttributeNumber;
+                K2PgStatus base_status = makeSKVBuilderWithKeysSerialized(database_oid, base_table_oid,
+                                           base_attr,
+                                           base_builder);
+                if (base_status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
+                    K2LOG_W(log::k2pg, "Bad basetupleid (base_status)");
+                    return base_status;
+                }
+            }
+            catch (...) {
+                K2PgStatus status {
+                    .pg_code = ERRCODE_INTERNAL_ERROR,
+                    .k2_code = 500,
+                    .msg = "Bad basetupleid",
+                    .detail = "Bad basetupleid"
+                };
+                return status;
+            }
+            K2LOG_I(log::k2pg, "Verified basetupleid");
+        }
     }
 
-    uint32_t base_table_oid = pg_table->base_table_oid();
     uint32_t index_id = base_table_oid == table_oid ? 0 : table_oid;
 
     std::unique_ptr<skv::http::dto::SKVRecordBuilder> builder;
