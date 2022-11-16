@@ -21,9 +21,13 @@ python3 ogskvquery.py get-schema  --toid 1233 # get schema by table oid
 
 python3 ogskvquery.py get-schema  --table pg_depend # get schema by table name
 
+python3 ogskvquery.py get-schema --schema 00000000000030008000000000000a30
+
 python3 ogskvquery.py query  --table pg_depend # query by table name
 
 python3 ogskvquery.py query  --toid 1233 # query by table oid
+
+python3 ogskvquery.py query --schema 00000000000030008000000000000a30  # query by schema name
 
 To specify remote sever use --http 'http://remote_server:port' option
 """
