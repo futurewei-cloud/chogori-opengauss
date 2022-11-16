@@ -2790,7 +2790,6 @@ Oid heap_insert(Relation relation, HeapTuple tup, CommandId cid, int options, Bu
     }
 
     if (IsK2PgRelation(relation)) {
-        elog(LOG, "Using K2PG heap insert in %s", __func__);
         return K2PgExecuteInsert(relation, RelationGetDescr(relation), tup);
     }
     /*
