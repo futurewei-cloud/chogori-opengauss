@@ -8218,12 +8218,24 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                     u_sess->exec_cxt.RetryController->stub_.ECodeStubTest();
                 }
 #endif
-				bool need_retry = false;
-                MemoryContext oldcontext = GetCurrentMemoryContext();
-				K2PgPrepareCacheRefreshIfNeeded(oldcontext,
+
+                PG_TRY();
+                {
+                    exec_simple_query(query_string, QUERY_MESSAGE, &input_message); /* @hdfs Add the second parameter */
+                }
+                PG_CATCH();
+                {
+                    bool need_retry = false;
+                    MemoryContext oldcontext = GetCurrentMemoryContext();
+                    K2PgPrepareCacheRefreshIfNeeded(oldcontext,
                                                   k2pg_check_retry_allowed(query_string),
                                                   &need_retry);
-                exec_simple_query(query_string, QUERY_MESSAGE, &input_message); /* @hdfs Add the second parameter */
+                    if (need_retry) {
+                        elog(WARNING, "Retry query is not supported yet for query: %s", query_string);
+                    }
+                    PG_RE_THROW();
+                }
+                PG_END_TRY();
 
                 if (MEMORY_TRACKING_QUERY_PEAK)
                     ereport(LOG, (errmsg("query_string %s, peak memory %ld(kb)", query_string,
@@ -8574,9 +8586,26 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                 if (IsStmtRetryEnabled())
                     u_sess->exec_cxt.RetryController->stub_.StartOneStubTest(firstchar);
 #endif
-                statement_init_metric_context();
-                exec_parse_message(query_string, stmt_name, paramTypes, paramTypeNames, numParams);
-                statement_commit_metirc_context();
+
+                PG_TRY();
+                {
+                    statement_init_metric_context();
+                    exec_parse_message(query_string, stmt_name, paramTypes, paramTypeNames, numParams);
+                    statement_commit_metirc_context();
+                }
+                PG_CATCH();
+                {
+                    /*
+                     * Cannot retry parse statements yet and have to abort the followup bind/execute.
+                     */
+                    bool need_retry = false;
+                    MemoryContext oldcontext = GetCurrentMemoryContext();
+                    K2PgPrepareCacheRefreshIfNeeded(oldcontext,
+                                                    false /* consider_retry */,
+                                                    &need_retry);
+                    PG_RE_THROW();
+                }
+                PG_END_TRY();
 
                 /*
                  * since AbortTransaction can't clean named prepared statement, we need to
@@ -8587,16 +8616,6 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
                 if (IsStmtRetryEnabled() && stmt_name[0] != '\0') {
                     u_sess->exec_cxt.RetryController->CacheStmtName(stmt_name);
                 }
-
-                /*
-				* TODO Cannot retry parse statements yet (without
-				* aborting the followup bind/execute.
-				*/
-				bool need_retry = false;
-                MemoryContext oldcontext = GetCurrentMemoryContext();
-				K2PgPrepareCacheRefreshIfNeeded(oldcontext,
-						                        false /* consider_retry */,
-						                        &need_retry);
 
             } break;
 
@@ -8659,26 +8678,34 @@ int PostgresMain(int argc, char* argv[], const char* dbname, const char* usernam
 
                 pgstatCountSQL4SessionLevel();
 
-				bool can_retry =
-					IsK2PgEnabled() &&
-					u_sess->pcache_cxt.unnamed_stmt_psrc &&
-					k2pg_check_retry_allowed(u_sess->pcache_cxt.unnamed_stmt_psrc->query_string);
-
-				bool need_retry = false;
-                MemoryContext oldcontext = GetCurrentMemoryContext();
-				/*
-				 * Execute may have been partially applied so need to
-				 * cleanup (and restart) the transaction.
-				*/
-				K2PgPrepareCacheRefreshIfNeeded(oldcontext,
-						                        can_retry,
-						                        &need_retry);
-
 #ifdef USE_RETRY_STUB
                 if (IsStmtRetryEnabled())
                     u_sess->exec_cxt.RetryController->stub_.StartOneStubTest(firstchar);
 #endif
-                exec_execute_message(portal_name, max_rows);
+
+                PG_TRY();
+                {
+                    exec_execute_message(portal_name, max_rows);
+                }
+                PG_CATCH();
+                {
+                    bool can_retry = IsK2PgEnabled() &&
+                                     u_sess->pcache_cxt.unnamed_stmt_psrc &&
+                                     k2pg_check_retry_allowed(u_sess->pcache_cxt.unnamed_stmt_psrc->query_string);
+
+                    bool need_retry = false;
+                    MemoryContext oldcontext = GetCurrentMemoryContext();
+
+                    K2PgPrepareCacheRefreshIfNeeded(oldcontext,
+						      can_retry,
+						      &need_retry);
+                    if (need_retry) {
+                        elog(WARNING, "Retry execution is not supported yet for %s", portal_name);
+                    }
+                    PG_RE_THROW();
+		 }
+		 PG_END_TRY();
+
             } break;
 
 #ifdef ENABLE_MULTIPLE_NODES
@@ -11597,22 +11624,27 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 {
 	bool		need_global_cache_refresh = false;
 	bool		need_table_cache_refresh = false;
-	char	   *table_to_refresh;
-	const char *table_cache_refresh_search_str =
-		"schema version mismatch for table ";
+	char	   *table_to_refresh = NULL;
+	const char *table_cache_refresh_search_str = "schema version mismatch for table ";
 
 	*need_retry = false;
 
 	/*
 	 * A retry is only required if the transaction is handled by K2PG.
 	 */
-	if (!IsK2PgEnabled())
+	if (!IsK2PgEnabled() || t_thrd.log_cxt.errordata_stack_depth < 0)
 		return;
 
 	/* Get error data */
-	ErrorData *edata;
+	ErrorData *edata = NULL;
 	MemoryContextSwitchTo(oldcontext);
 	edata = CopyErrorData();
+
+        if(edata != NULL) {
+            elog(INFO, "ErrorData: file: %s, func: %s, line: %d, message: %s, detail: %s\n", edata->filename, edata->funcname,
+                        edata->lineno, edata->message ? edata->message : "", edata->detail ? edata->detail : "");
+        }
+
 	bool is_retryable_err = K2PgNeedRetryAfterCacheRefresh(edata);
 	if ((table_to_refresh = strstr(edata->message,
 								   table_cache_refresh_search_str)) != NULL)
