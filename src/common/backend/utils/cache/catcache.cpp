@@ -2751,7 +2751,9 @@ static CatCTup* CatalogCacheCreateEntry(
         ct->tuple.t_self = dtp->t_self;
         ct->tuple.t_tableOid = dtp->t_tableOid;
         ct->tuple.t_bucketId = dtp->t_bucketId;
-        HEAPTUPLE_COPY_K2PGTID(dtp->t_k2pgctid, ct->tuple.t_k2pgctid);
+        if (IsK2PgEnabled()) {
+            HEAPTUPLE_COPY_K2PGTID(dtp->t_k2pgctid, ct->tuple.t_k2pgctid);
+        }
 #ifdef PGXC
         ct->tuple.t_xc_node_id = dtp->t_xc_node_id;
 #endif

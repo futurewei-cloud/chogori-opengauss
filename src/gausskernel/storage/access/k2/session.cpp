@@ -48,6 +48,7 @@ static void K2XactCallback(XactEvent event, void* arg) {
     if (event == XACT_EVENT_START) {
         elog(DEBUG2, "XACT_EVENT_START");
         if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Abort).get(); (!status.is2xxOK() && status.code != 410)) {
+            K2LOG_E(log::k2pg, "XACT_EVENT_START, TXMgr abort previous txn failed due to: {}", status);
             reportXactError("TXMgr abort failed", status);
         }
 
@@ -58,16 +59,19 @@ static void K2XactCallback(XactEvent event, void* arg) {
             });
 
         if (auto [status] = TXMgr.beginTxn().get(); !status.is2xxOK()) {
+            K2LOG_E(log::k2pg, "XACT_EVENT_START, TXMgr begin failed due to: {}", status);
             reportXactError("TXMgr begin failed", status);
         }
     } else if (event == XACT_EVENT_COMMIT) {
         elog(DEBUG2, "XACT_EVENT_COMMIT");
         if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Commit).get(); !status.is2xxOK()) {
+            K2LOG_E(log::k2pg, "XACT_EVENT_COMMIT, TXMgr commit failed due to: {}", status);
             reportXactError("TXMgr commit failed", status);
         }
     } else if (event == XACT_EVENT_ABORT) {
         elog(DEBUG2, "XACT_EVENT_ABORT");
         if (auto [status] = TXMgr.endTxn(sh::dto::EndAction::Abort).get(); !status.is2xxOK()) {
+            K2LOG_E(log::k2pg, "XACT_EVENT_ABORT, TXMgr abort failed due to: {}", status);
             reportXactError("TXMgr abort failed", status);
         }
     }

@@ -2789,8 +2789,7 @@ Oid heap_insert(Relation relation, HeapTuple tup, CommandId cid, int options, Bu
         Assert(TUPLE_IS_HEAP_TUPLE(tup));
     }
 
-    if (IsK2PgRelation(relation))
-    {
+    if (IsK2PgRelation(relation)) {
         return K2PgExecuteInsert(relation, RelationGetDescr(relation), tup);
     }
     /*
