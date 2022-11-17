@@ -878,6 +878,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
         // we have two extra fields, i.e., table_id and index_id, in skv key
         attr_to_offset[column.attr_num] = pg_column->index() + 2;
 
+        // If we have a basetupleid (ie this is a secondary index insert), verify that the basetupleid is a valid SKVRecord
         if (column.attr_num == (int)PgSystemAttrNum::kPgIdxBaseTupleId) {
             try {
                 std::unique_ptr<skv::http::dto::SKVRecordBuilder> base_builder;
@@ -889,7 +890,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
                                            base_attr,
                                            base_builder);
                 if (base_status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
-                    K2LOG_W(log::k2pg, "Bad basetupleid (base_status)");
+                    K2LOG_W(log::k2pg, "Bad basetupleid, pg status: {}, k2 status: {}, msg: {}", base_status.pg_code, base_status.k2_code, base_status.msg);
                     return base_status;
                 }
             }
@@ -902,7 +903,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
                 };
                 return status;
             }
-            K2LOG_I(log::k2pg, "Verified basetupleid");
+            K2LOG_D(log::k2pg, "Verified basetupleid");
         }
     }
 
