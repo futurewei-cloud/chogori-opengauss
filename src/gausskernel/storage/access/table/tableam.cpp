@@ -35,7 +35,7 @@
 #include "access/htup.h"
 #include "access/ustore/knl_uam.h"
 #include "access/ustore/knl_uscan.h"
-#include "access/ustore/knl_uheap.h" 
+#include "access/ustore/knl_uheap.h"
 #include "access/xact.h"
 #include "executor/executor.h"
 #include "executor/node/nodeTidscan.h"
@@ -50,6 +50,8 @@
 
 #include "access/ustore/knl_utuple.h"
 #include "access/ustore/knl_uvisibility.h"
+
+#include "access/k2/k2pg_aux.h"
 
 /* ------------------------------------------------------------------------
  * HEAP TABLE SLOT AM APIs
@@ -629,7 +631,14 @@ List *HeapamTopsExecUpdateIndexTuples(TupleTableSlot *slot, TupleTableSlot *olds
     /*
      * insert index entries for tuple
      */
-    recheckIndexes = ExecInsertIndexTuples(slot, &(((HeapTuple)tuple)->t_self), exec_index_tuples_state.estate,
+    ItemPointer item;
+    if (IsK2PgRelation(relation))
+    {
+        item = (ItemPointer)DatumGetPointer(((HeapTuple)tuple)->t_k2pgctid);
+    } else {
+        item = &(((HeapTuple)tuple)->t_self);
+    }
+    recheckIndexes = ExecInsertIndexTuples(slot, item, exec_index_tuples_state.estate,
         exec_index_tuples_state.targetPartRel, exec_index_tuples_state.p, bucketid, exec_index_tuples_state.conflict,
         modifiedIdxAttrs);
     return recheckIndexes;
@@ -824,8 +833,8 @@ Oid HeapamTupleInsert (Relation relation, Tuple tup, CommandId cid,
 }
 
 int HeapamTupleMultiInsert(Relation relation, Relation parent,
-                                  Tuple* tuples, int ntuples, CommandId cid, 
-                                  int options, struct BulkInsertStateData *bistate, 
+                                  Tuple* tuples, int ntuples, CommandId cid,
+                                  int options, struct BulkInsertStateData *bistate,
                                   HeapMultiInsertExtraArgs *args) {
     return heap_multi_insert(relation, parent, (HeapTuple*)tuples, ntuples, cid, options, bistate, args);
 }
@@ -838,7 +847,7 @@ TM_Result HeapamTupleDelete(Relation relation, ItemPointer tid,
     return heap_delete(relation, tid, cid, crosscheck, wait, tmfd, allow_delete_self);
 }
 
-/* 
+/*
  * Since both heapam and uheapam must have the same params, the params
  * here are the union of both versions.  Therefore, some parms are not used.
  */
@@ -860,7 +869,7 @@ TM_Result HeapamTupleUpdate(Relation relation, Relation parentRelation, ItemPoin
 
 TM_Result HeapamTupleLock(Relation relation, Tuple tuple, Buffer *buffer,
                             CommandId cid, LockTupleMode mode, bool nowait, TM_FailureData *tmfd,
-                            bool allow_lock_self, bool follow_updates, bool eval, Snapshot snapshot, 
+                            bool allow_lock_self, bool follow_updates, bool eval, Snapshot snapshot,
                             ItemPointer tid, bool isSelectForUpdate, bool isUpsert, TransactionId conflictXid)
 {
     return heap_lock_tuple(relation, (HeapTuple)tuple, buffer, cid, mode, nowait, tmfd, allow_lock_self);
@@ -906,7 +915,7 @@ TableScanDesc HeapamScanBegin(Relation relation, Snapshot snapshot, int nkeys, S
 {
     return heap_beginscan(relation, snapshot, nkeys, key, rangeScanInRedis);
 }
-    
+
 TableScanDesc HeapamScanBeginBm(Relation relation, Snapshot snapshot, int nkeys, ScanKey key)
 {
     return heap_beginscan_bm(relation, snapshot, nkeys, key);
@@ -937,7 +946,7 @@ void HeapamScanEnd(TableScanDesc sscan)
 {
     return heap_endscan(sscan);
 }
-    
+
 void HeapamScanRescan(TableScanDesc sscan, ScanKey key)
 {
      return heap_rescan(sscan, key);
@@ -970,8 +979,8 @@ void HeapamIndexValidateScan (Relation heapRelation, Relation indexRelation,
 }
 
 double HeapamRelationCopyForCluster(Relation OldHeap, Relation OldIndex,
-                                 Relation NewHeap, TransactionId OldestXmin, 
-                                 TransactionId FreezeXid, bool verbose, 
+                                 Relation NewHeap, TransactionId OldestXmin,
+                                 TransactionId FreezeXid, bool verbose,
                                  bool use_sort, AdaptMem* memUsage) {
     return copy_heap_data_internal(OldHeap, OldIndex, NewHeap, OldestXmin, FreezeXid, verbose, use_sort, memUsage);
 }
@@ -1055,7 +1064,7 @@ const TableAmRoutine g_heapam_methods = {
     tops_page_get_max_offsetnumber : PageGetMaxOffsetNumber,
     tops_page_get_freespace : PageGetHeapFreeSpace,
     tops_tuple_fetch_row_version : HeapFetchRowVersion,
-    
+
 
     /* -----------------------------------------------------------------------
      * SCAN AM APIS
@@ -1341,7 +1350,7 @@ Tuple UHeapamTopsNewTuple(Relation relation, ItemPointer tid)
 
 TransactionId UHeapamTopsGetConflictXid(Tuple tup)
 {
-    return UHeapTupleHasMultiLockers(((UHeapTuple)tup)->disk_tuple->flag) ? 
+    return UHeapTupleHasMultiLockers(((UHeapTuple)tup)->disk_tuple->flag) ?
                                     ((UHeapTuple)tup)->t_xid_base : ((UHeapTuple)tup)->t_multi_base;
 }
 
@@ -1437,7 +1446,7 @@ TableScanDesc UHeapamScanBeginBm(Relation relation, Snapshot snapshot, int nkeys
     return UHeapBeginScan(relation, snapshot, nkeys);
 }
 
-TableScanDesc UHeapBeginScanSampling(Relation relation, Snapshot snapshot, int nkeys, ScanKey key, 
+TableScanDesc UHeapBeginScanSampling(Relation relation, Snapshot snapshot, int nkeys, ScanKey key,
     bool allow_strat, bool allow_sync, RangeScanInRedis rangeScanInRedis)
 {
     ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION), errmsg("Ustore not support table sampling yet")));
@@ -1522,8 +1531,8 @@ void UHeapamIndexValidateScan (Relation heapRelation, Relation indexRelation,
                              IndexInfo* indexInfo, Snapshot snapshot, v_i_state* state) {
     ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION), errmsg("not supported in ustore yet")));
 }
-    
-void UHeapamTupleGetLatestTid(Relation relation, Snapshot snapshot, ItemPointer tid) 
+
+void UHeapamTupleGetLatestTid(Relation relation, Snapshot snapshot, ItemPointer tid)
 {
     ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION), errmsg("not supported in ustore yet")));
 }
@@ -1766,7 +1775,7 @@ const TableAmRoutine g_ustoream_methods = {
 
     index_validate_scan : UHeapamIndexValidateScan,
     relation_copy_for_cluster : UHeapamRelationCopyForCluster,
-    
+
     /* ------------------------------------------------------------------------
      * TIMECAPSULE AM APIs
      * ------------------------------------------------------------------------
