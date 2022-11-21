@@ -8,6 +8,8 @@ from skvclient import (CollectionMetadata, CollectionCapacity, SKVClient,
 import logging
 from ast import literal_eval
 
+cl = None
+
 helpmsg = """
 Examples:
 
