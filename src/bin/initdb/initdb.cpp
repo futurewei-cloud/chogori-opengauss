@@ -243,7 +243,7 @@ static const char* backend_options = "--single "
 #ifdef PGXC
                                      "--localxid "
 #endif
-                                     "-F -O -c search_path=pg_catalog -c exit_on_error=true";
+                                     "-E -F -O -c search_path=pg_catalog -c exit_on_error=true";
 #ifndef FREE_AND_RESET_STR
 #define FREE_AND_RESET_STR(ptr)  \
     do {                     \

@@ -455,7 +455,7 @@ K2PgStatus PgGate_ExecCreateIndex(const char *database_name,
         .attr_name = "k2pgidxbasectid",
         .attr_num = k2pg::to_underlying(k2pg::PgSystemAttrNum::kPgIdxBaseTupleId),
         .type_oid = BYTEAOID,
-        .is_key = false,
+        .is_key = !is_unique_index,
         .is_desc = false,
         .is_nulls_first = columns[0].is_nulls_first // honor the settings in other keys
     };
