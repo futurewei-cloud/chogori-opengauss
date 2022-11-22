@@ -1736,8 +1736,8 @@ TupleTableSlot* ExecUpdate(ItemPointer tupleid,
 
 			/* Insert new index entries for tuple */
             List* recheckIndexes = NIL;
-            ItemPointerData item = TUPLE_IS_UHEAP_TUPLE(tuple) ? ((UHeapTuple)tuple)->ctid : ((HeapTuple)tuple)->t_self;
-            recheckIndexes = ExecInsertIndexTuples(slot, &item, estate, fake_part_rel, partition, bucketid, NULL, NULL);
+            ItemPointer item = (ItemPointer)DatumGetPointer(((HeapTuple)tuple)->t_k2pgctid);
+            recheckIndexes = ExecInsertIndexTuples(slot, item, estate, fake_part_rel, partition, bucketid, NULL, NULL);
 		}
 	} else {
         bool update_indexes = false;
@@ -2417,8 +2417,14 @@ ldelete:
                                 tuple, estate->es_output_cid, 0, NULL);
 
                             if (result_rel_info->ri_NumIndices > 0) {
-                                recheck_indexes = ExecInsertIndexTuples(slot, &(((HeapTuple)tuple)->t_self), estate,
-                                    fake_part_rel, insert_partition, bucketid, NULL, NULL);
+                                ItemPointer item;
+                                if (IsK2PgRelation(fake_insert_relation))
+                                {
+                                    item = (ItemPointer)DatumGetPointer(((HeapTuple)tuple)->t_k2pgctid);
+                                } else {
+                                    item = &(((HeapTuple)tuple)->t_self);
+                                }
+                                recheck_indexes = ExecInsertIndexTuples(slot, item, estate, fake_part_rel, insert_partition, bucketid, NULL, NULL);
                             }
                             if (result_relation_desc->rd_isblockchain) {
                                 MemoryContext old_context = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
