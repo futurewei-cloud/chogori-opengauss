@@ -46,6 +46,8 @@
 #include "access/sysattr.h"
 #include "access/transam.h"
 #include "access/tableam.h"
+#include "access/k2/k2pg_aux.h"
+#include "access/k2/k2_table_ops.h"
 #include "catalog/index.h"
 #include "catalog/heap.h"
 #include "catalog/namespace.h"
@@ -1384,7 +1386,8 @@ void ExecDeleteIndexTuples(TupleTableSlot* slot, ItemPointer tupleid, EState* es
          */
         FormIndexDatum(indexInfo, slot, estate, values, isnull);
 
-        index_delete(actualindex, values, isnull, tupleid);
+        ItemPointer t_self = IsK2PgRelation(actualindex) ? (ItemPointer)K2PgGetPgTupleIdFromSlot(slot) : tupleid;
+        index_delete(actualindex, values, isnull, t_self);
     }
 
     list_free_ext(partitionIndexOidList);
