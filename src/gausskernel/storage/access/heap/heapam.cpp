@@ -4180,11 +4180,8 @@ TM_Result heap_delete(Relation relation, ItemPointer tid, CommandId cid,
     /* Don't allow any write/lock operator in stream. */
     Assert(!StreamThreadAmI());
 
-    if (IsK2PgRelation(relation))
-    {
-        elog(WARNING, "Ignoring unsupported tuple delete for rel %s",
-		    RelationGetRelationName(relation));
-        return TM_Ok;
+    if (IsK2PgRelation(relation)) {
+        ereport(ERROR, (errcode(ERRCODE_INVALID_OPERATION), errmsg("Invalid call on heap_delete for k2 relation %d", relation->rd_id)));
     }
 
     /*
@@ -4553,6 +4550,10 @@ void simple_heap_delete(Relation relation, ItemPointer tid, int options, bool al
 {
     TM_Result result;
     TM_FailureData tmfd;
+
+    if (IsK2PgRelation(relation)) {
+        ereport(ERROR, (errcode(ERRCODE_INVALID_OPERATION), errmsg("Invalid call on simple_heap_delete for k2 relation %d", relation->rd_id)));
+    }
 
     result = tableam_tuple_delete(relation,
         tid,
