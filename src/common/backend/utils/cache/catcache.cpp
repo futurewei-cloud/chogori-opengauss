@@ -717,7 +717,7 @@ static void ResetCatalogCache(CatCache* cache)
 
         nextelt = DLGetSucc(elt);
 
-        if (cl == NULL || cl->isnailed)
+        if (cl->isnailed)
             continue;
 
         if (cl->refcount > 0)
@@ -733,7 +733,7 @@ static void ResetCatalogCache(CatCache* cache)
 
             nextelt = DLGetSucc(elt);
 
-            if (ct == NULL || ct->isnailed)
+            if (ct->isnailed)
                 continue;
 
             if (ct->refcount > 0 || (ct->c_list && ct->c_list->refcount > 0)) {
@@ -3195,6 +3195,23 @@ SetCatCacheList(CatCache *cache,
 				if (IsK2PgEnabled())
 					continue; /* Cannot rely on ctid comparison in K2PG mode */
 
+                /* A built-in function is all in pg_proc, in upgrade senario, we skip searching
+                 * the builtin functions from builtin function array. In non-upgrade mode, the function
+                 * found from heap must exist in builtin array.
+                 */
+                if (IsProcCache(cache) && IsSystemObjOid(HeapTupleGetOid(&(cTup->tuple))) &&
+                    u_sess->attr.attr_common.IsInplaceUpgrade == false) {
+                    continue;
+                }
+                if (IsAttributeCache(cache)) {
+                    bool attIsNull = false;
+                    Oid attrelid = DatumGetObjectId(SysCacheGetAttr(cache->id, &(cTup->tuple),
+                                   Anum_pg_attribute_attrelid, &attIsNull));
+                    if (IsSystemObjOid(attrelid) && IsValidCatalogParam(GetCatalogParam(attrelid))) {
+                        continue;
+                    }
+                }
+
 				if (!ItemPointerEquals(&(cTup->tuple.t_self),
 									   &(ntp->t_self)))
 					continue;    /* not same tuple */
@@ -3254,27 +3271,14 @@ SetCatCacheList(CatCache *cache,
 	}
 	PG_CATCH();
 	{
-		foreach(ctlist_item, ctlist)
-		{
-			cTup = (CatCTup *) lfirst(ctlist_item);
-			Assert(cTup->c_list == NULL);
-			Assert(cTup->refcount > 0);
-			cTup->refcount--;
-			if (
-#ifndef CATCACHE_FORCE_RELEASE
-					cTup->dead &&
-#endif
-					cTup->refcount == 0 &&
-					(cTup->c_list == NULL || cTup->c_list->refcount == 0))
-					CatCacheRemoveCTup(cache, cTup);
-		}
-
+        ReleaseTempCatList(ctlist, cache);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
 	cl->cl_magic   = CL_MAGIC;
 	cl->my_cache   = cache;
+    DLInitElem(&cl->cache_elem, cl);
 	cl->refcount   = 0;            /* for the moment */
 	cl->dead       = false;
 	cl->ordered    = false;
@@ -3289,7 +3293,7 @@ SetCatCacheList(CatCache *cache,
 		Assert(cTup->c_list == NULL);
 		cTup->c_list = cl;
 		/* release the temporary refcount on the member */
-		Assert(ct->refcount > 0);
+		Assert(cTup->refcount > 0);
 		cTup->refcount--;
 		/* mark list dead if any members already dead */
 		if (cTup->dead)
@@ -3298,6 +3302,9 @@ SetCatCacheList(CatCache *cache,
 	Assert(i == nmembers);
 
     DLAddHead(&cache->cc_lists, &cl->cache_elem);
+
+    /* Finally, bump the list's refcount and return it */
+    cl->refcount++;
 }
 
 /*
