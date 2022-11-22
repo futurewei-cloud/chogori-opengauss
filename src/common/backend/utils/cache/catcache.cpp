@@ -3240,10 +3240,8 @@ SetCatCacheList(CatCache *cache,
 
 			/* Careful here: add entry to ctlist, then bump its refcount */
 			/* This way leaves state correct if lappend runs out of memory */
-            ResourceOwnerEnlargeCatCacheRefs(t_thrd.utils_cxt.CurrentResourceOwner);
 			ctlist = lappend(ctlist, cTup);
 			cTup->refcount++;
-            ResourceOwnerRememberCatCacheRef(t_thrd.utils_cxt.CurrentResourceOwner, &cTup->tuple);
 		}
 
 		heap_close(relation, AccessShareLock);
@@ -3307,7 +3305,6 @@ SetCatCacheList(CatCache *cache,
 
     /* Finally, bump the list's refcount and return it */
     cl->refcount++;
-    ResourceOwnerRememberCatCacheListRef(t_thrd.utils_cxt.CurrentResourceOwner, cl);
 }
 
 /*
