@@ -4544,7 +4544,6 @@ int main(int argc, char* argv[])
     (void)fflush(stdout);
     CreatePGDefaultTempDir();
 
-    exit(0);
     /* Create the stuff we don't need to use bootstrap mode for */
 
     printf(_("Setup auth ... \n"));
@@ -4560,6 +4559,7 @@ int main(int argc, char* argv[])
 #ifdef ENABLE_PRIVATEGAUSS
     setup_privsysviews();
 #endif
+    exit(0);
     printf(_("Setup perf views ... \n"));
     (void)fflush(stdout);
     setup_perfviews();

@@ -902,7 +902,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
                 };
                 return status;
             }
-            K2LOG_I(log::k2pg, "Verified basetupleid");
+            K2LOG_D(log::k2pg, "Verified basetupleid");
         }
     }
 
