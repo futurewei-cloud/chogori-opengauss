@@ -111,8 +111,9 @@ void AlterSetting(Oid databaseid, Oid roleid, VariableSetStmt* setstmt)
 
                 /* Update indexes */
                 CatalogUpdateIndexes(rel, newtuple);
-            } else
-                simple_heap_delete(rel, &tuple->t_self);
+            } else {
+                CatalogTupleDelete(rel, tuple);
+            }
         }
     } else if (HeapTupleIsValid(tuple)) {
         Datum repl_val[Natts_pg_db_role_setting];
@@ -147,8 +148,9 @@ void AlterSetting(Oid databaseid, Oid roleid, VariableSetStmt* setstmt)
 
             /* Update indexes */
             CatalogUpdateIndexes(rel, newtuple);
-        } else
-            simple_heap_delete(rel, &tuple->t_self);
+        } else {
+            CatalogTupleDelete(rel, tuple);
+        }
     } else if (valuestr != NULL) {
         /* non-null valuestr means it's not RESET, so insert a new tuple */
         HeapTuple newtuple = NULL;
@@ -211,7 +213,7 @@ void DropSetting(Oid databaseid, Oid roleid)
 
     scan = heap_beginscan(relsetting, SnapshotNow, numkeys, keys);
     while (HeapTupleIsValid(tup = heap_getnext(scan, ForwardScanDirection))) {
-        simple_heap_delete(relsetting, &tup->t_self);
+        CatalogTupleDelete(relsetting, tup);
     }
     heap_endscan(scan);
 

@@ -442,7 +442,7 @@ void DefineOpClass(CreateOpClassStmt* stmt)
                 }
 
                 if (item->order_family)
-                    sortfamilyOid = get_opfamily_oid(BTREE_AM_OID, item->order_family, false); 
+                    sortfamilyOid = get_opfamily_oid(BTREE_AM_OID, item->order_family, false);
                 else
                     sortfamilyOid = InvalidOid;
 
@@ -778,7 +778,7 @@ static void AlterOpFamilyAdd(
                 }
 
                 if (item->order_family)
-                    sortfamilyOid = get_opfamily_oid(BTREE_AM_OID, item->order_family, false); 
+                    sortfamilyOid = get_opfamily_oid(BTREE_AM_OID, item->order_family, false);
                 else
                     sortfamilyOid = InvalidOid;
 
@@ -1420,7 +1420,7 @@ void RemoveOpFamilyById(Oid opfamilyOid)
         ereport(
             ERROR, (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("cache lookup failed for opfamily %u", opfamilyOid)));
 
-    simple_heap_delete(rel, &tup->t_self);
+    CatalogTupleDelete(rel, tup);
 
     ReleaseSysCache(tup);
 
@@ -1439,7 +1439,7 @@ void RemoveOpClassById(Oid opclassOid)
         ereport(
             ERROR, (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("cache lookup failed for opclass %u", opclassOid)));
 
-    simple_heap_delete(rel, &tup->t_self);
+    CatalogTupleDelete(rel, tup);
 
     ReleaseSysCache(tup);
 
@@ -1464,7 +1464,7 @@ void RemoveAmOpEntryById(Oid entryOid)
     if (!HeapTupleIsValid(tup))
         ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("could not find tuple for amop entry %u", entryOid)));
 
-    simple_heap_delete(rel, &tup->t_self);
+    CatalogTupleDelete(rel, tup);
 
     systable_endscan(scan);
     heap_close(rel, RowExclusiveLock);
@@ -1489,7 +1489,7 @@ void RemoveAmProcEntryById(Oid entryOid)
         ereport(
             ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("could not find tuple for amproc entry %u", entryOid)));
 
-    simple_heap_delete(rel, &tup->t_self);
+    CatalogTupleDelete(rel, tup);
 
     systable_endscan(scan);
     heap_close(rel, RowExclusiveLock);

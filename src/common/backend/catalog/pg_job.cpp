@@ -118,8 +118,8 @@ static void insert_pg_job_proc(int4 job_id, Datum what)
     heap_close(rel, RowExclusiveLock);
 }
 /*
- * Encapsulating a function with the job interface will cause the function's schema be 
- * inserted into the pg_job system table. 
+ * Encapsulating a function with the job interface will cause the function's schema be
+ * inserted into the pg_job system table.
  * In order to avoid the situation that the job function in the dbe_task schema can only
  * call functions or procedures under the dbe_task schema, convert the dbe_task to public.
  */
@@ -311,7 +311,7 @@ static void delete_job_proc(int4 job_id)
             (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("Can not find jobid %d in system table pg_job_proc.", job_id)));
     }
 
-    simple_heap_delete(relation, &tup->t_self);
+    CatalogTupleDelete(relation, tup);
 
     ReleaseSysCache(tup);
     heap_close(relation, RowExclusiveLock);
@@ -390,7 +390,7 @@ void update_pg_job_dbname(Oid jobid, const char* dbname)
 
     rc = memset_s(nulls, sizeof(nulls), false, sizeof(nulls));
     securec_check_c(rc, "\0", "\0");
- 
+
     rc = memset_s(replaces, sizeof(replaces), false, sizeof(replaces));
     securec_check_c(rc, "\0", "\0");
 
@@ -493,7 +493,7 @@ static void update_pg_job_info(int job_id, Update_Pgjob_Status status, Datum sta
                 visnull[Anum_pg_job_last_suc_date - 1] ? 0 : old_value[Anum_pg_job_last_suc_date - 1],
                 values[Anum_pg_job_this_run_date - 1],
                 old_value[Anum_pg_job_next_run_date - 1],
-                failure_count, 
+                failure_count,
                 values[Anum_pg_job_node_name - 1]);
             break;
         }
@@ -1204,7 +1204,7 @@ Datum isubmit_job_on_nodes_internal(PG_FUNCTION_ARGS)
 
 #ifdef ENABLE_MULTIPLE_NODES
     if (IS_PGXC_COORDINATOR && !IsConnFromCoord()) {
-        syn_command_to_other_node_internal(node_name, database, job_id, Job_ISubmit_Node_Internal, 
+        syn_command_to_other_node_internal(node_name, database, job_id, Job_ISubmit_Node_Internal,
             what, next_date, job_interval, false);
     }
 #endif
@@ -1290,7 +1290,7 @@ static void remove_job_internal(Relation pg_job, int4 job_id, bool ischeck, bool
         check_job_permission(tup, !is_internal_perf_job(job_id));
     }
 
-    simple_heap_delete(pg_job, &tup->t_self);
+    CatalogTupleDelete(pg_job, tup);
 
     heap_freetuple_ext(tup);
 
@@ -1433,7 +1433,7 @@ void RemoveJobById(Oid objectId)
         if (ischeck) {
             check_job_permission(cp_tuple, !is_internal_perf_job(job_id));
         }
-        simple_heap_delete(relation, &cp_tuple->t_self);
+        CatalogTupleDelete(relation, cp_tuple);
         heap_freetuple_ext(cp_tuple);
         /* Delete from pg_job_proc.*/
         delete_job_proc(job_id);
@@ -1816,7 +1816,7 @@ void update_run_job_to_fail()
  * CAUTION: the function only tries JOBID_MAX_NUMBER times. So if there have been a lot of jobs in pg_job,
  * the function is likely to fail, although there is still valid id to use.
  */
-static int get_random_job_id() 
+static int get_random_job_id()
 {
     int job_id = gs_random() % JOBID_MAX_NUMBER;
     HeapTuple tup = NULL;

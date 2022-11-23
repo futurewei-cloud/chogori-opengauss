@@ -237,7 +237,7 @@ static void shdepChangeDep(Relation sdepRel, Oid classid, Oid objid, int32 objsu
     if (objfile_isnull && isSharedObjectPinned(refclassid, refobjid, sdepRel)) {
         /* No new entry needed, so just delete existing entry if any */
         if (oldtup != NULL)
-            simple_heap_delete(sdepRel, &oldtup->t_self);
+            CatalogTupleDelete(sdepRel, oldtup);
     } else if (oldtup != NULL) {
         /* Need to update existing entry */
         Form_pg_shdepend shForm = (Form_pg_shdepend)GETSTRUCT(oldtup);
@@ -795,7 +795,7 @@ void dropDatabaseDependencies(Oid databaseId)
         /* Forward drop stmt to MOT FDW. */
         MotFdwDropDatabaseDependency(tup);
 #endif
-        simple_heap_delete(sdepRel, &tup->t_self);
+        CatalogTupleDelete(sdepRel, tup);
     }
 
     systable_endscan(scan);
@@ -931,7 +931,7 @@ static void shdepDropDependency(Relation sdepRel, Oid classId, Oid objectId, int
             continue;
 
         /* OK, delete it */
-        simple_heap_delete(sdepRel, &tup->t_self);
+        CatalogTupleDelete(sdepRel, tup);
     }
 
     systable_endscan(scan);
@@ -1685,7 +1685,7 @@ void changeDependencyOnObjfile(Oid objectId, Oid refobjId, const char* newObjfil
     } else {
         if (ispinned && newObjfile == NULL) {
             /* No entry needed, just delete the existing entry */
-            simple_heap_delete(sdepRel, &oldtup->t_self);
+            CatalogTupleDelete(sdepRel, oldtup);
         } else {
             /* Update the existing entry */
             Datum repl_val[Natts_pg_shdepend];

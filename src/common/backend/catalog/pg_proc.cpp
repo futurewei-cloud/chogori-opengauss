@@ -582,7 +582,7 @@ static bool checkPackageFunctionConflicts(
                 continue;
             Datum packageid_datum = SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_packageid, &isNull);
             Oid packageid = ObjectIdGetDatum(packageid_datum);
-            if (packageid != propackageid) 
+            if (packageid != propackageid)
                 continue;
             Datum propackage = SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_package, &isNull);
             bool ispackage = false;
@@ -728,7 +728,7 @@ static void checkFunctionConflicts(HeapTuple oldtup, const char* procedureName, 
                 }
                 Relation gs_rel = heap_open(ClientLogicProcId, RowExclusiveLock);
                 deleteDependencyRecordsFor(ClientLogicProcId, HeapTupleGetOid(gs_oldtup), true);
-                simple_heap_delete(gs_rel, &gs_oldtup->t_self);
+                CatalogTupleDelete(gs_rel, gs_oldtup);
                 heap_close(gs_rel, RowExclusiveLock);
                 ReleaseSysCache(gs_oldtup);
             }
@@ -869,7 +869,7 @@ static void cfunction_check_user(const char* probin)
 inline void IsLeavingDefaultPath(const char* path)
 {
     if (strstr(path, "../") != NULL) {
-        ereport(ERROR, 
+        ereport(ERROR,
             (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Path \"%s\" is not admitted. Don't use \"../\" "
                 "when enable_default_cfunc_libpath is on.", path)));
     }
@@ -1313,7 +1313,7 @@ Oid ProcedureCreate(const char* procedureName, Oid procNamespace, Oid propackage
         if (OidIsValid(propackageid)) {
             pkgname = GetPackageName(propackageid);
         }
-        if (pkgname == NULL) { 
+        if (pkgname == NULL) {
             name = list_make2(makeString(get_namespace_name(procNamespace)), makeString(pstrdup(procedureName)));
         } else {
             name = list_make3(makeString(get_namespace_name(procNamespace)), makeString(pstrdup(pkgname->data)), makeString(pstrdup(procedureName)));
@@ -1355,17 +1355,17 @@ Oid ProcedureCreate(const char* procedureName, Oid procNamespace, Oid propackage
                                    "Do not allow different package have same function name with same parameter,"
                                    "please drop package by oid %d first", oldPkgOid)));
                 }
-            } 
+            }
             if (OidIsValid(propackageid) && !OidIsValid(oldPkgOid)) {
                     ereport(ERROR,
                         (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                             errmsg("Do not allow have same function name with same parameter in this version,"
-                                   "please drop function first.")));               
+                                   "please drop function first.")));
             } else if (!OidIsValid(propackageid) && OidIsValid(oldPkgOid)) {
                     ereport(ERROR,
                         (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                             errmsg("Do not allow have same function name with same parameter in this version,"
-                                   "please drop package by oid %d first.", oldPkgOid)));            
+                                   "please drop package by oid %d first.", oldPkgOid)));
             }
         }
         checkFunctionConflicts(oldtup,
@@ -2242,27 +2242,27 @@ Node *plpgsql_create_proc_operator_ref(ParseState *pstate, Node *left, Node *rig
 /*
  * judage the two arglis is same or not
  */
-bool isSameArgList(List* argList1, List* argList2) 
+bool isSameArgList(List* argList1, List* argList2)
 {
     ListCell* cell =  NULL;
     int length1 = list_length(argList1);
     int length2 = list_length(argList2);
-    
+
     if (length1 != length2) {
         return false;
-    }    
+    }
     FunctionParameter* arr1[length1];
     FunctionParameter* arr2[length2];
-    int length = 0; 
+    int length = 0;
     foreach(cell, argList1) {
         arr1[length] = (FunctionParameter*)lfirst(cell);
-        length = length + 1; 
-    }    
-    length = 0; 
+        length = length + 1;
+    }
+    length = 0;
     foreach(cell, argList2) {
         arr2[length] = (FunctionParameter*)lfirst(cell);
-        length = length + 1; 
-    }    
+        length = length + 1;
+    }
     for (int i = 0; i < length1; i++) {
         FunctionParameter* fp1 = arr1[i];
         FunctionParameter* fp2 = arr2[i];
@@ -2304,8 +2304,8 @@ bool isSameArgList(List* argList1, List* argList2)
         }
         if (toid1 != toid2 || fp1->mode != fp2->mode) {
             return false;
-        } 
-    }    
+        }
+    }
     return true;
 }
 
