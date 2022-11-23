@@ -259,20 +259,17 @@ void CatalogUpdateIndexes(Relation heapRel, HeapTuple heapTuple)
 	{
 		HeapTuple	oldtup = NULL;
 		bool		has_indices = K2PgRelHasSecondaryIndices(heapRel);
-
 		if (has_indices)
 		{
 			if (heapTuple->t_k2pgctid)
 			{
-				oldtup = CamFetchTuple(heapRel, heapTuple->t_k2pgctid);
-				CatalogIndexDelete(indstate, oldtup);
+				CatalogIndexDelete(indstate, heapTuple);
 			}
 			else
 				elog(WARNING, "k2pgctid missing in %s's tuple",
 								RelationGetRelationName(heapRel));
 		}
 
-		K2PgUpdateSysCatalogTuple(heapRel, oldtup, heapTuple);
 		/* Update the local cache automatically */
 		K2PgSetSysCacheTuple(heapRel, heapTuple);
 
