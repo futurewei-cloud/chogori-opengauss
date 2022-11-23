@@ -134,41 +134,41 @@ const struct AclObjectType {
     AclMode all_ddl_privileges;
     const char* errormsg;
 } acl_object_type[] = {
-    {ACL_OBJECT_RELATION, (ACL_ALL_RIGHTS_RELATION | ACL_ALL_RIGHTS_SEQUENCE), 
+    {ACL_OBJECT_RELATION, (ACL_ALL_RIGHTS_RELATION | ACL_ALL_RIGHTS_SEQUENCE),
         ACL_ALL_DDL_RIGHTS_RELATION, gettext_noop("invalid privilege type %s for relation")},
-    {ACL_OBJECT_SEQUENCE, ACL_ALL_RIGHTS_SEQUENCE, ACL_ALL_DDL_RIGHTS_SEQUENCE, 
+    {ACL_OBJECT_SEQUENCE, ACL_ALL_RIGHTS_SEQUENCE, ACL_ALL_DDL_RIGHTS_SEQUENCE,
         gettext_noop("invalid privilege type %s for sequence")},
-    {ACL_OBJECT_DATABASE, ACL_ALL_RIGHTS_DATABASE, ACL_ALL_DDL_RIGHTS_DATABASE, 
+    {ACL_OBJECT_DATABASE, ACL_ALL_RIGHTS_DATABASE, ACL_ALL_DDL_RIGHTS_DATABASE,
         gettext_noop("invalid privilege type %s for database")},
-    {ACL_OBJECT_DOMAIN, ACL_ALL_RIGHTS_TYPE, ACL_ALL_DDL_RIGHTS_DOMAIN, 
+    {ACL_OBJECT_DOMAIN, ACL_ALL_RIGHTS_TYPE, ACL_ALL_DDL_RIGHTS_DOMAIN,
         gettext_noop("invalid privilege type %s for domain")},
-    {ACL_OBJECT_FUNCTION, ACL_ALL_RIGHTS_FUNCTION, ACL_ALL_DDL_RIGHTS_FUNCTION, 
+    {ACL_OBJECT_FUNCTION, ACL_ALL_RIGHTS_FUNCTION, ACL_ALL_DDL_RIGHTS_FUNCTION,
         gettext_noop("invalid privilege type %s for function")},
-    {ACL_OBJECT_LANGUAGE, ACL_ALL_RIGHTS_LANGUAGE, ACL_ALL_DDL_RIGHTS_LANGUAGE, 
+    {ACL_OBJECT_LANGUAGE, ACL_ALL_RIGHTS_LANGUAGE, ACL_ALL_DDL_RIGHTS_LANGUAGE,
         gettext_noop("invalid privilege type %s for language")},
-    {ACL_OBJECT_PACKAGE, ACL_ALL_RIGHTS_PACKAGE, ACL_ALL_DDL_RIGHTS_PACKAGE, 
+    {ACL_OBJECT_PACKAGE, ACL_ALL_RIGHTS_PACKAGE, ACL_ALL_DDL_RIGHTS_PACKAGE,
         gettext_noop("invalid privilege type %s for package")},
-    {ACL_OBJECT_LARGEOBJECT, ACL_ALL_RIGHTS_LARGEOBJECT, ACL_ALL_DDL_RIGHTS_LARGEOBJECT, 
+    {ACL_OBJECT_LARGEOBJECT, ACL_ALL_RIGHTS_LARGEOBJECT, ACL_ALL_DDL_RIGHTS_LARGEOBJECT,
         gettext_noop("invalid privilege type %s for large object")},
-    {ACL_OBJECT_NAMESPACE, ACL_ALL_RIGHTS_NAMESPACE, ACL_ALL_DDL_RIGHTS_NAMESPACE, 
+    {ACL_OBJECT_NAMESPACE, ACL_ALL_RIGHTS_NAMESPACE, ACL_ALL_DDL_RIGHTS_NAMESPACE,
         gettext_noop("invalid privilege type %s for schema")},
-    {ACL_OBJECT_NODEGROUP, ACL_ALL_RIGHTS_NODEGROUP, ACL_ALL_DDL_RIGHTS_NODEGROUP, 
+    {ACL_OBJECT_NODEGROUP, ACL_ALL_RIGHTS_NODEGROUP, ACL_ALL_DDL_RIGHTS_NODEGROUP,
         gettext_noop("invalid privilege type %s for node group")},
-    {ACL_OBJECT_TABLESPACE, ACL_ALL_RIGHTS_TABLESPACE, ACL_ALL_DDL_RIGHTS_TABLESPACE, 
+    {ACL_OBJECT_TABLESPACE, ACL_ALL_RIGHTS_TABLESPACE, ACL_ALL_DDL_RIGHTS_TABLESPACE,
         gettext_noop("invalid privilege type %s for tablespace")},
-    {ACL_OBJECT_TYPE, ACL_ALL_RIGHTS_TYPE, ACL_ALL_DDL_RIGHTS_TYPE, 
+    {ACL_OBJECT_TYPE, ACL_ALL_RIGHTS_TYPE, ACL_ALL_DDL_RIGHTS_TYPE,
         gettext_noop("invalid privilege type %s for type")},
-    {ACL_OBJECT_FDW, ACL_ALL_RIGHTS_FDW, ACL_ALL_DDL_RIGHTS_FDW, 
+    {ACL_OBJECT_FDW, ACL_ALL_RIGHTS_FDW, ACL_ALL_DDL_RIGHTS_FDW,
         gettext_noop("invalid privilege type %s for foreign-data wrapper")},
-    {ACL_OBJECT_FOREIGN_SERVER, ACL_ALL_RIGHTS_FOREIGN_SERVER, ACL_ALL_DDL_RIGHTS_FOREIGN_SERVER, 
+    {ACL_OBJECT_FOREIGN_SERVER, ACL_ALL_RIGHTS_FOREIGN_SERVER, ACL_ALL_DDL_RIGHTS_FOREIGN_SERVER,
         gettext_noop("invalid privilege type %s for foreign server")},
-    {ACL_OBJECT_DATA_SOURCE, ACL_ALL_RIGHTS_DATA_SOURCE, ACL_ALL_DDL_RIGHTS_DATA_SOURCE, 
+    {ACL_OBJECT_DATA_SOURCE, ACL_ALL_RIGHTS_DATA_SOURCE, ACL_ALL_DDL_RIGHTS_DATA_SOURCE,
         gettext_noop("invalid privilege type %s for data source")},
-    {ACL_OBJECT_GLOBAL_SETTING, ACL_ALL_RIGHTS_KEY, ACL_ALL_DDL_RIGHTS_KEY, 
+    {ACL_OBJECT_GLOBAL_SETTING, ACL_ALL_RIGHTS_KEY, ACL_ALL_DDL_RIGHTS_KEY,
         gettext_noop("invalid privilege type %s for client master key")},
-    {ACL_OBJECT_COLUMN_SETTING, ACL_ALL_RIGHTS_KEY, ACL_ALL_DDL_RIGHTS_KEY, 
+    {ACL_OBJECT_COLUMN_SETTING, ACL_ALL_RIGHTS_KEY, ACL_ALL_DDL_RIGHTS_KEY,
         gettext_noop("invalid privilege type %s for column encryption key")},
-    {ACL_OBJECT_DIRECTORY, ACL_ALL_RIGHTS_DIRECTORY, ACL_ALL_DDL_RIGHTS_DIRECTORY, 
+    {ACL_OBJECT_DIRECTORY, ACL_ALL_RIGHTS_DIRECTORY, ACL_ALL_DDL_RIGHTS_DIRECTORY,
         gettext_noop("invalid privilege type %s for directory")},
 };
 
@@ -373,7 +373,7 @@ static void restrict_and_check_grant(AclMode* this_privileges, bool is_grant,
             break;
         }
     }
-    
+
     if (!kind_flag) {
         ereport(ERROR, (errmodule(MOD_SEC), errcode(ERRCODE_UNRECOGNIZED_NODE_TYPE),
             errmsg("unrecognized object kind: %d", objkind), errdetail("N/A"),
@@ -618,7 +618,7 @@ void ExecuteGrantStmt(GrantStmt* stmt)
                             errdetail("Column privileges are only valid for relations."),
                                 errcause("Column privileges are only valid for relations in GRANT/REVOKE."),
                                     erraction("Use the column privileges only for relations.")));
-                
+
                 if (privnode->priv_name == NULL) {
                     istmt.col_ddl_privs = lappend(istmt.col_ddl_privs, privnode);
                     istmt.col_privs = lappend(istmt.col_privs, privnode);
@@ -630,7 +630,7 @@ void ExecuteGrantStmt(GrantStmt* stmt)
                         istmt.col_privs = lappend(istmt.col_privs, privnode);
                     }
                 }
-                
+
                 continue;
             }
 
@@ -875,7 +875,7 @@ static List *objectNamesToOids(GrantObjectType objtype, List *objnames)
 
                 Oid dest_group(0);
                 char in_redis = get_pgxc_group_redistributionstatus(group_oid);
-                bool redis_valid_oid = (in_redis == PGXC_REDISTRIBUTION_SRC_GROUP) && 
+                bool redis_valid_oid = (in_redis == PGXC_REDISTRIBUTION_SRC_GROUP) &&
                                         (OidIsValid(dest_group = PgxcGroupGetRedistDestGroupOid()));
                 if (redis_valid_oid) {
                     objects = lappend_oid(objects, dest_group);
@@ -1741,7 +1741,7 @@ void RemoveDefaultACLById(Oid defaclOid)
             errmsg("could not find tuple for default ACL %u", defaclOid), errdetail("N/A"),
                 errcause("System error."), erraction("Contact engineer to support.")));
 
-    simple_heap_delete(rel, &tuple->t_self);
+    CatalogTupleDelete(rel, tuple);
     systable_endscan(scan);
     heap_close(rel, RowExclusiveLock);
 }
@@ -1806,7 +1806,7 @@ static void expand_all_col_privileges(
         if (curr_att == BucketIdAttributeNumber && !relhasbucket)
             continue;
         /* Views don't have any system columns at all */
-        if ((classForm->relkind == RELKIND_VIEW || classForm->relkind == RELKIND_CONTQUERY) 
+        if ((classForm->relkind == RELKIND_VIEW || classForm->relkind == RELKIND_CONTQUERY)
             && curr_att < 0)
             continue;
 
@@ -1923,7 +1923,7 @@ static void ExecGrant_Attribute(InternalGrant* istmt, Oid relOid, const char* re
      * whether a warning is issued, this seems close enough.
      */
     bool all_privs = ((col_privileges == ACL_ALL_RIGHTS_COLUMN) && (col_ddl_privileges == ACL_ALL_DDL_RIGHTS_COLUMN));
-    
+
     AclMode this_col_privileges[PRIVS_ATTR_NUM];
     restrict_and_check_grant(this_col_privileges, istmt->is_grant,
         avail_goptions,
@@ -3490,7 +3490,7 @@ static void set_nodegroup_all_privileges(InternalGrant* grantStmt) {
         grantStmt->privileges = ACL_ALL_RIGHTS_NODEGROUP;
         grantStmt->ddl_privileges = (t_thrd.proc->workingVersionNum >= PRIVS_VERSION_NUM) ?
             ACL_ALL_DDL_RIGHTS_NODEGROUP : ACL_NO_DDL_RIGHTS;
-    }    
+    }
 }
 
 /*
@@ -3547,7 +3547,7 @@ static void ExecGrant_NodeGroup(InternalGrant* grantStmt)
     ListCell* cell = NULL;
 
     /* set nodegroup all privileges */
-    set_nodegroup_all_privileges(grantStmt); 
+    set_nodegroup_all_privileges(grantStmt);
 
     relation = heap_open(PgxcGroupRelationId, RowExclusiveLock);
 
@@ -5009,7 +5009,7 @@ AclMode pg_class_aclmask(Oid table_oid, Oid roleid, AclMode mask, AclMaskHow how
      * protected in this way.  Assume the view rules can take care of
      * themselves.	ACL_USAGE is if we ever have system sequences.
      */
-    if (!is_ddl_privileges && (mask & (ACL_INSERT | ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE | ACL_USAGE)) 
+    if (!is_ddl_privileges && (mask & (ACL_INSERT | ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE | ACL_USAGE))
         && IsSystemClass(classForm) &&
         classForm->relkind != RELKIND_VIEW && classForm->relkind != RELKIND_CONTQUERY && !has_rolcatupdate(roleid) &&
         !g_instance.attr.attr_common.allowSystemTableMods) {
@@ -5718,7 +5718,7 @@ AclMode pg_tablespace_aclmask(Oid spc_oid, Oid roleid, AclMode mask, AclMaskHow 
     /* Database Security:  Support separation of privilege. */
     if (superuser_arg(roleid) || systemDBA_arg(roleid))
         return REMOVE_DDL_FLAG(mask);
-    
+
     if (isOperatoradmin(roleid) && u_sess->attr.attr_security.operation_mode) {
         return REMOVE_DDL_FLAG(mask);
     }
@@ -6431,7 +6431,7 @@ bool gs_sec_cmk_ownercheck(Oid key_oid, Oid roleid)
     }
     tuple = SearchSysCache1(GLOBALSETTINGOID, ObjectIdGetDatum(key_oid));
     if (!HeapTupleIsValid(tuple)) {
-        ereport(ERROR, (errmodule(MOD_SEC), errcode(ERRCODE_UNDEFINED_KEY), 
+        ereport(ERROR, (errmodule(MOD_SEC), errcode(ERRCODE_UNDEFINED_KEY),
             errmsg("client master key with OID %u does not exist", key_oid), errdetail("N/A"),
                 errcause("System error."), erraction("Contact engineer to support.")));
     }

@@ -101,7 +101,7 @@ void LargeObjectDrop(Oid loid)
     if (!HeapTupleIsValid(tuple))
         ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("large object %u does not exist", loid)));
 
-    simple_heap_delete(pg_lo_meta, &tuple->t_self);
+    CatalogTupleDelete(pg_lo_meta, tuple);
 
     systable_endscan(scan);
 
@@ -112,7 +112,7 @@ void LargeObjectDrop(Oid loid)
 
     scan = systable_beginscan(pg_largeobject, LargeObjectLOidPNIndexId, true, NULL, 1, skey);
     while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
-        simple_heap_delete(pg_largeobject, &tuple->t_self);
+        CatalogTupleDelete(pg_largeobject, tuple);
     }
 
     systable_endscan(scan);

@@ -348,7 +348,7 @@ void RemoveOperatorById(Oid operOid)
     if (!HeapTupleIsValid(tup)) /* should not happen */
         ereport(ERROR, (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("cache lookup failed for operator %u", operOid)));
 
-    simple_heap_delete(relation, &tup->t_self);
+    CatalogTupleDelete(relation, tup);
 
     ReleaseSysCache(tup);
 

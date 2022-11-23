@@ -44,7 +44,7 @@
  * @in ctime - object create time.
  * @in mtime - object modify time.
  * @in createcsn - the commit sequence number when object create.
- * @in changecsn - the commit sequence number when the old version expires. 
+ * @in changecsn - the commit sequence number when the old version expires.
  * @returns - void
  */
 void CreatePgObject(Oid objectOid, PgObjectType objectType, Oid creator, const PgObjectOption objectOpt)
@@ -143,7 +143,7 @@ void DeletePgObject(Oid objectOid, PgObjectType objectType)
 
     tup = SearchSysCache2(PGOBJECTID, ObjectIdGetDatum(objectOid), CharGetDatum(objectType));
     if (HeapTupleIsValid(tup)) {
-        simple_heap_delete(relation, &tup->t_self);
+        CatalogTupleDelete(relation, tup);
         ReleaseSysCache(tup);
     }
     heap_close(relation, RowExclusiveLock);
@@ -172,7 +172,7 @@ static CommitSeqNo GetMaxChangecsn(List* indexIds, CommitSeqNo relationChangecsn
     foreach(indexId, indexIds) {
         Oid indexOid = lfirst_oid(indexId);
         tup = SearchSysCache2(PGOBJECTID, ObjectIdGetDatum(indexOid), CharGetDatum(OBJECT_TYPE_INDEX));
-        if (!HeapTupleIsValid(tup)) { 
+        if (!HeapTupleIsValid(tup)) {
             changecsn = InvalidCommitSeqNo;
         } else {
             valueChangecsn = heap_getattr(tup, Anum_pg_object_changecsn, tupdesc, &changecsnIsnull);
@@ -208,17 +208,17 @@ void GetObjectCSN(Oid objectOid, Relation userRel, PgObjectType objectType, Obje
     Relation relation = NULL;
     Datum valueChangecsn;
     Datum valueCreatecsn;
-    /* 
-       The pg_object system table does not hold objects generated during the database init 
+    /*
+       The pg_object system table does not hold objects generated during the database init
        process,so the object's createcsn and changecsn is zero during the process.
     */
     if (IsInitdb || !(t_thrd.proc->workingVersionNum >= INPLACE_UPDATE_WERSION_NUM)) {
         return;
     }
-    /* 
-       The pg_object records mtime and changecsn when the DDL command occurs.However,unlike 
-       the normal table creation process, no user can directly operate on the system 
-       table after the initialization process. So we record createcsn and changecsn of the 
+    /*
+       The pg_object records mtime and changecsn when the DDL command occurs.However,unlike
+       the normal table creation process, no user can directly operate on the system
+       table after the initialization process. So we record createcsn and changecsn of the
        system table as zero.
     */
     if (objectOid < FirstNormalObjectId) {
@@ -227,7 +227,7 @@ void GetObjectCSN(Oid objectOid, Relation userRel, PgObjectType objectType, Obje
     relation = heap_open(PgObjectRelationId, RowExclusiveLock);
     tupdesc = RelationGetDescr(relation);
     tup = SearchSysCache2(PGOBJECTID, ObjectIdGetDatum(objectOid), CharGetDatum(objectType));
-    if (!HeapTupleIsValid(tup)) { 
+    if (!HeapTupleIsValid(tup)) {
         heap_close(relation, RowExclusiveLock);
         return;
     } else {
@@ -239,7 +239,7 @@ void GetObjectCSN(Oid objectOid, Relation userRel, PgObjectType objectType, Obje
         if (!createcsnIsnull) {
             csnInfo->createcsn = UInt64GetDatum(valueCreatecsn);
         }
-        /* 
+        /*
             When an  index is created or modified, the changecsn of table defining
             index should be updated to the maximum changecsn of the index and table.
         */

@@ -72,7 +72,7 @@ void RemoveRewriteRuleById(Oid ruleOid)
     /*
      * Now delete the pg_rewrite tuple for the rule
      */
-    simple_heap_delete(RewriteRelation, &tuple->t_self);
+    CatalogTupleDelete(RewriteRelation, tuple);
 
     systable_endscan(rcscan);
 

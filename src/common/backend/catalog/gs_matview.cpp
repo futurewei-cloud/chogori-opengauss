@@ -168,7 +168,7 @@ void delete_matview_tuple(Oid matviewOid)
     }
 
     if (HeapTupleIsValid(tup)) {
-        simple_heap_delete(relation, &tup->t_self);
+        CatalogTupleDelete(relation, tup);
 
         /* clear up correlative matmap-table */
         if (HeapTupleIsValid(ScanPgRelation(matmapid, true, false))) {
@@ -292,8 +292,8 @@ void delete_matviewdep_tuple(Oid matviewOid)
     while((tup = (HeapTuple) tableam_scan_getnexttuple(scan, ForwardScanDirection)) != NULL) {
         matviewDepForm = (Form_gs_matview_dependency)GETSTRUCT(tup);
         try_delete_mlog_table(relation, matviewDepForm->mlogid);
-        simple_heap_delete(relation, &tup->t_self);
-    }
+        CatalogTupleDelete(relation, tup);
+   }
 
     tableam_scan_end(scan);
     heap_close(relation, NoLock);
@@ -323,7 +323,7 @@ void delete_matdep_table(Oid mlogid)
     scan = tableam_scan_begin(relation, SnapshotNow, 1, &scanKey);
 
     while((tup = (HeapTuple) tableam_scan_getnexttuple(scan, ForwardScanDirection)) != NULL) {
-        simple_heap_delete(relation, &tup->t_self);
+        CatalogTupleDelete(relation, tup);
         try_delete_mlog_table(relation, mlogid);
         matviewDepForm = (Form_gs_matview_dependency)GETSTRUCT(tup);
         delete_matview_tuple(matviewDepForm->matviewid);

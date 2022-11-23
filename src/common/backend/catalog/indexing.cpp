@@ -242,6 +242,15 @@ CatalogIndexDelete(CatalogIndexState indstate, HeapTuple heapTuple)
 	ExecDropSingleTupleTableSlot(slot);
 }
 
+void CatalogTupleDelete(Relation heapRel, HeapTuple tup)
+{
+    if (IsK2PgRelation(heapRel)) {
+        K2PgDeleteSysCatalogTuple(heapRel, tup);
+    } else {
+        simple_heap_delete(heapRel, &tup->t_self);
+    }
+}
+
 /*
  * CatalogUpdateIndexes - do all the indexing work for a new catalog tuple
  *

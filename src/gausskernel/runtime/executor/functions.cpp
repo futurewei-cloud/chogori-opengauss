@@ -1802,7 +1802,7 @@ bool check_sql_fn_retval(Oid func_id, Oid ret_type, List* query_tree_list, bool*
             } else if (!IsBinaryCoercible(tle_type, att_type) &&
                 /*
                  * if the data type mismatch is because of it is client_logic, it's OK at this point
-                 * we just need to validate that it does not conflict with the original data type 
+                 * we just need to validate that it does not conflict with the original data type
                  */
                 !(IsClientLogicType(att_type) && IsBinaryCoercible(tle_type, attr->atttypmod))) {
                 ereport(ERROR,
@@ -2060,12 +2060,12 @@ bool sql_fn_cl_rewrite_params(const Oid func_id, SQLFunctionParseInfoPtr p_info,
                 Assert(oldtup != tuple);
                 HeapTuple old_gs_tup = SearchSysCache1(GSCLPROCID, ObjectIdGetDatum(HeapTupleGetOid(oldtup)));
                 deleteDependencyRecordsFor(ProcedureRelationId, HeapTupleGetOid(oldtup), true);
-                simple_heap_delete(rel, &oldtup->t_self);
+                CatalogTupleDelete(rel, oldtup);
                 ReleaseSysCache(oldtup);
                 if (HeapTupleIsValid(old_gs_tup)) {
                     gs_rel = heap_open(ClientLogicProcId, RowExclusiveLock);
                     deleteDependencyRecordsFor(ClientLogicProcId, HeapTupleGetOid(old_gs_tup), true);
-                    simple_heap_delete(gs_rel, &old_gs_tup->t_self);
+                    CatalogTupleDelete(gs_rel, old_gs_tup);
                     heap_close(gs_rel, RowExclusiveLock);
                     ReleaseSysCache(old_gs_tup);
                 }

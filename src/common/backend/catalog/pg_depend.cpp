@@ -259,7 +259,7 @@ long deleteDependencyRecordsFor(Oid classId, Oid objectId, bool skipExtensionDep
         if (skipExtensionDeps && ((Form_pg_depend)GETSTRUCT(tup))->deptype == DEPENDENCY_EXTENSION)
             continue;
 
-        simple_heap_delete(depRel, &tup->t_self);
+        CatalogTupleDelete(depRel, tup);
         count++;
     }
 
@@ -300,7 +300,7 @@ long deleteDependencyRecordsForClass(Oid classId, Oid objectId, Oid refclassId, 
         Form_pg_depend depform = (Form_pg_depend)GETSTRUCT(tup);
 
         if (depform->refclassid == refclassId && depform->deptype == deptype) {
-            simple_heap_delete(depRel, &tup->t_self);
+            CatalogTupleDelete(depRel, tup);
             count++;
         }
     }
@@ -370,9 +370,9 @@ long changeDependencyFor(Oid classId, Oid objectId, Oid refClassId, Oid oldRefOb
         Form_pg_depend depform = (Form_pg_depend)GETSTRUCT(tup);
 
         if (depform->refclassid == refClassId && depform->refobjid == oldRefObjectId) {
-            if (newIsPinned)
-                simple_heap_delete(depRel, &tup->t_self);
-            else {
+            if (newIsPinned) {
+                CatalogTupleDelete(depRel, tup);
+            } else {
                 /* make a modifiable copy */
                 tup = heap_copytuple(tup);
                 depform = (Form_pg_depend)GETSTRUCT(tup);

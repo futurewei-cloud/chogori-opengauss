@@ -152,11 +152,12 @@ void RemoveConversionById(Oid conversionOid)
     scan = heap_beginscan(rel, SnapshotNow, 1, &scanKeyData);
 
     /* search for the target tuple */
-    if (HeapTupleIsValid(tuple = heap_getnext(scan, ForwardScanDirection)))
-        simple_heap_delete(rel, &tuple->t_self);
-    else
+    if (HeapTupleIsValid(tuple = heap_getnext(scan, ForwardScanDirection))) {
+        CatalogTupleDelete(rel, tuple);
+    } else {
         ereport(ERROR,
             (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("could not find tuple for conversion %u", conversionOid)));
+    }
     heap_endscan(scan);
     heap_close(rel, RowExclusiveLock);
 }

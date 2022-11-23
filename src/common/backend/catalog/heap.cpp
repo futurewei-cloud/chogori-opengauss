@@ -2969,8 +2969,9 @@ static void RelationRemoveInheritance(Oid relid)
 
     scan = systable_beginscan(catalogRelation, InheritsRelidSeqnoIndexId, true, NULL, 1, &key);
 
-    while (HeapTupleIsValid(tuple = systable_getnext(scan)))
-        simple_heap_delete(catalogRelation, &tuple->t_self);
+    while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
+        CatalogTupleDelete(catalogRelation, tuple);
+    }
 
     systable_endscan(scan);
     heap_close(catalogRelation, RowExclusiveLock);
@@ -2997,7 +2998,7 @@ void DeleteRelationTuple(Oid relid)
         ereport(ERROR, (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("cache lookup failed for relation %u", relid)));
 
     /* delete the relation tuple from pg_class, and finish up */
-    simple_heap_delete(pg_class_desc, &tup->t_self);
+    CatalogTupleDelete(pg_class_desc, tup);
 
     ReleaseSysCache(tup);
 
@@ -3028,8 +3029,9 @@ void DeleteAttributeTuples(Oid relid)
     scan = systable_beginscan(attrel, AttributeRelidNumIndexId, true, NULL, 1, key);
 
     /* Delete all the matching tuples */
-    while ((atttup = systable_getnext(scan)) != NULL)
-        simple_heap_delete(attrel, &atttup->t_self);
+    while ((atttup = systable_getnext(scan)) != NULL) {
+        CatalogTupleDelete(attrel, atttup);
+    }
 
     /* Clean up after the scan */
     systable_endscan(scan);
@@ -3061,8 +3063,9 @@ void DeleteSystemAttributeTuples(Oid relid)
     scan = systable_beginscan(attrel, AttributeRelidNumIndexId, true, NULL, 2, key);
 
     /* Delete all the matching tuples */
-    while ((atttup = systable_getnext(scan)) != NULL)
-        simple_heap_delete(attrel, &atttup->t_self);
+    while ((atttup = systable_getnext(scan)) != NULL) {
+        CatalogTupleDelete(attrel, atttup);
+    }
 
     /* Clean up after the scan */
     systable_endscan(scan);
@@ -3122,7 +3125,7 @@ void RemoveAttributeById(Oid relid, AttrNumber attnum)
     if (attnum < 0 || isRedisDropColumn) {
         /* System attribute (probably OID) ... just delete the row */
 
-        simple_heap_delete(attr_rel, &atttuple->t_self);
+        CatalogTupleDelete(attr_rel, atttuple);
     } else {
         errno_t rc;
         /* Dropping user attributes is lots harder */
@@ -3280,7 +3283,7 @@ void RemoveAttrDefaultById(Oid attrdefId)
     myrel = relation_open(myrelid, AccessExclusiveLock);
 
     /* Now we can delete the pg_attrdef row */
-    simple_heap_delete(attrdef_rel, &tuple->t_self);
+    CatalogTupleDelete(attrdef_rel, tuple);
 
     systable_endscan(scan);
     heap_close(attrdef_rel, RowExclusiveLock);
@@ -3402,7 +3405,7 @@ void heap_drop_with_catalog(Oid relid)
         /* remove error table file */
         RemoveBulkLoadErrorTableFile(foreignRel->rd_node.dbNode, relid);
 
-        simple_heap_delete(foreignRel, &tuple->t_self);
+        CatalogTupleDelete(foreignRel, tuple);
 
         ReleaseSysCache(tuple);
         heap_close(foreignRel, RowExclusiveLock);
@@ -3427,7 +3430,7 @@ void heap_drop_with_catalog(Oid relid)
         HeapTuple partTuple = searchPgPartitionByParentIdCopy(PART_OBJ_TYPE_PARTED_TABLE, relid);
         if (partTuple) {
             Relation pg_partitionRel = heap_open(PartitionRelationId, RowExclusiveLock);
-            simple_heap_delete(pg_partitionRel, &partTuple->t_self);
+            CatalogTupleDelete(pg_partitionRel, partTuple);
 
             heap_freetuple(partTuple);
             heap_close(pg_partitionRel, RowExclusiveLock);
@@ -4404,9 +4407,9 @@ void RemoveStatistics(Oid relid, AttrNumber attnum)
     scan = systable_beginscan(pgstatistic, StatisticRelidKindAttnumInhIndexId, true, NULL, nkeys, key);
 
     /* we must loop even when attnum != 0, in case of inherited stats */
-    while (HeapTupleIsValid(tuple = systable_getnext(scan)))
-        simple_heap_delete(pgstatistic, &tuple->t_self);
-
+    while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
+        CatalogTupleDelete(pgstatistic, tuple);
+    }
     systable_endscan(scan);
     heap_close(pgstatistic, RowExclusiveLock);
 
@@ -4420,9 +4423,9 @@ void RemoveStatistics(Oid relid, AttrNumber attnum)
 
     /* we must loop here, in case of inherited stats and extended stats */
     while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
-        if (0 == attnum)
-            simple_heap_delete(pgstatistic, &tuple->t_self);
-        else {
+        if (0 == attnum) {
+            CatalogTupleDelete(pgstatistic, tuple);
+        } else {
             bool isnull = false;
             Datum attnums = heap_getattr(tuple, Anum_pg_statistic_ext_stakey, RelationGetDescr(pgstatistic), &isnull);
 
@@ -4434,8 +4437,9 @@ void RemoveStatistics(Oid relid, AttrNumber attnum)
                     break;
             }
             /* found multi-column stat that contains certain attnum */
-            if (i < key_nums)
-                simple_heap_delete(pgstatistic, &tuple->t_self);
+            if (i < key_nums) {
+                CatalogTupleDelete(pgstatistic, tuple);
+            }
         }
     }
 
@@ -5020,7 +5024,7 @@ static void deletePartitionTuple(Oid part_id)
 
     /* delete the relation tuple from pg_partition, and finish up */
     else {
-        simple_heap_delete(pg_partition_desc, &tup->t_self);
+        CatalogTupleDelete(pg_partition_desc, tup);
     }
 
     ReleaseSysCache(tup);
