@@ -74,6 +74,11 @@ extern void K2PgExecuteDeleteIndex(Relation index,
                                   Datum k2pgctid);
 
 /*
+ * Scans a secondary index for entries with matchin basek2pgctid and deletes them one by one
+*/
+extern void K2PgDeleteIndexRowsByBaseK2Pgctid(Relation index, Datum basek2pgctid);
+
+/*
  * Update a row (identified by k2pgctid) in a K2PG table.
  * If this is a single row op we will return false in the case that there was
  * no row to update. This can occur because we do not first perform a scan if
