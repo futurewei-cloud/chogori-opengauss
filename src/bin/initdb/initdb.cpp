@@ -1532,7 +1532,7 @@ static void setup_auth(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     fputs(_(cmd), stdout);
@@ -1661,7 +1661,7 @@ static void get_set_pwd(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -1761,7 +1761,7 @@ static void setup_depend(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -1798,7 +1798,7 @@ static void setup_sysviews(void)
      * We use -j here to avoid backslashing stuff in system_views.sql
      */
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -1834,7 +1834,7 @@ static void setup_perfviews(void)
      * We use -j here to avoid backslashing stuff in performance_views.sql
      */
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -1871,7 +1871,7 @@ static void setup_privsysviews(void)
      * We use -j here to avoid backslashing stuff in system_views.sql
      */
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -1908,7 +1908,7 @@ static void setup_snapshots(void)
         current_setup = readfile(snapshot_files[i]);
 
         nRet = snprintf_s(
-            cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1",
+            cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 2>&1",
             backend_exec, backend_options);
         securec_check_ss_c(nRet, "\0", "\0");
 
@@ -1939,7 +1939,7 @@ static void setup_update(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -1977,7 +1977,7 @@ static void setup_nodeself(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2041,7 +2041,7 @@ static void setup_description(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2144,7 +2144,7 @@ static void setup_collation(void)
 
 #if defined(HAVE_LOCALE_T) && !defined(WIN32)
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     locale_a_handle = popen_check("locale -a", "r");
@@ -2277,7 +2277,7 @@ static void setup_conversion(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2313,7 +2313,7 @@ static void setup_dictionary(void)
      * We use -j here to avoid backslashing stuff
      */
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2382,7 +2382,7 @@ static void setup_privileges(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2455,7 +2455,7 @@ static void setup_schema(void)
      * We use -j here to avoid backslashing stuff in information_schema.sql
      */
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s -j template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2470,7 +2470,7 @@ static void setup_schema(void)
     PG_CMD_CLOSE;
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2534,7 +2534,7 @@ static void setup_bucketmap_len(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     nRet = sprintf_s(sql, sizeof(sql),
@@ -2563,7 +2563,7 @@ static void load_plpgsql(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2584,7 +2584,7 @@ static void load_dist_fdw(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2618,7 +2618,7 @@ static void load_hdfs_fdw(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2642,7 +2642,7 @@ static void load_k2_fdw(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2664,7 +2664,7 @@ static void load_gc_fdw(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2687,7 +2687,7 @@ static void load_packages_extension(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2716,7 +2716,7 @@ static void load_gsredistribute_extension(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2740,7 +2740,7 @@ static void load_searchserver_extension()
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2761,7 +2761,7 @@ static void load_tsdb_extension(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2782,7 +2782,7 @@ static void load_streaming_extension(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2805,7 +2805,7 @@ static void load_mot_fdw(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2829,7 +2829,7 @@ static void load_hstore_extension(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2848,7 +2848,7 @@ static void load_log_extension(void)
 
     PG_CMD_DECL;
     int nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2864,7 +2864,7 @@ static void load_security_plugin()
 
     PG_CMD_DECL;
     int nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2934,7 +2934,7 @@ static void vacuumfreeze(const char* dbname)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s %s >%s 2>&1", backend_exec, backend_options, dbname, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s %s 2>&1", backend_exec, backend_options, dbname);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -2959,7 +2959,7 @@ static void vacuum_db(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 >%s 2>&1", backend_exec, backend_options, DEVNULL);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -3012,7 +3012,7 @@ static void make_template0(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -3050,7 +3050,7 @@ static void make_postgres(void)
     (void)fflush(stdout);
 
     nRet = snprintf_s(
-        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1", backend_exec, backend_options);
+        cmd, sizeof(cmd), sizeof(cmd) - 1, "\"%s\" %s template1 2>&1", backend_exec, backend_options);
     securec_check_ss_c(nRet, "\0", "\0");
 
     PG_CMD_OPEN;
@@ -4551,11 +4551,18 @@ int main(int argc, char* argv[])
     setup_auth();
     get_set_pwd();
 
-    printf(_("Setup depend,load plpgsql, and system views ... \n"));
+    printf(_("Setup depend ... \n"));
     (void)fflush(stdout);
     setup_depend();
+
+    printf(_("Load plpgsql, and system views ... \n"));
+    (void)fflush(stdout);
     load_plpgsql();
+
+    printf(_("Setup system views ... \n"));
+    (void)fflush(stdout);
     setup_sysviews();
+    
 #ifdef ENABLE_PRIVATEGAUSS
     setup_privsysviews();
 #endif
@@ -4600,9 +4607,9 @@ int main(int argc, char* argv[])
     (void)fflush(stdout);
     setup_schema();
 
-    //printf(_("Load supported extension ... \n"));
-    //(void)fflush(stdout);
-    //load_supported_extension();
+    printf(_("Load supported extension ... \n"));
+    (void)fflush(stdout);
+    load_supported_extension();
 
     printf(_("Load update ... \n"));
     (void)fflush(stdout);
