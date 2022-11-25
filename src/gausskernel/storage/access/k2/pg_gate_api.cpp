@@ -29,6 +29,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <atomic>
 #include <memory>
 
+#include "access/k2/pg_session.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/pg_memctx.h"
 #include "access/k2/pg_ids.h"
@@ -38,7 +39,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "config.h"
 #include "session.h"
 #include "access/sysattr.h"
-#include "access/k2/pg_session.h"
 #include "access/k2/k2_util.h"
 #include "access/k2/storage.h"
 #include "access/k2/k2pg_util.h"
