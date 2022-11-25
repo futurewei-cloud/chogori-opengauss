@@ -21,15 +21,14 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
-#include <libintl.h>
-#include "postgres.h"
-#include "catalog/pg_type.h"
 #include "access/k2/k2_types.h"
 
 #include "table_info_handler.h"
 
 #include <stdexcept>
 
+#include "postgres.h"
+#include "catalog/pg_type.h"
 namespace k2pg {
 namespace catalog {
 

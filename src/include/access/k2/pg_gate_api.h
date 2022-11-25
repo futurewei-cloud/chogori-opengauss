@@ -23,7 +23,6 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
-#include "postgres.h"
 
 #include <cstdint>
 #include <vector>
@@ -31,6 +30,8 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2pg_util.h"
 #include "access/k2/pg_gate_typedefs.h"
 #include "access/k2/status.h"
+
+#include "postgres.h"
 
 // This must be called exactly once to initialize the YPostgreSQL/SKV gateway API before any other
 // functions in this API are called.

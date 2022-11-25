@@ -21,9 +21,9 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
-// When we mix certain C++ standard lib code and pg code there seems to be a macro conflict that
-// will cause compiler errors in libintl.h. Including as the first thing fixes this.
-#include <libintl.h>
+#include <skvhttp/dto/Expression.h>
+#include <skvhttp/dto/SKVRecord.h>
+
 #include "postgres.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
@@ -35,9 +35,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2_util.h"
 #include "access/k2/storage.h"
 #include "session.h"
-
-#include <skvhttp/dto/Expression.h>
-#include <skvhttp/dto/SKVRecord.h>
 
 namespace k2pg {
 namespace gate {

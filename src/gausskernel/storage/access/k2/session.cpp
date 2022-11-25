@@ -24,13 +24,12 @@ Copyright(c) 2022 Futurewei Cloud
 // This is the include pattern needed for mixing our C++ code with pg code. libintl.h first,
 // postgres.h second, then other pg headers, then our headers
 
-#include <libintl.h>
-#include "postgres.h"
-#include "access/xact.h"
+#include "session.h"
 #include "access/k2/status.h"
 #include "access/k2/k2pg_aux.h"
+#include "postgres.h"
+#include "access/xact.h"
 
-#include "session.h"
 using namespace std::chrono_literals;  // so that we can type "1ms"
 
 namespace k2pg {

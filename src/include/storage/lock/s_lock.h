@@ -198,7 +198,7 @@ typedef unsigned char slock_t;
 
 static __inline__ int tas(volatile slock_t* lock)
 {
-    slock_t _res = 1;
+    slock_t __res = 1;
 
     /*
      * On Opteron, using a non-locking test before the locking instruction
@@ -207,10 +207,10 @@ static __inline__ int tas(volatile slock_t* lock)
      */
     __asm__ __volatile__("	lock			\n"
                          "	xchgb	%0,%1	\n"
-                         : "+q"(_res), "+m"(*lock)
+                         : "+q"(__res), "+m"(*lock)
                          :
                          : "memory", "cc");
-    return (int)_res;
+    return (int)__res;
 }
 
 #define SPIN_DELAY() spin_delay()

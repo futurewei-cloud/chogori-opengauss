@@ -104,7 +104,7 @@
 #define unlikely(x) __builtin_expect((x) != 0, 0)
 #endif
 
-#ifdef ENABLE_NLS
+#if defined(ENABLE_NLS) || defined(_LIBINTL_H)
 #include <libintl.h>
 #else
 #define gettext(x) (x)

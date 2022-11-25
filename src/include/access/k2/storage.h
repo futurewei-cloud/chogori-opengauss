@@ -25,7 +25,6 @@ Copyright(c) 2022 Futurewei Cloud
 
 // When we mix certain C++ standard lib code and pg code there seems to be a macro conflict that
 // will cause compiler errors in libintl.h. Including as the first thing fixes this.
-#include <libintl.h>
 #include "postgres.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
