@@ -21,9 +21,9 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
-// When we mix certain C++ standard lib code and pg code there seems to be a macro conflict that
-// will cause compiler errors in libintl.h. Including as the first thing fixes this.
-#include <libintl.h>
+#include <skvhttp/dto/Expression.h>
+#include <skvhttp/dto/SKVRecord.h>
+
 #include "postgres.h"
 #include "access/k2/pg_gate_api.h"
 #include "access/k2/k2pg_aux.h"
@@ -35,9 +35,6 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/k2_util.h"
 #include "access/k2/storage.h"
 #include "session.h"
-
-#include <skvhttp/dto/Expression.h>
-#include <skvhttp/dto/SKVRecord.h>
 
 namespace k2pg {
 namespace gate {
@@ -346,7 +343,7 @@ static void AppendValueToRecord(skv::http::dto::expression::Value& value, skv::h
     typename std::remove_reference_t<decltype(afr)>::ValueT constant;
     skv::http::MPackReader reader(value.literal);
     if (reader.read(constant)) {
-        K2LOG_D(log::k2pg, "read: {}", constant);
+        K2LOG_D(k2log::k2pg, "read: {}", constant);
         builder.serializeNext(constant);
     }
     else {
@@ -364,19 +361,19 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
     std::shared_ptr<skv::http::dto::Schema> schema = start.getSchema();
 
     if (range_conds.op == Operation::UNKNOWN) {
-        K2LOG_D(log::k2pg, "range_conds UNKNOWN");
+        K2LOG_D(k2log::k2pg, "range_conds UNKNOWN");
         return;
     }
 
     if (range_conds.op != Operation::AND) {
         std::string msg = "Only AND top-level condition is supported in range expression";
-        K2LOG_E(log::k2pg, "{}", msg);
+        K2LOG_ERT(k2log::k2pg, "{}", msg);
         //return STATUS(InvalidCommand, msg);
         throw std::invalid_argument(msg);
     }
 
     if (range_conds.expressionChildren.size() == 0) {
-        K2LOG_D(log::k2pg, "Child conditions are empty");
+        K2LOG_D(k2log::k2pg, "Child conditions are empty");
         return;
     }
 
@@ -408,7 +405,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
             // there was a branch in the processing of previous condition and we cannot continue.
             // Ideally, this shouldn't happen if the query parser did its job well.
             // This is not an error, and so we can still process the request. PG would down-filter the result set after
-            K2LOG_D(log::k2pg, "Condition branched at previous key field. Use the condition as filter condition");
+            K2LOG_D(k2log::k2pg, "Condition branched at previous key field. Use the condition as filter condition");
             leftover_exprs.push_back(pg_expr);
             continue; // keep going so that we log all skipped expressions;
         }
@@ -422,13 +419,13 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
 
-                    K2LOG_D(log::k2pg, "Appending to start");
+                    K2LOG_D(k2log::k2pg, "Appending to start");
                     AppendValueToRecord(val, start);
-                    K2LOG_D(log::k2pg, "Appending to end");
+                    K2LOG_D(k2log::k2pg, "Appending to end");
                     AppendValueToRecord(val, end);
                 } else {
                     didBranch = true;
-                    K2LOG_D(log::k2pg, "Appending to leftover EQ else cur: {}, start: {}", cur_idx, start_idx);
+                    K2LOG_D(k2log::k2pg, "Appending to leftover EQ else cur: {}, start: {}", cur_idx, start_idx);
                     leftover_exprs.emplace_back(pg_expr);
                 }
             } break;
@@ -436,27 +433,27 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
             case Operation::GT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
-                    K2LOG_D(log::k2pg, "Appending to start");
+                    K2LOG_D(k2log::k2pg, "Appending to start");
                     AppendValueToRecord(val, start);
                     isRangeScan = true;
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
-                K2LOG_D(log::k2pg, "Appending to leftover GT");
+                K2LOG_D(k2log::k2pg, "Appending to leftover GT");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
-                    K2LOG_D(log::k2pg, "Appending to end");
+                    K2LOG_D(k2log::k2pg, "Appending to end");
                     AppendValueToRecord(val, end);
                     isRangeScan = true;
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
-                K2LOG_D(log::k2pg, "Appending to leftover LT");
+                K2LOG_D(k2log::k2pg, "Appending to leftover LT");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LTE: {
@@ -473,15 +470,15 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                 // Not pushing LTE to range record because end record is exclusive
                 didBranch = true;
                 isRangeScan = true;
-                K2LOG_D(log::k2pg, "Appending to leftover LTE");
+                K2LOG_D(k2log::k2pg, "Appending to leftover LTE");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             default: {
                 //const char* msg = "Expression Condition must be one of [BETWEEN, EQ, GE, LE]";
-                //K2LOG_W(log::k2Adapter, "{}", msg);
+                //K2LOG_WCT(log::k2Adapter, "{}", msg);
                 didBranch = true;
                 isRangeScan = true;
-                K2LOG_D(log::k2pg, "Appending to leftover default");
+                K2LOG_D(k2log::k2pg, "Appending to leftover default");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
         }
@@ -579,13 +576,13 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
             opr_expr.op = expression::Operation::GTE;
             break;
         default:
-            K2LOG_W(log::k2pg, "Ignoring scan constraint of type: {}", constraint.constraint);
+            K2LOG_WCT(k2log::k2pg, "Ignoring scan constraint of type: {}", constraint.constraint);
             return opr_expr;
     }
 
     auto it = attr_to_offset.find(constraint.attr_num);
     if (it == attr_to_offset.end()) {
-        K2LOG_W(log::k2pg, "Attr_num not found in map for buildScanExpr: {}, constants size {}", constraint.attr_num, constraint.constants.size());
+        K2LOG_WCT(k2log::k2pg, "Attr_num not found in map for buildScanExpr: {}, constants size {}", constraint.attr_num, constraint.constants.size());
         return expression::Expression();
     }
     uint32_t offset = it->second;
@@ -711,7 +708,7 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
                 record = tupleIDDatumToSKVRecord(attribute.value.datum, builder->getCollectionName(), builder->getSchema());
                 use_tupleID = true;
             } else {
-                K2LOG_W(log::k2pg, "TupeId is NULL in makeSKVBuilderWithKeys for schema {}", *(builder->getSchema()));
+                K2LOG_WCT(k2log::k2pg, "TupeId is NULL in makeSKVBuilderWithKeys for schema {}", *(builder->getSchema()));
             }
         }
     }
@@ -890,7 +887,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
                                            base_attr,
                                            base_builder);
                 if (base_status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
-                    K2LOG_W(log::k2pg, "Bad basetupleid, pg status: {}, k2 status: {}, msg: {}", base_status.pg_code, base_status.k2_code, base_status.msg);
+                    K2LOG_WCT(k2log::k2pg, "Bad basetupleid, pg status: {}, k2 status: {}, msg: {}", base_status.pg_code, base_status.k2_code, base_status.msg);
                     return base_status;
                 }
             }
@@ -903,7 +900,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
                 };
                 return status;
             }
-            K2LOG_D(log::k2pg, "Verified basetupleid");
+            K2LOG_D(k2log::k2pg, "Verified basetupleid");
         }
     }
 

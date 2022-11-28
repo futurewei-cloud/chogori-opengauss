@@ -27,12 +27,12 @@ Config::Config(nlohmann::json conf) : _config(std::move(conf)) {
 Config::Config() {
     const char* configFileName = getenv("K2_CONFIG_FILE");
     if (NULL == configFileName) {
-        K2LOG_W(log::k2pg, "No config file given for K2 configuration in the K2_CONFIG_FILE env variable");
+        K2LOG_W(k2log::k2pg, "No config file given for K2 configuration in the K2_CONFIG_FILE env variable");
         return;
     }
 
     // read the config file
-    K2LOG_D(log::k2pg, "{}", configFileName);
+    K2LOG_D(k2log::k2pg, "{}", configFileName);
     std::ifstream ifile(configFileName);
     ifile >> _config;
 }

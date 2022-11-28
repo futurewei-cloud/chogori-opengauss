@@ -23,12 +23,10 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
-#include <libintl.h>
-#include "postgres.h"
-#include "catalog/pg_type.h"
 
 #include <skvhttp/dto/FieldTypes.h>
-
+#include "postgres.h"
+#include "catalog/pg_type.h"
 // This file contains stateless helper methods for converting between PG and SKV types
 
 namespace k2pg {

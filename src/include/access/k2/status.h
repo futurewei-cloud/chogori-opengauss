@@ -23,10 +23,10 @@ Copyright(c) 2022 Futurewei Cloud
 
 #pragma once
 
+#include <string>
+
 #include "utils/elog.h" // PG error codes
 #include "utils/errcodes.h"
-
-#include <string>
 
 namespace k2pg {
 

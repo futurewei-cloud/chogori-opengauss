@@ -20,12 +20,12 @@ Copyright(c) 2022 Futurewei Cloud
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 */
-#include <libintl.h>
+#include <skvhttp/common/Status.h>
+#include "access/k2/status.h"
+
 #include "postgres.h"
 #include "c.h"
 #include "fmgr/fmgr_comp.h"
-#include "access/k2/status.h"
-#include <skvhttp/common/Status.h>
 
 namespace k2pg {
 // A class for untoasted datums so that freeing data can be done by the destructor and exception-safe

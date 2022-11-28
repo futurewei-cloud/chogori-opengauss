@@ -21,12 +21,12 @@ Copyright(c) 2022 Futurewei Cloud
     SOFTWARE.
 */
 
-#include "utils/elog.h"
-
 #include "access/k2/catalog/k2_catalog_defaults.h"
 #include "access/k2/pg_tabledesc.h"
 
 #include "catalog/pg_type.h"
+#include "utils/elog.h"
+
 
 namespace k2pg {
 

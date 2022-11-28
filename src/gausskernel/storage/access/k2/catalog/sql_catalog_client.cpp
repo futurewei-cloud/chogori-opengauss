@@ -138,7 +138,7 @@ Status SqlCatalogClient::DeleteIndexTable(const PgOid database_oid, const PgOid 
 std::shared_ptr<TableInfo> SqlCatalogClient::OpenTable(const PgOid database_oid, const PgOid table_oid) {
     auto [status, tableInfo] = catalog_manager_->GetTableSchema(database_oid, table_oid);
     if (!status.is2xxOK()) {
-        K2LOG_W(log::catalog, "Failed to get TableSchema {} : {} due to {}", database_oid, table_oid, status);
+        K2LOG_WCT(log::catalog, "Failed to get TableSchema {} : {} due to {}", database_oid, table_oid, status);
         return nullptr;
     }
 

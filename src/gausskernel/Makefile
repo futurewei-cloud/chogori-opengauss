@@ -270,12 +270,12 @@ LIBS += -l${LIBSTD_LIB_NAME}
 # boost
 ###################################################################################
 ifeq ($(enable_llt), yes)
- LIBS += -lboost_thread_pic -lboost_chrono_pic  -lboost_system_pic -lboost_atomic
+ LIBS += -lboost_thread_pic -lboost_chrono_pic  -lboost_system_pic -lboost_atomic -ldl -rdynamic
 else
  ifeq ($(enable_ut), yes)
-  LIBS += -lboost_thread_pic -lboost_chrono_pic  -lboost_system_pic -lboost_atomic
+  LIBS += -lboost_thread_pic -lboost_chrono_pic  -lboost_system_pic -lboost_atomic -ldl -rdynamic
  else
-  LIBS += -lboost_thread -lboost_chrono  -lboost_system -lboost_atomic
+  LIBS += -lboost_thread -lboost_chrono  -lboost_system -lboost_atomic -ldl -rdynamic
  endif
 endif
 
