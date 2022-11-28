@@ -1643,8 +1643,10 @@ static void RelationBuildTupleDesc(Relation relation, bool onlyLoadInitDefVal)
             else
                 constr->defval = attrdef;
             constr->num_defval = ndef;
-            constr->generatedCols = (char *)MemoryContextAllocZero(u_sess->cache_mem_cxt,
-                RelationGetNumberOfAttributes(relation) * sizeof(char));
+            if (!constr->generatedCols) {
+                constr->generatedCols = (char *)MemoryContextAllocZero(u_sess->cache_mem_cxt,
+                    RelationGetNumberOfAttributes(relation) * sizeof(char));
+            }
             AttrDefaultFetch(relation);
         } else {
             constr->num_defval = 0;
@@ -8181,7 +8183,7 @@ void K2PgPreloadRelCache()
 	 * info into the Relation entry, which among other things, sets up then constraint and default
 	 * info.
 	 */
-    std::unordered_map<Oid, std::vector<Form_pg_attribute>> rel_to_attrs;
+    std::map<Oid, std::vector<Form_pg_attribute>> rel_to_attrs;
 	while (true)
 	{
 	    pg_attribute_tuple = systable_getnext(scandesc);
@@ -8275,6 +8277,12 @@ void K2PgPreloadRelCache()
                                                               sizeof(AttrDefault));
                 else
                     constr->defval = attrdef;
+
+                if (!constr->generatedCols) {
+                    constr->generatedCols = (char *)MemoryContextAllocZero(u_sess->cache_mem_cxt,
+                        RelationGetNumberOfAttributes(relation) * sizeof(char));
+                }
+
                 constr->num_defval = ndef;
                 AttrDefaultFetch(relation);
             }
