@@ -2189,7 +2189,7 @@ void AlterRole(AlterRoleStmt* stmt)
         grpid = get_pgxc_logic_groupoid(roleid);
 
         /* Don't allow grant sysadmin privilege to logic cluster user except cluster redistributing. */
-        if (OidIsValid(grpid) && (issystemadmin > 0 || ismonitoradmin > 0 || isoperatoradmin > 0) && 
+        if (OidIsValid(grpid) && (issystemadmin > 0 || ismonitoradmin > 0 || isoperatoradmin > 0) &&
             PgxcGroupGetInRedistributionGroup() == NULL) {
             str_reset(password);
             str_reset(replPasswd);
@@ -2301,7 +2301,7 @@ void AlterRole(AlterRoleStmt* stmt)
             ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("Permission denied.")));
         }
     }
-    
+
     if (((Form_pg_authid)GETSTRUCT(tuple))->rolsuper || issuper >= 0) {
         if (!isRelSuperuser()) {
             str_reset(password);
@@ -3297,7 +3297,7 @@ void DropRole(DropRoleStmt* stmt)
         /*
          * Remove the role from the pg_authid table
          */
-        simple_heap_delete(pg_authid_rel, &tuple->t_self);
+        CatalogTupleDelete(pg_authid_rel, tuple);
 
         ReleaseSysCache(tuple);
 
@@ -3312,7 +3312,7 @@ void DropRole(DropRoleStmt* stmt)
         SysScanDesc sscan = systable_beginscan(pg_auth_members_rel, AuthMemRoleMemIndexId, true, NULL, 1, &scankey);
         HeapTuple tmp_tuple = NULL;
         while (HeapTupleIsValid(tmp_tuple = systable_getnext(sscan))) {
-            simple_heap_delete(pg_auth_members_rel, &tmp_tuple->t_self);
+            CatalogTupleDelete(pg_auth_members_rel, tmp_tuple);
         }
 
         systable_endscan(sscan);
@@ -3322,7 +3322,7 @@ void DropRole(DropRoleStmt* stmt)
         sscan = systable_beginscan(pg_auth_members_rel, AuthMemMemRoleIndexId, true, NULL, 1, &scankey);
 
         while (HeapTupleIsValid(tmp_tuple = systable_getnext(sscan))) {
-            simple_heap_delete(pg_auth_members_rel, &tmp_tuple->t_self);
+            CatalogTupleDelete(pg_auth_members_rel, tmp_tuple);
         }
 
         systable_endscan(sscan);
@@ -3871,7 +3871,7 @@ static void DelRoleMems(const char* rolename, Oid roleid, const List* memberName
 
         if (!admin_opt) {
             /* Remove the entry altogether */
-            simple_heap_delete(pg_authmem_rel, &authmem_tuple->t_self);
+            CatalogTupleDelete(pg_authmem_rel, authmem_tuple);
         } else {
             /* Just turn off the admin option */
             Datum new_record[Natts_pg_auth_members];
@@ -4228,7 +4228,7 @@ static void CalculateTheNumberOfAllTypesOfCharacters(const char* ptr, int *kinds
 
         ptr++;
     }
-    
+
     return;
 }
 
@@ -4447,7 +4447,7 @@ static void AddAuthHistory(Oid roleID, const char* rolename, const char* passwd,
         ereport(WARNING, (errmsg("the relation pg_auth_history is invalid")));
         return;
     }
-    
+
     TupleDesc pg_auth_history_dsc = NULL;
     HeapTuple password_tuple = NULL;
     ScanKeyData key[1];
@@ -4536,7 +4536,7 @@ static void AddAuthHistory(Oid roleID, const char* rolename, const char* passwd,
                 changeTimes > u_sess->attr.attr_security.Password_reuse_max) {
                 isMaxSafe = true;
             }
-            
+
             if (u_sess->attr.attr_security.Password_reuse_time > 0 ||
                 u_sess->attr.attr_security.Password_reuse_max > 0) {
                 /* rolepassword is same and all the reuse conditions are not satisfied */
@@ -4601,7 +4601,7 @@ static void DropAuthHistory(Oid roleID)
         sscan = systable_beginscan(pg_auth_history_rel, AuthHistoryIndexId, true, NULL, 1, &scankey);
 
         while (HeapTupleIsValid(tmp_tuple = systable_getnext(sscan))) {
-            simple_heap_delete(pg_auth_history_rel, &tmp_tuple->t_self);
+            CatalogTupleDelete(pg_auth_history_rel, tmp_tuple);
         }
         systable_endscan(sscan);
         heap_close(pg_auth_history_rel, NoLock);
@@ -4822,7 +4822,7 @@ void UpdateFailCountToHashTable(Oid roleid, int4 extrafails, bool superlock)
         account_entry->rolstatus = UNLOCK_STATUS;
     } else {
         account_entry->failcount += extrafails;
-        if (u_sess->attr.attr_security.Failed_login_attempts > 0 && 
+        if (u_sess->attr.attr_security.Failed_login_attempts > 0 &&
             account_entry->failcount >= u_sess->attr.attr_security.Failed_login_attempts) {
             lockflag = true;
         }
@@ -4841,7 +4841,7 @@ void UpdateFailCountToHashTable(Oid roleid, int4 extrafails, bool superlock)
     ReportLockAccountMessage(lockflag, rolename);
 }
 
-void FillAccountRecord(AccountLockHashEntry *account_entry, TupleDesc pg_user_status_dsc, HeapTuple tuple, 
+void FillAccountRecord(AccountLockHashEntry *account_entry, TupleDesc pg_user_status_dsc, HeapTuple tuple,
                     Datum *user_status_record, bool *user_status_record_repl) {
     Datum userStatusDatum;
     bool userStatusIsNull = false;
@@ -4849,7 +4849,7 @@ void FillAccountRecord(AccountLockHashEntry *account_entry, TupleDesc pg_user_st
     const char* locktime_in_catalog = NULL;
     bool catalog_superlock = false;
     bool catalog_lock = false;
-    
+
     userStatusDatum = heap_getattr(tuple, Anum_pg_user_status_failcount, pg_user_status_dsc, &userStatusIsNull);
     if (!(userStatusIsNull || (void*)userStatusDatum == NULL)) {
         failcount_in_catalog += DatumGetInt32(userStatusDatum);
@@ -4880,7 +4880,7 @@ void FillAccountRecord(AccountLockHashEntry *account_entry, TupleDesc pg_user_st
                 user_status_record_repl[Anum_pg_user_status_locktime - 1] = true;
                 user_status_record[Anum_pg_user_status_rolstatus - 1] = Int16GetDatum(LOCK_STATUS);
                 user_status_record_repl[Anum_pg_user_status_rolstatus - 1] = true;
-            } else if (u_sess->attr.attr_security.Failed_login_attempts > 0 && 
+            } else if (u_sess->attr.attr_security.Failed_login_attempts > 0 &&
                 failcount_in_catalog >= u_sess->attr.attr_security.Failed_login_attempts) {
                 /* The sum of failcount in hash table and pg_user_status > Failed_login_attempts, update rolestatus*/
                 user_status_record[Anum_pg_user_status_rolstatus - 1] = Int16GetDatum(LOCK_STATUS);
@@ -5410,7 +5410,7 @@ static void UpdateUnlockAccountTuples(HeapTuple tuple, Relation rel, TupleDesc t
     Datum user_status_record[Natts_pg_user_status];
     bool user_status_record_nulls[Natts_pg_user_status] = {false};
     bool user_status_record_repl[Natts_pg_user_status] = {false};
-    
+
     errno_t rc = memset_s(user_status_record, sizeof(user_status_record), 0, sizeof(user_status_record));
     securec_check(rc, "\0", "\0");
     rc = memset_s(user_status_record_nulls, sizeof(user_status_record_nulls), 0, sizeof(user_status_record_nulls));
@@ -5546,7 +5546,7 @@ PASSWORD_STATUS GetAccountPasswordExpired(Oid roleID)
             SysCacheGetAttr((int)USERSTATUSROLEID, tuple, Anum_pg_user_status_passwordexpired, &userStatusIsNull);
         if (!(userStatusIsNull || (void*)userStatusDatum == NULL)) {
             status = DatumGetInt16(userStatusDatum);
-        } 
+        }
         ReleaseSysCache(tuple);
     }
     return (PASSWORD_STATUS)status;
@@ -5568,14 +5568,14 @@ void SetAccountPasswordExpired(Oid roleID, bool expired)
     bool user_status_record_repl[Natts_pg_user_status] = {false};
 
     pg_user_status_rel = RelationIdGetRelation(UserStatusRelationId);
-    if (RelationIsValid(pg_user_status_rel)) { 
+    if (RelationIsValid(pg_user_status_rel)) {
         LockRelationOid(UserStatusRelationId, RowExclusiveLock);
         pgstat_initstats(pg_user_status_rel);
         pg_user_status_dsc = RelationGetDescr(pg_user_status_rel);
         HeapTuple tuple = SearchSysCache1(USERSTATUSROLEID, PointerGetDatum(roleID));
         if (!HeapTupleIsValid(tuple)) {
             ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("The roleid of pg_user_status not found.")));
-        } else { 
+        } else {
             userStatusRecord[Anum_pg_user_status_passwordexpired - 1] =
                 Int16GetDatum(expired ? EXPIRED_STATUS : UNEXPIRED_STATUS);
             user_status_record_repl[Anum_pg_user_status_passwordexpired - 1] = true;
@@ -5617,7 +5617,7 @@ void DropUserStatus(Oid roleID)
 
         HeapTuple tuple = SearchSysCache1(USERSTATUSROLEID, PointerGetDatum(roleID));
         if (HeapTupleIsValid(tuple)) {
-            simple_heap_delete(pg_user_status_rel, &tuple->t_self);
+            CatalogTupleDelete(pg_user_status_rel, tuple);
             ReleaseSysCache(tuple);
         }
         heap_close(pg_user_status_rel, NoLock);
@@ -6014,7 +6014,7 @@ static Datum gs_calculate_encrypted_sm3_password(const char* password, const cha
  * @char* salt_string : the role oid need check.
  * @return : the encrypted password in Datum format.
  */
-Datum calculate_encrypted_password(bool is_encrypted, const char* password, const char* rolname, 
+Datum calculate_encrypted_password(bool is_encrypted, const char* password, const char* rolname,
                                    const char* salt_string)
 {
     errno_t rc = EOK;
@@ -6111,15 +6111,15 @@ static bool is_weak_password(const char* password)
 
     TableScanDesc scan = tableam_scan_begin(gs_weak_rel, SnapshotNow, 0, NULL);
     while ((tup = (HeapTuple) tableam_scan_getnexttuple(scan, ForwardScanDirection)) != NULL) {
-        if (strcmp(DatumGetCString(heap_getattr(tup, Anum_gs_global_config_name, RelationGetDescr(gs_weak_rel), &is_null)), 
+        if (strcmp(DatumGetCString(heap_getattr(tup, Anum_gs_global_config_name, RelationGetDescr(gs_weak_rel), &is_null)),
             "weak_password") == 0) {
             datum = heap_getattr(tup, Anum_gs_global_config_value, RelationGetDescr(gs_weak_rel), &is_null);
             if (is_null) {
                 continue;
-            }	
+            }
             exist_pwd = TextDatumGetCString(datum);
             if (strcmp(password, exist_pwd) == 0) {
-                result = true; 
+                result = true;
                 break;
             }
         }
@@ -6135,6 +6135,6 @@ static void check_weak_password(char *Password)
     if (is_weak_password(Password)) {
         str_reset(Password);
         ereport(ERROR,
-            (errcode(ERRCODE_INVALID_PASSWORD), errmsg("Password should not be weak password.")));        
+            (errcode(ERRCODE_INVALID_PASSWORD), errmsg("Password should not be weak password.")));
     }
 }

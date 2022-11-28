@@ -1237,9 +1237,9 @@ TupleTableSlot* ExecDelete(ItemPointer tupleid, Oid deletePartitionOid, int2 buc
 		{
 			/* Delete index entries of the old tuple
             *
-            * TODO: double check the logic here
             */
-			ExecDeleteIndexTuples(planSlot, tupleid, estate, part_relation, partition, NULL, false);
+            ItemPointer k2pg_ctid = (ItemPointer)DatumGetPointer(K2PgGetPgTupleIdFromSlot(planSlot));
+			ExecDeleteIndexTuples(planSlot, k2pg_ctid, estate, part_relation, partition, NULL, false);
 		}
     } else {
         /*
@@ -1731,13 +1731,12 @@ TupleTableSlot* ExecUpdate(ItemPointer tupleid,
 		 */
 		if (K2PgRelInfoHasSecondaryIndices(result_rel_info))
 		{
+            ItemPointer item = (ItemPointer)DatumGetPointer(((HeapTuple)tuple)->t_k2pgctid);
 			/* Delete index entries of the old tuple */
-            ExecDeleteIndexTuples(slot, tupleid, estate, fake_part_rel, partition, NULL, false);
+            ExecDeleteIndexTuples(slot, item, estate, fake_part_rel, partition, NULL, false);
 
 			/* Insert new index entries for tuple */
-            List* recheckIndexes = NIL;
-            ItemPointer item = (ItemPointer)DatumGetPointer(((HeapTuple)tuple)->t_k2pgctid);
-            recheckIndexes = ExecInsertIndexTuples(slot, item, estate, fake_part_rel, partition, bucketid, NULL, NULL);
+            List* recheckIndexes = ExecInsertIndexTuples(slot, item, estate, fake_part_rel, partition, bucketid, NULL, NULL);
 		}
 	} else {
         bool update_indexes = false;

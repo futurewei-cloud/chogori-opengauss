@@ -155,11 +155,12 @@ void RemoveCollationById(Oid collationOid)
 
     tuple = systable_getnext(scandesc);
 
-    if (HeapTupleIsValid(tuple))
-        simple_heap_delete(rel, &tuple->t_self);
-    else
+    if (HeapTupleIsValid(tuple)) {
+        CatalogTupleDelete(rel, tuple);
+    } else {
         ereport(ERROR,
             (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("could not find tuple for collation %u", collationOid)));
+    }
 
     systable_endscan(scandesc);
 

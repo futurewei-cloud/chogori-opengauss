@@ -1097,7 +1097,7 @@ static void deleteOneObject(const ObjectAddress* object, Relation* depRel, int f
     scan = systable_beginscan(*depRel, DependDependerIndexId, true, NULL, nkeys, key);
 
     while (HeapTupleIsValid(tup = systable_getnext(scan))) {
-        simple_heap_delete(*depRel, &tup->t_self);
+        CatalogTupleDelete(*depRel, tup);
     }
 
     systable_endscan(scan);
@@ -1123,8 +1123,9 @@ static void deleteOneObject(const ObjectAddress* object, Relation* depRel, int f
         while (HeapTupleIsValid(tup = systable_getnext(scan))) {
             Form_pg_depend Pinnedobj = (Form_pg_depend)GETSTRUCT(tup);
 
-            if (Pinnedobj->deptype == DEPENDENCY_PIN)
-                simple_heap_delete(*depRel, &tup->t_self);
+            if (Pinnedobj->deptype == DEPENDENCY_PIN) {
+                CatalogTupleDelete(*depRel, tup);
+            }
         }
 
         systable_endscan(scan);

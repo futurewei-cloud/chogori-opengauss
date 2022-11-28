@@ -560,7 +560,7 @@ void RemoveConstraintById(Oid conId)
             ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("constraint %u is not of a known type", conId)));
 
     /* Fry the constraint itself */
-    simple_heap_delete(conDesc, &tup->t_self);
+    CatalogTupleDelete(conDesc, tup);
 
     /* Clean up */
     ReleaseSysCache(tup);

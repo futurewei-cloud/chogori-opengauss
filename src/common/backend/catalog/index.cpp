@@ -1831,7 +1831,7 @@ void index_drop(Oid indexId, bool concurrent)
 
     hasexprs = !heap_attisnull(tuple, Anum_pg_index_indexprs, NULL);
 
-    simple_heap_delete(indexRelation, &tuple->t_self);
+    CatalogTupleDelete(indexRelation, tuple);
 
     ReleaseSysCache(tuple);
     heap_close(indexRelation, RowExclusiveLock);
