@@ -54,19 +54,19 @@ TableInfoHandler::~TableInfoHandler() {
 sh::Status TableInfoHandler::CreateMetaTables(const std::string& collection_name) {
     try {
         if (auto [status] = TXMgr.createSchema(collection_name, *table_meta_SKVSchema_).get(); !status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to create schema for {} in {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
                 table_meta_SKVSchema_->name, collection_name, status);
             return status;
         }
 
         if (auto [status] = TXMgr.createSchema(collection_name, *tablecolumn_meta_SKVSchema_).get(); !status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to create schema for {} in {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
                 tablecolumn_meta_SKVSchema_->name, collection_name, status);
             return status;
         }
 
         if (auto [status] = TXMgr.createSchema(collection_name, *indexcolumn_meta_SKVSchema_).get(); !status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to create schema for {} in {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
                 indexcolumn_meta_SKVSchema_->name, collection_name, status);
             return status;
         } else {
@@ -110,7 +110,7 @@ sh::Status TableInfoHandler::CreateOrUpdateTable(const std::string& collection_n
             // persist SKV table and index schemas
             auto status = CreateTableSKVSchema(collection_name, table);
             if (!status.is2xxOK()) {
-                K2LOG_E(log::catalog, "Failed to persist table SKV schema id: {}, name: {}, in {} due to {}", table->table_id(), table->table_name(),
+                K2LOG_ECT(log::catalog, "Failed to persist table SKV schema id: {}, name: {}, in {} due to {}", table->table_id(), table->table_name(),
                     table->database_id(), status);
                 return status;
             }
@@ -196,7 +196,7 @@ sh::Response<std::vector<std::string>> TableInfoHandler::ListTableIds(const std:
 
         auto&& [status, query] = TXMgr.createQuery(startKey, endKey, std::move(filterExpr)).get();
         if (!status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to create scan read due to {}", status);
+            K2LOG_ECT(log::catalog, "Failed to create scan read due to {}", status);
             return std::make_pair(std::move(status), std::vector<std::string>());
         }
 
@@ -204,7 +204,7 @@ sh::Response<std::vector<std::string>> TableInfoHandler::ListTableIds(const std:
         do {
             auto&& [status, result]  = TXMgr.query(query).get();
             if (!status.is2xxOK()) {
-                K2LOG_E(log::catalog, "Failed to run scan read due to {}", status);
+                K2LOG_ECT(log::catalog, "Failed to run scan read due to {}", status);
                 return std::make_pair(status, ids);
             }
             done = result.done;
@@ -330,7 +330,7 @@ sh::Status TableInfoHandler::CopySKVTable(
     // check target SKV schema
     auto [target_status, target_schema] = TXMgr.getSchema(target_coll_name, target_schema_name, target_version).get();
     if (!target_status.is2xxOK()) {
-        K2LOG_E(log::catalog, "Failed to get SKV schema for table {} in {} with version {} due to {}",
+        K2LOG_ECT(log::catalog, "Failed to get SKV schema for table {} in {} with version {} due to {}",
             target_schema_name, target_coll_name, target_version,target_status);
         return target_status;
     }
@@ -338,7 +338,7 @@ sh::Status TableInfoHandler::CopySKVTable(
     // check the source SKV schema
     auto [source_status, source_schema] = TXMgr.getSchema(source_coll_name, source_schema_name, source_version).get();
     if (!source_status.is2xxOK()) {
-        K2LOG_E(log::catalog, "Failed to get SKV schema for table {} in {} with version {} due to {}",
+        K2LOG_ECT(log::catalog, "Failed to get SKV schema for table {} in {} with version {} due to {}",
             source_schema_name, source_coll_name, source_version, source_status);
         return source_status;
     }
@@ -347,7 +347,7 @@ sh::Status TableInfoHandler::CopySKVTable(
     // create scan for source table
     auto [status, query]  = TXMgr.createQuery(startScanRecord, endScanRecord).get();
     if (!status.is2xxOK()) {
-        K2LOG_E(log::catalog, "Failed to create scan read for {} in {} due to {}", source_schema_name, source_coll_name, status.message);
+        K2LOG_ECT(log::catalog, "Failed to create scan read for {} in {} due to {}", source_schema_name, source_coll_name, status.message);
         return status;
     }
 
@@ -357,7 +357,7 @@ sh::Status TableInfoHandler::CopySKVTable(
     do {
         auto [status, query_result] = TXMgr.query(query).get();
         if (!status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to run scan read for table {} in {} due to {}",
+            K2LOG_ECT(log::catalog, "Failed to run scan read for table {} in {} due to {}",
                 source_schema_name, source_coll_name, status);
             return status;
         }
@@ -367,7 +367,7 @@ sh::Status TableInfoHandler::CopySKVTable(
             sh::dto::SKVRecord target_record(target_coll_name, target_schema, std::move(storage), true);
             auto [upsert_status] = TXMgr.write(target_record).get();
             if (!upsert_status.is2xxOK()) {
-                K2LOG_E(log::catalog, "Failed to upsert target_record due to {}", upsert_status);
+                K2LOG_ECT(log::catalog, "Failed to upsert target_record due to {}", upsert_status);
                 return upsert_status;
             }
             count++;
@@ -386,13 +386,13 @@ sh::Status TableInfoHandler::CreateTableSKVSchema(const std::string& collection_
         std::shared_ptr<sh::dto::Schema> outSchema = nullptr;
         auto [status, schema] = TXMgr.getSchema(collection_name, table->table_id(), table->schema().version()).get();
         if (status.is2xxOK()) { //  schema of specified version already exists, no-op.
-            K2LOG_W(log::catalog, "SKV schema {} with specified version already exists in {}, skipping creation", table->table_id(), table->schema().version(), collection_name);
+            K2LOG_WCT(log::catalog, "SKV schema {} with specified version already exists in {}, skipping creation", table->table_id(), table->schema().version(), collection_name);
             return sh::Statuses::S200_OK;
         }
 
         // !result.status.is2xxOK() here and 404 Not Found is ok, as we are going to create it, otherwise error out
         if (status.code != 404)  {
-            K2LOG_E(log::catalog, "Failed to getSchema {} in collection {} due to {}", table->table_id(), collection_name, status);
+            K2LOG_ECT(log::catalog, "Failed to getSchema {} in collection {} due to {}", table->table_id(), collection_name, status);
             return status;
         }
 
@@ -400,7 +400,7 @@ sh::Status TableInfoHandler::CreateTableSKVSchema(const std::string& collection_
         std::shared_ptr<sh::dto::Schema> tablecolumn_schema = DeriveSKVSchemaFromTableInfo(table);
         auto [createStatus] = TXMgr.createSchema(collection_name, *tablecolumn_schema).get();
         if (!createStatus.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to create schema for {} in {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
                 tablecolumn_schema->name, collection_name, status);
             return createStatus;
         }
@@ -409,7 +409,7 @@ sh::Status TableInfoHandler::CreateTableSKVSchema(const std::string& collection_
             std::vector<std::shared_ptr<sh::dto::Schema>> index_schemas = DeriveIndexSchemas(table);
             for (std::shared_ptr<sh::dto::Schema> index_schema : index_schemas) {
                 if (!index_schema) {
-                    K2LOG_W(log::catalog, "Failed to create index schema in {} due to unsupported feature",
+                    K2LOG_WCT(log::catalog, "Failed to create index schema in {} due to unsupported feature",
                         collection_name);
                     return sh::Statuses::S400_Bad_Request("Unsupported feature in secondary index");
                 }
@@ -417,7 +417,7 @@ sh::Status TableInfoHandler::CreateTableSKVSchema(const std::string& collection_
                 // TODO use sequential SKV writes for now, could optimize this later
                 std::tie(createStatus) = TXMgr.createSchema(collection_name, *index_schema).get();
                 if (!createStatus.is2xxOK()) {
-                    K2LOG_E(log::catalog, "Failed to create index schema for {} in {}, due to {}",
+                    K2LOG_ECT(log::catalog, "Failed to create index schema for {} in {}, due to {}",
                         index_schema->name, collection_name, status);
                     return createStatus;
                 }
@@ -437,7 +437,7 @@ sh::Status TableInfoHandler::CreateIndexSKVSchema(const std::string& collection_
         std::shared_ptr<sh::dto::Schema> index_schema = DeriveIndexSchema(index_info);
         auto [createStatus] = TXMgr.createSchema(collection_name, *index_schema).get();
         if (!createStatus.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to create index schema for {} in {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to create index schema for {} in {}, due to {}",
                 index_schema->name, collection_name, createStatus);
             return createStatus;
         }
@@ -456,14 +456,14 @@ sh::Status TableInfoHandler::PersistTableMeta(const std::string& collection_name
         auto [status] = TXMgr.write(tablelist_table_record).get();
         if (!status.is2xxOK())
         {
-            K2LOG_E(log::catalog, "Failed to upsert tablelist_table_record due to {}", status);
+            K2LOG_ECT(log::catalog, "Failed to upsert tablelist_table_record due to {}", status);
             return status;
         }
         std::vector<sh::dto::SKVRecord> table_column_records = DeriveTableColumnMetaRecords(collection_name, table);
         for (auto& table_column_record : table_column_records) {
             std::tie(status) = TXMgr.write(table_column_record).get();
             if (!status.is2xxOK()) {
-                K2LOG_E(log::catalog, "Failed to upsert table_column_record  due to {}",  status);
+                K2LOG_ECT(log::catalog, "Failed to upsert table_column_record  due to {}",  status);
                 return status;
             }
         }
@@ -490,7 +490,7 @@ sh::Status TableInfoHandler::PersistIndexMeta(const std::string& collection_name
             index_info.table_id(), index_info.table_name());
         auto [status] = TXMgr.write(tablelist_index_record).get();
         if (!status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to upsert tablelist_index_record due to {}", status);
+            K2LOG_ECT(log::catalog, "Failed to upsert tablelist_index_record due to {}", status);
             return status;
         }
 
@@ -500,7 +500,7 @@ sh::Status TableInfoHandler::PersistIndexMeta(const std::string& collection_name
                 index_info.table_id(), index_info.table_name());
             auto [status] = TXMgr.write(index_column_record).get();
             if (!status.is2xxOK()) {
-                K2LOG_E(log::catalog, "Failed to upsert index_column_record due to {}", status);
+                K2LOG_ECT(log::catalog, "Failed to upsert index_column_record due to {}", status);
                 return status;
             }
         }
@@ -549,7 +549,7 @@ sh::Status TableInfoHandler::DeleteTableMetadata(const std::string& collection_n
         }
         // then delete table meta record
         if (auto [status] = TXMgr.write(table_meta, true).get(); !status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to delete tablemeta {} in Collection {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to delete tablemeta {} in Collection {}, due to {}",
                 table->table_id(), collection_name, status);
             return status;
         }
@@ -591,7 +591,7 @@ sh::Status TableInfoHandler::DeleteIndexMetadata(const std::string& collection_n
         }
 
         if (auto [status] = TXMgr.write(index_table_meta).get(); !status.is2xxOK()) {
-            K2LOG_E(log::catalog, "Failed to delete indexhead {} in Collection {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to delete indexhead {} in Collection {}, due to {}",
                 index_id, collection_name, status);
             return status;
         }
@@ -701,7 +701,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
                 return std::make_tuple(sh::Statuses::S200_OK, indexInfo);
             } else {
                 // return index already present error if index already exists
-                K2LOG_E(log::catalog,"index {} has already existed in ns {}", index_table_id, database_info->database_id);
+                K2LOG_ECT(log::catalog,"index {} has already existed in ns {}", index_table_id, database_info->database_id);
                 return std::make_tuple(sh::Statuses::S400_Bad_Request(fmt::format("index {} has already existed in ns {}", index_table_id, database_info->database_id)), std::shared_ptr<IndexInfo>());
             }
         }
@@ -715,7 +715,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
         // persist the index metadata to the system catalog SKV tables
         auto status = PersistIndexMeta(database_info->database_id, base_table_info, new_index_info);
         if (!status.is2xxOK()) {
-                K2LOG_E(log::catalog, "Failed to persist index meta {}, name: {}, in {} due to {}", new_index_info.table_id(), new_index_info.table_name(),
+                K2LOG_ECT(log::catalog, "Failed to persist index meta {}, name: {}, in {} due to {}", new_index_info.table_id(), new_index_info.table_name(),
                 database_info->database_id, status);
                 return std::make_pair(std::move(status), std::shared_ptr<IndexInfo>());
         }
@@ -725,7 +725,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
             // create a SKV schema to insert the actual index data
             auto status = CreateIndexSKVSchema(database_info->database_id, base_table_info, new_index_info);
             if (!status.is2xxOK()) {
-                K2LOG_E(log::catalog, "Failed to persist index SKV schema id: {}, name: {}, in {} due to {}", new_index_info.table_id(), new_index_info.table_name(),
+                K2LOG_ECT(log::catalog, "Failed to persist index SKV schema id: {}, name: {}, in {} due to {}", new_index_info.table_id(), new_index_info.table_name(),
                     database_info->database_id, status);
                 return std::make_pair(std::move(status), std::shared_ptr<IndexInfo>());
             }
@@ -739,12 +739,12 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
 
         if (!index_params.skip_index_backfill) {
             // TODO: add logic to backfill the index
-            K2LOG_W(log::catalog, "Index backfill is not supported yet");
+            K2LOG_WCT(log::catalog, "Index backfill is not supported yet");
         }
         return std::make_pair(sh::Statuses::S200_OK, std::make_shared<IndexInfo>(new_index_info));
 
     } catch (const std::exception& e) {
-        K2LOG_E(log::catalog, "Failed to create index {} in {}",
+        K2LOG_ECT(log::catalog, "Failed to create index {} in {}",
             index_params.index_name, database_info->database_id);
         return std::make_pair(sh::Statuses::S500_Internal_Server_Error(e.what()), std::shared_ptr<IndexInfo>());
     }
@@ -758,7 +758,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     auto [status, table_type_info_result] = GetTableTypeInfo(local_database_info->database_id, table_id);
     if (!status.is2xxOK()) {
         TXMgr.endTxn(sh::dto::EndAction::Abort);
-        K2LOG_E(log::catalog, "Failed to check table {} in ns {}, due to {}",
+        K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, local_database_info->database_id, status);
         return std::make_tuple(status, std::shared_ptr<TableInfo>());
     }
@@ -774,7 +774,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
             // load the shared database info
             local_database_info = fnc_db(physical_coll);
             if (database_info == nullptr) {
-                K2LOG_E(log::catalog, "Cannot find database {} for shared table {}", physical_coll, table_id);
+                K2LOG_ECT(log::catalog, "Cannot find database {} for shared table {}", physical_coll, table_id);
                 return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
             }
         }
@@ -787,13 +787,13 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
             table_id);
         if (!status.is2xxOK()) {
             TXMgr.endTxn(sh::dto::EndAction::Abort);
-            K2LOG_E(log::catalog, "Failed to check table {} in ns {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(status, std::shared_ptr<TableInfo>());
         }
         if (idxInfo == nullptr) {
             TXMgr.endTxn(sh::dto::EndAction::Commit);
-            K2LOG_E(log::catalog, "Failed to find table {} in ns {}", table_id, physical_coll);
+            K2LOG_ECT(log::catalog, "Failed to find table {} in ns {}", table_id, physical_coll);
             return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
         }
         K2LOG_D(log::catalog, "Returned schema for table name: {}, id: {}",
@@ -806,7 +806,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         auto [status, baseTableId]  = GetBaseTableId(physical_coll, table_id);
         if (!status.is2xxOK()) {
             TXMgr.endTxn(sh::dto::EndAction::Abort);
-            K2LOG_E(log::catalog, "Failed to check base table id for index {} in {}, due to {}",
+            K2LOG_ECT(log::catalog, "Failed to check base table id for index {} in {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(std::move(status), std::shared_ptr<TableInfo>());
         }
@@ -818,7 +818,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     if (base_table_id.empty()) {
         // cannot find the id as either a table id or an index id
         TXMgr.endTxn(sh::dto::EndAction::Abort);
-        K2LOG_E(log::catalog, "Failed to find base table id for index {} in {}", table_id, physical_coll);
+        K2LOG_ECT(log::catalog, "Failed to find base table id for index {} in {}", table_id, physical_coll);
         return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
     }
 
@@ -951,7 +951,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveIndexSchema(const Index
                 field.nullLast = false;
             } break;
             case ColumnSchema::SortingType::kDescending: {
-                K2LOG_W(log::catalog, "Descending secondary indexes are not supported, will be equivalent to ascending");
+                K2LOG_WCT(log::catalog, "Descending secondary indexes are not supported, will be equivalent to ascending");
                 field.descending = true;
                 field.nullLast = false;
             } break;
@@ -960,7 +960,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveIndexSchema(const Index
                 field.nullLast = true;
             } break;
             case ColumnSchema::SortingType::kDescendingNullsLast: {
-                K2LOG_W(log::catalog, "Descending secondary indexes are not supported, will be equivalent to ascending");
+                K2LOG_WCT(log::catalog, "Descending secondary indexes are not supported, will be equivalent to ascending");
                 field.descending = true;
                 field.nullLast = true;
             } break;
@@ -1126,7 +1126,7 @@ sh::Status TableInfoHandler::FetchTableMetaSKVRecord(const std::string& collecti
     auto&& [status, value] = TXMgr.read(recordKey).get();
     // TODO: add error handling and retry logic in catalog manager
     if (!status.is2xxOK()) {
-        K2LOG_E(log::catalog, "Error fetching entry {} in {} due to {}", table_id, collection_name, status);
+        K2LOG_ECT(log::catalog, "Error fetching entry {} in {} due to {}", table_id, collection_name, status);
         return status;
     }
 
@@ -1149,7 +1149,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexMetaSKVRecords(const
     if (!status.is2xxOK()) {
         auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
         base_table_id, collection_name, status);
-        K2LOG_E(log::catalog, "{}", msg);
+        K2LOG_ECT(log::catalog, "{}", msg);
         throw std::runtime_error(msg);
     }
 
@@ -1159,7 +1159,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexMetaSKVRecords(const
         auto [status, query_result] = TXMgr.query(query).get();
         if (!status.is2xxOK()) {
             auto msg = fmt::format("Failed to run scan read for indexes in base table {} in {} due to {}", base_table_id, collection_name, status);
-            K2LOG_E(log::catalog, "{}", msg);
+            K2LOG_ECT(log::catalog, "{}", msg);
             throw std::runtime_error(msg);
         }
 
@@ -1187,7 +1187,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchTableColumnMetaSKVRecords
     if (!status.is2xxOK()) {
         auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
         table_id, collection_name, status);
-        K2LOG_E(log::catalog, "{}", msg);
+        K2LOG_ECT(log::catalog, "{}", msg);
         throw std::runtime_error(msg);
     }
     std::vector<sh::dto::SKVRecord> records;
@@ -1197,7 +1197,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchTableColumnMetaSKVRecords
         if (!status.is2xxOK()) {
             auto msg = fmt::format("Failed to run scan read for {} in {} due to {}",
                 table_id, collection_name,status);
-            K2LOG_E(log::catalog, "{}", msg);
+            K2LOG_ECT(log::catalog, "{}", msg);
             throw std::runtime_error(msg);
         }
 
@@ -1226,7 +1226,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexColumnMetaSKVRecords
     if (!status.is2xxOK()) {
         auto msg = fmt::format("Failed to create scan read for {} in {} due to {}",
         table_id, collection_name, status);
-        K2LOG_E(log::catalog, "{}", msg);
+        K2LOG_ECT(log::catalog, "{}", msg);
         throw std::runtime_error(msg);
     }
 
@@ -1236,7 +1236,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexColumnMetaSKVRecords
         if (!status.is2xxOK()) {
             auto msg = fmt::format("Failed to run scan read for {} in {} due to {}",
                 table_id, collection_name, status);
-            K2LOG_E(log::catalog, "{}", msg);
+            K2LOG_ECT(log::catalog, "{}", msg);
             throw std::runtime_error(msg);
         }
 
