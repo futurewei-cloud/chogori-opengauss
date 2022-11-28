@@ -2694,7 +2694,7 @@ void index_build(Relation heapRelation, Partition heapPartition, Relation indexR
      *
      * Note that planner considers parallel safety for us.
      */
-    if (parallel && IsNormalProcessingMode() && indexRelation->rd_rel->relam == BTREE_AM_OID && !IS_PGXC_COORDINATOR) {
+    if (!IsK2PgEnabled() && parallel && IsNormalProcessingMode() && indexRelation->rd_rel->relam == BTREE_AM_OID && !IS_PGXC_COORDINATOR) {
         int parallel_workers = get_parallel_workers(heapRelation);
 
         /* The check order should not be changed. */
