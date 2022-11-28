@@ -137,6 +137,7 @@
 #include "workload/workload.h"
 #include "streaming/init.h"
 #include "replication/obswalreceiver.h"
+#include "access/k2/k2pg_aux.h"
 
 static RemoteQueryExecType ExecUtilityFindNodes(ObjectType object_type, Oid rel_id, bool* is_temp);
 static RemoteQueryExecType exec_utility_find_nodes_relkind(Oid rel_id, bool* is_temp);
@@ -213,7 +214,7 @@ Oid GetNamespaceIdbyRelId(const Oid relid)
 
 bool IsSchemaInDistribution(const Oid namespaceOid)
 {
-    bool isNull = false; 
+    bool isNull = false;
     bool result = false;
     if (!OidIsValid(namespaceOid)) {
         return false;
@@ -467,7 +468,7 @@ static void check_xact_readonly(Node* parse_tree)
         case T_AlterAuditPolicyStmt:
         case T_DropAuditPolicyStmt:
         case T_CreateWeakPasswordDictionaryStmt:
-        case T_DropWeakPasswordDictionaryStmt:        
+        case T_DropWeakPasswordDictionaryStmt:
         case T_CreateMaskingPolicyStmt:
         case T_AlterMaskingPolicyStmt:
         case T_DropMaskingPolicyStmt:
@@ -1739,7 +1740,7 @@ bool find_hashbucket_options(List* stmts)
             DefElem* def = (DefElem*)lfirst(opt);
             char* lower_string = lowerstr(def->defname);
 
-            if (strstr(lower_string, "hashbucket") || 
+            if (strstr(lower_string, "hashbucket") ||
                 strstr(lower_string, "bucketcnt")) {
                 return true;
             }
@@ -1754,7 +1755,7 @@ bool find_hashbucket_options(List* stmts)
  * Notice: parse_tree could be from cached plan, do not modify it under other memory context
  */
 #ifdef PGXC
-void CreateCommand(CreateStmt *parse_tree, const char *query_string, ParamListInfo params, 
+void CreateCommand(CreateStmt *parse_tree, const char *query_string, ParamListInfo params,
                    bool is_top_level, bool sent_to_remote, bool isCTAS)
 #else
 void CreateCommand(CreateStmt *parse_tree, const char *query_string, ParamListInfo params, bool is_top_level,
@@ -2121,32 +2122,37 @@ void CreateCommand(CreateStmt *parse_tree, const char *query_string, ParamListIn
                                     ((CreateStmt*)stmt)->relkind == RELKIND_MATVIEW ?
                                                                     RELKIND_MATVIEW : RELKIND_RELATION,
                                     InvalidOid, isCTAS);
-            /*
-             * Let AlterTableCreateToastTable decide if this one
-             * needs a secondary relation too.
-             */
-            CommandCounterIncrement();
 
-            /* parse and validate reloptions for the toast table */
-            toast_options =
-                transformRelOptions((Datum)0, ((CreateStmt*)stmt)->options, "toast", validnsps, true, false);
+            /* No need for toasting attributes in K2PG mode */
+			if (!IsK2PgEnabled())
+			{
+                /*
+                * Let AlterTableCreateToastTable decide if this one
+                * needs a secondary relation too.
+                */
+                CommandCounterIncrement();
 
-            (void)heap_reloptions(RELKIND_TOASTVALUE, toast_options, true);
+                /* parse and validate reloptions for the toast table */
+                toast_options =
+                    transformRelOptions((Datum)0, ((CreateStmt*)stmt)->options, "toast", validnsps, true, false);
 
-            AlterTableCreateToastTable(rel_oid, toast_options, AccessShareLock);
-            AlterCStoreCreateTables(rel_oid, toast_options, (CreateStmt*)stmt);
-            AlterDfsCreateTables(rel_oid, toast_options, (CreateStmt*)stmt);
-            AlterCreateChainTables(rel_oid, toast_options, (CreateStmt *)stmt);
+                (void)heap_reloptions(RELKIND_TOASTVALUE, toast_options, true);
+
+                AlterTableCreateToastTable(rel_oid, toast_options, AccessShareLock);
+                AlterCStoreCreateTables(rel_oid, toast_options, (CreateStmt*)stmt);
+                AlterDfsCreateTables(rel_oid, toast_options, (CreateStmt*)stmt);
+                AlterCreateChainTables(rel_oid, toast_options, (CreateStmt *)stmt);
 #ifdef ENABLE_MULTIPLE_NODES
-            Datum reloptions = transformRelOptions(
-                (Datum)0, ((CreateStmt*)stmt)->options, NULL, validnsps, true, false);
-            StdRdOptions* std_opt = (StdRdOptions*)heap_reloptions(RELKIND_RELATION, reloptions, true);
-            if (StdRelOptIsTsStore(std_opt)) {
-                create_ts_store_tables(rel_oid, toast_options);
-            }
-            /* create partition policy if ttl or period defined */
-            create_part_policy_if_needed((CreateStmt*)stmt, rel_oid);
+                Datum reloptions = transformRelOptions(
+                    (Datum)0, ((CreateStmt*)stmt)->options, NULL, validnsps, true, false);
+                StdRdOptions* std_opt = (StdRdOptions*)heap_reloptions(RELKIND_RELATION, reloptions, true);
+                if (StdRelOptIsTsStore(std_opt)) {
+                    create_ts_store_tables(rel_oid, toast_options);
+                }
+                /* create partition policy if ttl or period defined */
+                create_part_policy_if_needed((CreateStmt*)stmt, rel_oid);
 #endif   /* ENABLE_MULTIPLE_NODES */
+            }
         } else if (IsA(stmt, CreateForeignTableStmt)) {
             /* forbid user to set or change inner options */
             ForbidOutUsersToSetInnerOptions(((CreateStmt*)stmt)->options);
@@ -2155,7 +2161,7 @@ void CreateCommand(CreateStmt *parse_tree, const char *query_string, ParamListIn
             check_log_ft_definition((CreateForeignTableStmt*)stmt);
 
             /* Create the table itself */
-            if (pg_strcasecmp(((CreateForeignTableStmt *)stmt)->servername, 
+            if (pg_strcasecmp(((CreateForeignTableStmt *)stmt)->servername,
                 STREAMING_SERVER) == 0) {
                 /* Create stream */
                 rel_oid = DefineRelation((CreateStmt*)stmt, RELKIND_STREAM, InvalidOid);
@@ -2419,7 +2425,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
     new_query = rewrite_query_string(parse_tree);
     if (new_query != NULL) {
         /*
-         * cannot free old queryString. it may point to other memory context, 
+         * cannot free old queryString. it may point to other memory context,
          * after switch to this context, it can be free. left to free with this context,
          * rewrite to 1 table, can free, rewrite 2 table, cannot free
          */
@@ -2530,6 +2536,11 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                     break;
 
                 case TRANS_STMT_PREPARE:
+                	if(IsK2PgEnabled()) {
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("PREPARE not supported by K2PG yet")));
+					}
                     PreventCommandDuringRecovery("PREPARE TRANSACTION");
 #ifdef PGXC
 
@@ -2985,7 +2996,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
             break;
 
         case T_CreateFdwStmt:
-#ifdef ENABLE_MULTIPLE_NODES		
+#ifdef ENABLE_MULTIPLE_NODES
 #ifdef PGXC
             /* enable CREATE FOREIGN DATA WRAPPER when initdb */
             if (!IsInitdb && !u_sess->attr.attr_common.IsInplaceUpgrade) {
@@ -3020,9 +3031,9 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
 #ifdef ENABLE_MULTIPLE_NODES
         if (IS_PGXC_COORDINATOR && !IsConnFromCoord() && !IsInitdb)
             ExecUtilityStmtOnNodes(query_string, NULL, sent_to_remote, false, EXEC_ON_COORDS, false);
-#endif            
+#endif
             break;
-    
+
         case T_AlterFdwStmt:
 #ifdef ENABLE_MULTIPLE_NODES
 #ifdef PGXC
@@ -3036,14 +3047,14 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
             break;
 
         case T_CreateForeignServerStmt:
-#ifdef ENABLE_MULTIPLE_NODES		
+#ifdef ENABLE_MULTIPLE_NODES
             if (!IsInitdb && IS_SINGLE_NODE) {
                 ereport(ERROR,
                     (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                         errmsg("Current mode does not support FOREIGN server yet"),
                         errdetail("The feature is not currently supported")));
             }
-#endif			
+#endif
             CreateForeignServer((CreateForeignServerStmt*)parse_tree);
 #ifdef PGXC
             if (IS_PGXC_COORDINATOR && !IsConnFromCoord() && !IsInitdb)
@@ -3060,38 +3071,38 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
             break;
 
         case T_CreateUserMappingStmt:
-#ifdef ENABLE_MULTIPLE_NODES		
+#ifdef ENABLE_MULTIPLE_NODES
 #ifdef PGXC
             ereport(ERROR,
                 (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                     errmsg("openGauss does not support USER MAPPING yet"),
                     errdetail("The feature is not currently supported")));
 #endif
-#endif	
+#endif
             CreateUserMapping((CreateUserMappingStmt*)parse_tree);
             break;
 
         case T_AlterUserMappingStmt:
-#ifdef ENABLE_MULTIPLE_NODES			
+#ifdef ENABLE_MULTIPLE_NODES
 #ifdef PGXC
             ereport(ERROR,
                 (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                     errmsg("openGauss does not support USER MAPPING yet"),
                     errdetail("The feature is not currently supported")));
 #endif
-#endif	
+#endif
             AlterUserMapping((AlterUserMappingStmt*)parse_tree);
             break;
 
         case T_DropUserMappingStmt:
-#ifdef ENABLE_MULTIPLE_NODES		
+#ifdef ENABLE_MULTIPLE_NODES
 #ifdef PGXC
             ereport(ERROR,
                 (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                     errmsg("openGauss does not support USER MAPPING yet"),
                     errdetail("The feature is not currently supported")));
 #endif
-#endif	
+#endif
             RemoveUserMapping((DropUserMappingStmt*)parse_tree);
             break;
 
@@ -3317,7 +3328,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                         } else {
                             exec_nodes = RelidGetExecNodes(rel_id);
                         }
-                    } else if (IS_PGXC_COORDINATOR && !IsConnFromCoord() && 
+                    } else if (IS_PGXC_COORDINATOR && !IsConnFromCoord() &&
                                (object_type == OBJECT_FOREIGN_TABLE ||
                                object_type == OBJECT_STREAM) &&
                                in_logic_cluster()) {
@@ -3573,7 +3584,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                         }
                     }
                     (void)drop_column_settings((DropStmt *)parse_tree);
-                    if (IS_PGXC_COORDINATOR && !IsConnFromCoord()) {	
+                    if (IS_PGXC_COORDINATOR && !IsConnFromCoord()) {
                         if (u_sess->attr.attr_sql.enable_parallel_ddl && !isFirstNode) {
                             if (exec_type == EXEC_ON_ALL_NODES || exec_type == EXEC_ON_DATANODES)
                                 ExecUtilityStmtOnNodes_ParallelDDLMode(query_string, NULL, sent_to_remote, false,
@@ -4857,7 +4868,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
 #ifdef ENABLE_MULTIPLE_NODES
             bool isredis_rule = false;
             isredis_rule = is_redis_rule((RuleStmt*)parse_tree);
-            if (!IsInitdb && !u_sess->attr.attr_sql.enable_cluster_resize && !u_sess->exec_cxt.extension_is_valid 
+            if (!IsInitdb && !u_sess->attr.attr_sql.enable_cluster_resize && !u_sess->exec_cxt.extension_is_valid
                             && !IsConnFromCoord() && !isredis_rule)
                 ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("RULE is not yet supported.")));
 #endif
@@ -5038,7 +5049,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
 
         case T_DoStmt:
             /* This change is from PG11 commit/rollback patch */
-            ExecuteDoStmt((DoStmt*) parse_tree, 
+            ExecuteDoStmt((DoStmt*) parse_tree,
                 (!u_sess->SPI_cxt.is_allow_commit_rollback));
             break;
 
@@ -5307,7 +5318,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
             }
 
             /* @hdfs
-             * isForeignTableAnalyze will be set to true when we need to 
+             * isForeignTableAnalyze will be set to true when we need to
              * analyze a foreign table/foreign tables
              */
             bool isForeignTableAnalyze = IsHDFSForeignTableAnalyzable(stmt);
@@ -5409,7 +5420,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
 
         case T_RefreshMatViewStmt: {
             RefreshMatViewStmt *stmt = (RefreshMatViewStmt *)parse_tree;
- 
+
 #ifdef ENABLE_MULTIPLE_NODES
             Query *query = NULL;
             if (IS_PGXC_COORDINATOR && !IsConnFromCoord()) {
@@ -5448,7 +5459,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                     false,
                     EXEC_ON_DATANODES,
                     false);
- 
+
                 heap_close(matview, NoLock);
             } else if (IS_PGXC_COORDINATOR) {
                 /* attach lock on matview and its table */
@@ -5474,7 +5485,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                 }
             }
         } break;
-		
+
 #ifndef ENABLE_MULTIPLE_NODES
         case T_AlterSystemStmt:
             /*
@@ -6157,7 +6168,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                     create_audit_policy((CreateAuditPolicyStmt *)parse_tree);
                     ExecUtilityStmtOnNodes(query_string, NULL, sent_to_remote, false, EXEC_ON_COORDS, false);
                 }
-            } 
+            }
             if (IS_SINGLE_NODE) {
                 create_audit_policy((CreateAuditPolicyStmt *) parse_tree);
             }
@@ -6204,7 +6215,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                     drop_audit_policy((DropAuditPolicyStmt *) parse_tree);
                     ExecUtilityStmtOnNodes(query_string, NULL, sent_to_remote, false, EXEC_ON_COORDS, false);
                 }
-            } 
+            }
             if (IS_SINGLE_NODE) {
                 drop_audit_policy((DropAuditPolicyStmt *) parse_tree);
             }
@@ -6777,7 +6788,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                 DropPgDirectory((DropDirectoryStmt*)parse_tree);
             break;
         /* Client Logic */
-        case T_CreateClientLogicGlobal: 
+        case T_CreateClientLogicGlobal:
             if (IS_PGXC_COORDINATOR) {
                 if (!IsConnFromCoord() && !u_sess->attr.attr_common.enable_full_encryption) {
                     ereport(ERROR,
@@ -6799,7 +6810,7 @@ void standard_ProcessUtility(Node* parse_tree, const char* query_string, ParamLi
                 (void)process_global_settings((CreateClientLogicGlobal *)parse_tree);
             }
             break;
-        case T_CreateClientLogicColumn: 
+        case T_CreateClientLogicColumn:
             if (IS_PGXC_COORDINATOR) {
                 if (!IsConnFromCoord() && !u_sess->attr.attr_common.enable_full_encryption) {
                     ereport(ERROR,
@@ -7855,7 +7866,7 @@ const char* CreateCommandTag(Node* parse_tree)
             break;
 
         case T_CreateForeignTableStmt:
-            if (pg_strcasecmp(((CreateForeignTableStmt *)parse_tree)->servername, 
+            if (pg_strcasecmp(((CreateForeignTableStmt *)parse_tree)->servername,
                 STREAMING_SERVER) == 0) {
                 tag = "CREATE STREAM";
                 if (!is_multiple_nodes) {
@@ -8137,7 +8148,7 @@ const char* CreateCommandTag(Node* parse_tree)
 
         case T_ViewStmt:
 #ifdef ENABLE_MULTIPLE_NODES
-            if ((((ViewStmt*)parse_tree)->relkind) == OBJECT_CONTQUERY || 
+            if ((((ViewStmt*)parse_tree)->relkind) == OBJECT_CONTQUERY ||
                 view_stmt_has_stream((ViewStmt*)parse_tree))
                 tag = "CREATE CONTVIEW";
             else
@@ -8254,7 +8265,7 @@ const char* CreateCommandTag(Node* parse_tree)
                         tag = "???";
                 }
                 break;
-            
+
         case T_RefreshMatViewStmt:
             tag = "REFRESH MATERIALIZED VIEW";
             break;
@@ -8932,7 +8943,7 @@ LogStmtLevel GetCommandLogLevel(Node* parse_tree)
         case T_AlterSchemaStmt:
             lev = LOGSTMT_DDL;
             break;
-            
+
         case T_CreateWeakPasswordDictionaryStmt:
         case T_DropWeakPasswordDictionaryStmt:
             lev = LOGSTMT_DDL;
@@ -9756,7 +9767,7 @@ bool DropExtensionIsSupported(const char* query_string)
     char* lower_string = lowerstr(query_string);
 
 #ifndef ENABLE_MULTIPLE_NODES
-    if (strstr(lower_string, "drop") && 
+    if (strstr(lower_string, "drop") &&
         (strstr(lower_string, "postgis") || strstr(lower_string, "packages") ||
          strstr(lower_string, "mysql_fdw") || strstr(lower_string, "oracle_fdw") ||
          strstr(lower_string, "postgres_fdw") || strstr(lower_string, "dblink") ||
@@ -9874,7 +9885,7 @@ bool CheckExtensionInWhiteList(const char* extension_name, uint32 hash_value, bo
             for (int i = 0; i < POSTGIS_VERSION_NUM; i++) {
                 if (hash_value == postgisHashHistory[i]) {
                     return true;
-                }         
+                }
             }
         } else {
             return true;
@@ -10097,7 +10108,7 @@ static void attatch_global_info(char** query_string_with_info, VacuumStmt* stmt,
         if (foreign_tbl_schedul_message != NULL) {
             hdfs_table_analyze = (HDFSTableAnalyze*)stringToNode(foreign_tbl_schedul_message);
         } else {
-            /* make a default dn task for do analyze foreign tables. */ 
+            /* make a default dn task for do analyze foreign tables. */
             hdfs_table_analyze = makeNode(HDFSTableAnalyze);
             task_map->locatorType = LOCATOR_TYPE_NONE;
             task_map->splits = NIL;
@@ -11369,7 +11380,7 @@ static void do_global_analyze_rel(VacuumStmt* stmt, Oid rel_id, const char* quer
         pfree_ext(query_string_with_info);
         query_string_with_info = NULL;
     }
-    
+
     /*
      * Other CNs have already gotten statistics. Now, We can resume the time counter which was stoped before
      * update statistics on local CN.
@@ -11728,7 +11739,7 @@ void DoVacuumMppTable(VacuumStmt* stmt, const char* query_string, bool is_top_le
     }
 
     /* It is no means to vacuum a foreign table */
-    if (stmt->relation != NULL && (stmt->isForeignTables || stmt->isPgFdwForeignTables) 
+    if (stmt->relation != NULL && (stmt->isForeignTables || stmt->isPgFdwForeignTables)
         && (stmt->options & VACOPT_VACUUM)) {
         ereport(WARNING, (errmsg("skipping \"%s\" --- cannot vacuum a foreign table", stmt->relation->relname)));
         return;
