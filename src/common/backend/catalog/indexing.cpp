@@ -233,10 +233,14 @@ CatalogIndexDelete(CatalogIndexState indstate, HeapTuple heapTuple)
 		 * The index AM does the rest.
 		 */
         ItemPointer t_self = IsK2PgRelation(relationDescs[i]) ? (ItemPointer)(heapTuple->t_k2pgctid) : &(heapTuple->t_self);
-		index_delete(relationDescs[i],	/* index relation */
-					 values,	/* array of index Datums */
-					 isnull,	/* is-null flags */
-                     t_self);
+        if (IsK2PgRelation(relationDescs[i])) {
+            K2PgDeleteIndexRowsByBaseK2Pgctid(relationDescs[i], (Datum)t_self);
+        } else {
+            index_delete(relationDescs[i],	/* index relation */
+                         values,	/* array of index Datums */
+                         isnull,	/* is-null flags */
+                         t_self);
+        }
 	}
 
 	ExecDropSingleTupleTableSlot(slot);
@@ -266,7 +270,6 @@ void CatalogUpdateIndexes(Relation heapRel, HeapTuple heapTuple)
     indstate = CatalogOpenIndexes(heapRel);
 	if (IsK2PgEnabled())
 	{
-		HeapTuple	oldtup = NULL;
 		bool		has_indices = K2PgRelHasSecondaryIndices(heapRel);
 		if (has_indices)
 		{

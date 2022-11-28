@@ -553,6 +553,53 @@ void K2PgExecuteDeleteIndex(Relation index, Datum *values, const bool *isnull, D
     HandleK2PgStatus(PgGate_ExecDelete(dboid, relid, false, NULL, columns));
 }
 
+void K2PgDeleteIndexRowsByBaseK2Pgctid(Relation index, Datum basek2pgctid)
+{
+    Assert(index->rd_rel->relkind == RELKIND_INDEX);
+    Oid dboid = K2PgGetDatabaseOid(index);
+    Oid relid = RelationGetRelid(index);
+
+    K2PgSelectIndexParams params{};
+    params.index_oid = kInvalidOid;
+    K2PgScanHandle* handle = nullptr;
+
+    HandleK2PgStatus(PgGate_NewSelect(dboid, relid, params, &handle));
+
+    std::vector<int> targets{};
+    std::vector<K2PgConstraintDef> constraints{};
+    K2PgConstant basectid {
+        .type_id = BYTEAOID,
+        .datum = basek2pgctid,
+        .is_null = false
+    };
+    K2PgConstraintDef constraint {
+        .attr_num =	K2PgIdxBaseTupleIdAttributeNumber,
+        .constraint = K2PG_CONSTRAINT_EQ,
+        .constants = {basectid}
+    };
+    constraints.push_back(std::move(constraint));
+
+    HandleK2PgStatus(PgGate_ExecSelect(handle, constraints, targets, true /* forward */, K2PgSelectLimitParams{}));
+
+    bool has_data = false;
+    K2PgSysColumns syscols{};
+    HandleK2PgStatus(PgGate_DmlFetch(handle, 0, nullptr, nullptr, &syscols, &has_data));
+    while (has_data) {
+        K2PgAttributeDef k2pgctid = {
+            .attr_num = K2PgTupleIdAttributeNumber,
+            .value = {
+                .type_id = BYTEAOID,
+                .datum = (Datum)syscols.k2pgctid,
+                .is_null = false
+            }
+        };
+        std::vector<K2PgAttributeDef> columns = {k2pgctid};
+        HandleK2PgStatus(PgGate_ExecDelete(dboid, relid, false, nullptr, columns));
+
+        HandleK2PgStatus(PgGate_DmlFetch(handle, 0, nullptr, nullptr, &syscols, &has_data));
+    }
+}
+
 bool K2PgExecuteUpdate(Relation rel,
 					  TupleTableSlot *slot,
 					  HeapTuple tuple,

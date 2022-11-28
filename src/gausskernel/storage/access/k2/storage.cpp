@@ -116,7 +116,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
         case PgSystemAttrNum::kPgIdxBaseTupleId: {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (!value.has_value()) {
-                throw std::runtime_error("System attribute in skvrecord was null");
+                // This may be null if it wasn't specified as a target, in that case it is OK to ignore it
                 break;
             }
 
@@ -126,6 +126,7 @@ static void populateSysColumnFromSKVRecord(skv::http::dto::SKVRecord& record, in
             syscols->k2pgbasectid = (uint8_t*)PointerGetDatum(datum);
         }
             break;
+        case PgSystemAttrNum::kPgUniqueIdxKeySuffix:
         case PgSystemAttrNum::kPgRowId: {
             // PG does not want to read rowid back
             std::optional<std::string> value = record.deserializeNext<std::string>();
@@ -167,6 +168,11 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
 
         Oid id = offset_to_oid[offset];
         int datum_offset = offset_to_attr[offset] - 1;
+
+        if (datum_offset > nattrs - 1) {
+            record.seekField(offset + 1);
+            continue;
+        }
 
         // Otherwise field is a normal user column
         if (isStringType(id)) {
