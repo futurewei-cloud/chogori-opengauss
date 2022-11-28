@@ -3,8 +3,19 @@
         "host": "172.17.0.1",
         "port": 30000
     },
-    "k2.txn_op_timeout_ms": 3600000,
-    "k2.sync_finalize_txn": true,
+    "txn_opts": {
+        "op_timeout_ms": 3600000,
+        "sync_finalize": true,
+        "priority": 128
+    },
+    "logging": {
+        "level": "Info",
+        "tracing": "rwc",
+        "moduleOverrides": {
+            "k2::pg": "Info",
+            "skv::http::client": "Info"
+        }
+    },
     "create_collections": {
         "PG_DEFAULT_CLUSTER": {
             "range_ends": [""]

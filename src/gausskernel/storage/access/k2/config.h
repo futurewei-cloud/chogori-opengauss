@@ -18,12 +18,9 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
-#include <k2/logging/Log.h>
+#include "access/k2/log.h"
 
 namespace k2pg {
-namespace log {
-inline thread_local k2::logging::Logger k2pg("k2::pg");
-}
 
 class Config {
 public:
