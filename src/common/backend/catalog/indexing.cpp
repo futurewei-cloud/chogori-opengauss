@@ -250,6 +250,11 @@ void CatalogTupleDelete(Relation heapRel, HeapTuple tup)
 {
     if (IsK2PgRelation(heapRel)) {
         K2PgDeleteSysCatalogTuple(heapRel, tup);
+		if (K2PgRelHasSecondaryIndices(heapRel)) {
+			CatalogIndexState indstate = CatalogOpenIndexes(heapRel);
+			CatalogIndexDelete(indstate, tup);
+			CatalogCloseIndexes(indstate);
+		}
     } else {
         simple_heap_delete(heapRel, &tup->t_self);
     }
