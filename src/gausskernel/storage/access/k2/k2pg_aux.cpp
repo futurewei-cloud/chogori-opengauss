@@ -1,3 +1,5 @@
+#include "libintl.h"
+#include "postgres.h"
 #include "access/k2/k2pg_aux.h"
 
 #include "utils/elog.h"
@@ -14,6 +16,9 @@
 #include "access/k2/pg_gate_typedefs.h"
 #include "access/k2/k2_type.h"
 #include "access/k2/pg_gate_api.h"
+
+#include <iostream>
+#include "access/k2/log.h"
 
 uint64_t k2pg_catalog_cache_version = K2PG_CATCACHE_VERSION_UNINITIALIZED;
 
@@ -186,9 +191,9 @@ HandleK2PgStatus(const K2PgStatus& status)
         return;
     }
 
-    elog(ERROR, "HandleK2PgStatus: %s", status.msg.c_str());
+ 	std::cout << "Error status: " << status.msg << " with stacktrace: " << k2log::TR << std::endl;
 
-    ereport(ERROR, (errcode(status.pg_code), errmsg("%s: %s", status.msg.c_str(), status.detail.c_str())));
+    ereport(ERROR, (errcode(status.pg_code), errmsg("Status: %s: %s", status.msg.c_str(), status.detail.c_str())));
 }
 
 void
