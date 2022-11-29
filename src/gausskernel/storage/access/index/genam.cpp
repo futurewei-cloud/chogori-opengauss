@@ -442,7 +442,10 @@ bool systable_recheck_tuple(SysScanDesc sysscan, HeapTuple tup)
 {
     bool result = false;
 
-    if (sysscan->irel) {
+    if (sysscan->k2scan) {
+        return true;
+    }
+    else if (sysscan->irel) {
         IndexScanDesc scan = sysscan->iscan;
 
         Assert(tup == &scan->xs_ctup);
