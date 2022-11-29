@@ -2911,7 +2911,7 @@ Oid heap_create_with_catalog(const char *relname, Oid relnamespace, Oid reltable
     if (oncommit != ONCOMMIT_NOOP)
         register_on_commit_action(relid, oncommit);
 
-    if (relpersistence == RELPERSISTENCE_UNLOGGED) {
+    if (!IsK2PgRelation(new_rel_desc) && relpersistence == RELPERSISTENCE_UNLOGGED) {
         Assert(relkind == RELKIND_RELATION || relkind == RELKIND_TOASTVALUE || relkind == RELKIND_MATVIEW);
         heap_create_init_fork(new_rel_desc);
     }

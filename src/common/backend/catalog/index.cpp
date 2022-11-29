@@ -2256,10 +2256,10 @@ void index_update_stats(
     if (IS_PGXC_DATANODE || IsSystemRelation(rel)) {
 #endif
         if (reltuples >= 0) {
-            BlockNumber relpages = RelationGetNumberOfBlocks(rel);
+            BlockNumber relpages =  IsK2PgEnabled() ? 0 : RelationGetNumberOfBlocks(rel);
             BlockNumber relallvisible;
 
-            if (rd_rel->relkind != RELKIND_INDEX &&  rd_rel->relkind != RELKIND_GLOBAL_INDEX) {
+            if (!IsK2PgEnabled() && rd_rel->relkind != RELKIND_INDEX &&  rd_rel->relkind != RELKIND_GLOBAL_INDEX) {
                 relallvisible = visibilitymap_count(rel, NULL);
             } else { /* don't bother for indexes */
                 relallvisible = 0;
@@ -2471,7 +2471,7 @@ static IndexBuildResult* index_build_storage(Relation heapRelation, Relation ind
     IndexBuildResult* stats = (IndexBuildResult*)DatumGetPointer(OidFunctionCall3(
         procedure, PointerGetDatum(heapRelation), PointerGetDatum(indexRelation), PointerGetDatum(indexInfo)));
     Assert(PointerIsValid(stats));
-    if (RELPERSISTENCE_UNLOGGED == heapRelation->rd_rel->relpersistence) {
+    if (!IsK2PgRelation(heapRelation) && RELPERSISTENCE_UNLOGGED == heapRelation->rd_rel->relpersistence) {
         index_build_init_fork(heapRelation, indexRelation);
     }
     return stats;
