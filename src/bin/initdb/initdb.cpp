@@ -4562,11 +4562,10 @@ int main(int argc, char* argv[])
     printf(_("Setup system views ... \n"));
     (void)fflush(stdout);
     setup_sysviews();
-    
+
 #ifdef ENABLE_PRIVATEGAUSS
     setup_privsysviews();
 #endif
-    exit(0);
     printf(_("Setup perf views ... \n"));
     (void)fflush(stdout);
     setup_perfviews();
@@ -4599,6 +4598,7 @@ int main(int argc, char* argv[])
     (void)fflush(stdout);
     setup_privileges();
 
+    exit(0);
     printf(_("Setup bucketmap len ... \n"));
     (void)fflush(stdout);
     setup_bucketmap_len();
