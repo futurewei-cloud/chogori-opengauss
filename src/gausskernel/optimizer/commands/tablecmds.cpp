@@ -12602,7 +12602,7 @@ static void DelDependencONDataType(const Relation rel, Relation depRel, const Fo
                 errmsg("found unexpected dependency for column")));
         }
 
-        simple_heap_delete(depRel, &depTup->t_self);
+        CatalogTupleDelete(depRel, depTup);
     }
 
     systable_endscan(scan);
@@ -15837,7 +15837,7 @@ static void ATExecDropInherit(Relation rel, RangeVar* parent, LOCKMODE lockmode)
 
         inhparent = ((Form_pg_inherits)GETSTRUCT(inheritsTuple))->inhparent;
         if (inhparent == RelationGetRelid(parent_rel)) {
-            simple_heap_delete(catalogRelation, &inheritsTuple->t_self);
+            CatalogTupleDelete(catalogRelation, inheritsTuple);
             found = true;
             break;
         }
@@ -15990,7 +15990,7 @@ static void drop_parent_dependency(Oid relid, Oid refclassid, Oid refobjid)
 
         if (dep->refclassid == refclassid && dep->refobjid == refobjid && dep->refobjsubid == 0 &&
             dep->deptype == DEPENDENCY_NORMAL)
-            simple_heap_delete(catalogRelation, &depTuple->t_self);
+            CatalogTupleDelete(catalogRelation, depTuple);
     }
 
     systable_endscan(scan);
@@ -16695,7 +16695,7 @@ static void AtExecUpdateSliceLike(Relation rel, const RangeVar* refTableName)
         /* drop tabOid1 slice tuples except table entry tuple */
         for (i = 0; i < sliceList1->n_members; i++) {
             oldTup = &sliceList1->members[i]->tuple;
-            simple_heap_delete(pgxcSliceRel, &oldTup->t_self);
+            CatalogTupleDelete(pgxcSliceRel, oldTup);
         }
         ReleaseSysCacheList(sliceList1);
 
@@ -19874,7 +19874,7 @@ static void delete_delta_table_tuples(Relation deltaRel, Oid partOid)
     scan = tableam_scan_begin(deltaRel, SnapshotNow, 1, &key);
 
     while (HeapTupleIsValid(tup = (HeapTuple) tableam_scan_getnexttuple(scan, ForwardScanDirection))) {
-        simple_heap_delete(deltaRel, &tup->t_self);
+        CatalogTupleDelete(deltaRel, tup);
     }
 
     tableam_scan_end(scan);
@@ -20854,7 +20854,7 @@ static void replaceRepeatChunkId(HTAB* chunkIdHashTable, List* srcPartToastRels)
                     values[0] = mapping->newChunkId;
                     copyTuple = (HeapTuple)tableam_tops_form_tuple(tupleDesc, values, isNull, tupleDesc->tdTableAmType);
 
-                    simple_heap_delete(srcPartToastRel, &((HeapTuple)tuple)->t_self);
+                    CatalogTupleDelete(srcPartToastRel, (HeapTuple)tuple);
                     (void)simple_heap_insert(srcPartToastRel, copyTuple);
 
                     (void)index_insert(toastIndexRel,
@@ -20882,12 +20882,12 @@ static void replaceRepeatChunkId(HTAB* chunkIdHashTable, List* srcPartToastRels)
 
                 copyTuple = (HeapTuple)tableam_tops_form_tuple(tupleDesc, values, isNull, tupleDesc->tdTableAmType);
 
-                simple_heap_delete(srcPartToastRel, &((HeapTuple)tuple)->t_self);
+                CatalogTupleDelete(srcPartToastRel, (HeapTuple)tuple);
                 (void)simple_heap_insert(srcPartToastRel, copyTuple);
                 {
                     copyTuple = heap_form_tuple(tupleDesc, values, isNull);
 
-                    simple_heap_delete(srcPartToastRel, &((HeapTuple)tuple)->t_self);
+                    CatalogTupleDelete(srcPartToastRel, (HeapTuple)tuple);
                     (void)simple_heap_insert(srcPartToastRel, copyTuple);
 
                     (void)index_insert(toastIndexRel,
@@ -25158,7 +25158,7 @@ void DropWeakPasswordDictionary()
         if (strcmp(DatumGetCString(heap_getattr(tuple, Anum_gs_global_config_name, tupdesc, &is_null)),
             "weak_password") == 0) {
             Assert(is_null == false);
-            simple_heap_delete(rel, &tuple->t_self);
+            CatalogTupleDelete(rel, tuple);
         }
     }
     tableam_scan_end(scan);
