@@ -91,6 +91,7 @@
 
 #include "access/k2/k2pg_aux.h"
 #include "access/k2/k2_table_ops.h"
+#include "access/k2/k2_plan.h"
 
 #ifdef PGXC
 static TupleTableSlot* fill_slot_with_oldvals(TupleTableSlot* slot, HeapTupleHeader oldtuphd, Bitmapset* modifiedCols);
@@ -1476,6 +1477,17 @@ end:;
                 /* FDW must have provided a slot containing the deleted row */
                 Assert(!TupIsNull(slot));
                 del_buffer = InvalidBuffer;
+            } else if (IsK2PgRelation(result_relation_desc)) {
+                if (node->k2pg_mt_is_single_row_update_or_delete)
+                {
+                    slot = planSlot;
+                }
+                else
+                {
+                    slot = ExecFilterJunk(result_rel_info->ri_junkFilter, planSlot);
+                }
+
+                del_buffer = InvalidBuffer;
             } else {
                 slot = estate->es_trig_tuple_slot;
                 if (slot->tts_tupleDescriptor != RelationGetDescr(result_relation_desc)) {
@@ -2498,6 +2510,14 @@ ldelete:
         if (TupIsNull(slot))
             return NULL;
 #endif
+		/*
+		 * Prepare the updated tuple in inner slot for RETURNING clause execution.
+		 * For ON CONFLICT DO UPDATE, the INSERT returning clause is setup
+		 * differently, so junkFilter is not needed.
+		 */
+		if (IsK2PgRelation(result_relation_desc) && result_rel_info->ri_junkFilter)
+			slot = ExecFilterJunk(result_rel_info->ri_junkFilter, planSlot);
+
         return ExecProcessReturning(result_rel_info->ri_projectReturning, slot, planSlot);
 #ifdef PGXC
     }
@@ -2874,6 +2894,9 @@ TupleTableSlot* ExecModifyTable(ModifyTableState* node)
 					if (isNull)
 						elog(ERROR, "k2pgctid is NULL");
 
+					// old_tuple->t_k2pgctid = datum;
+
+					// // oldtuple = &oldtupdata;
                     tuple_id = (ItemPointer)DatumGetPointer(datum);
                     tuple_ctid = *tuple_id; /* be sure we don't free ctid!! */
                     tuple_id = &tuple_ctid;
@@ -3123,6 +3146,7 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
     mt_state->mt_arowmarks = (List**)palloc0(sizeof(List*) * nplans);
     mt_state->mt_nplans = nplans;
     mt_state->limitExprContext = NULL;
+	mt_state->k2pg_mt_is_single_row_update_or_delete = K2PgIsSingleRowUpdateOrDelete(node);
 
     upsertState = (UpsertState*)palloc0(sizeof(UpsertState));
     upsertState->us_action = node->upsertAction;
@@ -3454,7 +3478,13 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
             case CMD_UPDATE:
             case CMD_DELETE:
             case CMD_MERGE:
-                junk_filter_needed = true;
+ //               junk_filter_needed = true;
+				/*
+				 * If it's a K2PG single row UPDATE/DELETE we do not perform an
+				 * initial scan to populate the k2pgctid, so there is no junk
+				 * attribute to extract.
+				 */
+				junk_filter_needed = !mt_state->k2pg_mt_is_single_row_update_or_delete;
                 break;
             default:
                 ereport(ERROR,
@@ -3483,7 +3513,14 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
                     char relkind;
 
                     relkind = result_rel_info->ri_RelationDesc->rd_rel->relkind;
-                    if (relkind == RELKIND_RELATION) {
+                    if (IsK2PgRelation(result_rel_info->ri_RelationDesc))
+					{
+						j->jf_junkAttNo = ExecFindJunkAttribute(j, "k2pgctid");
+						if (!AttributeNumberIsValid(j->jf_junkAttNo)) {
+							elog(ERROR, "could not find junk k2pgctid column");
+						}
+					}
+                    else if (relkind == RELKIND_RELATION) {
                         j->jf_junkAttNo = ExecFindJunkAttribute(j, "ctid");
                         if (!AttributeNumberIsValid(j->jf_junkAttNo)) {
                             ereport(ERROR,
