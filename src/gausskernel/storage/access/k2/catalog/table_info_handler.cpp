@@ -757,7 +757,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     K2LOG_D(log::catalog, "Checking if table {} is an index or not", table_id);
     auto [status, table_type_info_result] = GetTableTypeInfo(local_database_info->database_id, table_id);
     if (!status.is2xxOK()) {
-        TXMgr.endTxn(sh::dto::EndAction::Abort);
+        // TXMgr.endTxn(sh::dto::EndAction::Abort);
         K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, local_database_info->database_id, status);
         return std::make_tuple(status, std::shared_ptr<TableInfo>());
@@ -769,7 +769,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         // check if the shared table is stored on a different collection
         if (physical_coll.compare(database_info->database_id) != 0) {
             // shared table is on a different collection, first finish the existing collection
-            TXMgr.endTxn(sh::dto::EndAction::Commit);
+            // TXMgr.endTxn(sh::dto::EndAction::Commit);
             K2LOG_I(log::catalog, "Shared table {} is not in {} but in {} instead", table_id, database_info->database_id, physical_coll);
             // load the shared database info
             local_database_info = fnc_db(physical_coll);
@@ -786,13 +786,13 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         auto [status, idxInfo] = GetTable(physical_coll, local_database_info->database_name,
             table_id);
         if (!status.is2xxOK()) {
-            TXMgr.endTxn(sh::dto::EndAction::Abort);
+            // TXMgr.endTxn(sh::dto::EndAction::Abort);
             K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(status, std::shared_ptr<TableInfo>());
         }
         if (idxInfo == nullptr) {
-            TXMgr.endTxn(sh::dto::EndAction::Commit);
+            // TXMgr.endTxn(sh::dto::EndAction::Commit);
             K2LOG_ECT(log::catalog, "Failed to find table {} in ns {}", table_id, physical_coll);
             return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
         }
@@ -805,7 +805,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         // not founnd in cache, try to check the base table id from SKV
         auto [status, baseTableId]  = GetBaseTableId(physical_coll, table_id);
         if (!status.is2xxOK()) {
-            TXMgr.endTxn(sh::dto::EndAction::Abort);
+            // TXMgr.endTxn(sh::dto::EndAction::Abort);
             K2LOG_ECT(log::catalog, "Failed to check base table id for index {} in {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(std::move(status), std::shared_ptr<TableInfo>());
@@ -817,7 +817,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
 
     if (base_table_id.empty()) {
         // cannot find the id as either a table id or an index id
-        TXMgr.endTxn(sh::dto::EndAction::Abort);
+        // TXMgr.endTxn(sh::dto::EndAction::Abort);
         K2LOG_ECT(log::catalog, "Failed to find base table id for index {} in {}", table_id, physical_coll);
         return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
     }
@@ -825,13 +825,13 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     K2LOG_D(log::catalog, "Fetching base table schema {} for index {} in {}", base_table_id, table_id, physical_coll);
     auto [table_status, base_table_result] = GetTable(physical_coll, local_database_info->database_name, base_table_id);
     if (!table_status.is2xxOK()) {
-        TXMgr.endTxn(sh::dto::EndAction::Abort);
+        // TXMgr.endTxn(sh::dto::EndAction::Abort);
         return std::make_tuple(std::move(table_status), std::shared_ptr<TableInfo>());
     }
     // update table cache
     K2LOG_D(log::catalog, "Returned base table schema id: {}, name {}, for index: {}",
         base_table_id, base_table_result->table_name(), table_id);
-    TXMgr.endTxn(sh::dto::EndAction::Commit);
+    // TXMgr.endTxn(sh::dto::EndAction::Commit);
     return std::make_tuple(sh::Statuses::S200_OK, base_table_result);
 }
 
