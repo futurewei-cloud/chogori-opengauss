@@ -4598,7 +4598,6 @@ int main(int argc, char* argv[])
     (void)fflush(stdout);
     setup_privileges();
 
-    exit(0);
     printf(_("Setup bucketmap len ... \n"));
     (void)fflush(stdout);
     setup_bucketmap_len();
@@ -4625,6 +4624,7 @@ int main(int argc, char* argv[])
         vacuum_db();
     }
 
+    exit(0);
     printf(_("Make template0 ... \n"));
     (void)fflush(stdout);
     make_template0();
