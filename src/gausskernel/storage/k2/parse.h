@@ -92,6 +92,8 @@ struct FDWColumnRef {
 struct FDWConstValue
 {
    Oid   atttypid;
+   int attlen;
+   bool attbyval;
    Datum value;
    bool is_null;
 };

@@ -130,6 +130,8 @@ static void CreateTableAddColumn(Form_pg_attribute att,
         .attr_name = NameStr(att->attname),
         .attr_num = att->attnum,
         .type_oid = att->atttypid,
+        .attr_size = att->attlen,
+        .attr_byvalue = att->attbyval,
         .is_key = is_primary,
         .is_desc = is_desc,
         .is_nulls_first = is_nulls_first
@@ -160,7 +162,7 @@ static void CreateTableAddColumns(TupleDesc desc,
 				Form_pg_attribute att = TupleDescAttr(desc, i);
 				if (strcmp(NameStr(att->attname), index_elem->name) == 0)
 				{
-					if (!K2PgAllowForPrimaryKey(att->atttypid))
+					if (!K2PgAllowForPrimaryKey(att->atttypid, att->attlen, att->attbyval))
 						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("PRIMARY KEY containing column of type"
@@ -305,7 +307,7 @@ K2PgCreateIndex(const char *indexName,
 
 		if (is_key)
 		{
-			if (!K2PgAllowForPrimaryKey(att->atttypid)) {
+			if (!K2PgAllowForPrimaryKey(att->atttypid, att->attlen, att->attbyval)) {
                  elog(WARNING, "INDEX on column of type '%s' is only supported for uniqueness not ordering",
                         K2PgTypeOidToStr(att->atttypid));
             }

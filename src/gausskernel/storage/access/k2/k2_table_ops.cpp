@@ -82,29 +82,45 @@ bool IsK2PgSystemColumn(int attrNum)
  * Get the type ID of a real or virtual attribute (column).
  * Returns InvalidOid if the attribute number is invalid.
  */
-static Oid GetTypeId(int attrNum, TupleDesc tupleDesc)
+static void GetTypeInfo(int attrNum, TupleDesc tupleDesc, Oid& typeoid, int& attr_size, bool& attr_byval)
 {
 	switch (attrNum)
 	{
 		case SelfItemPointerAttributeNumber:
-			return TIDOID;
-		case ObjectIdAttributeNumber:
-			return OIDOID;
-		case MinTransactionIdAttributeNumber:
-			return XIDOID;
-		case MinCommandIdAttributeNumber:
-			return CIDOID;
-		case MaxTransactionIdAttributeNumber:
-			return XIDOID;
-		case MaxCommandIdAttributeNumber:
-			return CIDOID;
+            typeoid = TIDOID;
+            attr_size = 8;
+            attr_byval = true;
+			break;
 		case TableOidAttributeNumber:
-			return OIDOID;
+		case ObjectIdAttributeNumber:
+            typeoid = OIDOID;
+            attr_size = 4;
+            attr_byval = true;
+            break;
+		case MaxTransactionIdAttributeNumber:
+		case MinTransactionIdAttributeNumber:
+            typeoid = XIDOID;
+            attr_size = 4;
+            attr_byval = true;
+            break;
+		case MinCommandIdAttributeNumber:
+		case MaxCommandIdAttributeNumber:
+            typeoid = CIDOID;
+            attr_size = 4;
+            attr_byval = true;
+            break;
 		default:
-			if (attrNum > 0 && attrNum <= tupleDesc->natts)
-				return TupleDescAttr(tupleDesc, attrNum - 1)->atttypid;
-			else
-				return InvalidOid;
+			if (attrNum > 0 && attrNum <= tupleDesc->natts) {
+				auto desc =  TupleDescAttr(tupleDesc, attrNum - 1);
+                typeoid = desc->atttypid;
+                attr_size = desc->attlen;
+                attr_byval = desc->attbyval;
+            }
+			else {
+				typeoid = InvalidOid;
+                attr_size = 0;
+                attr_byval = true;
+            }
 	}
 }
 
@@ -273,7 +289,10 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
 			continue;
 		}
 
-		Oid   type_id = GetTypeId(attnum, tupleDesc);
+		Oid   type_id;
+        int attr_size;
+        bool attr_byvalue;
+        GetTypeInfo(attnum, tupleDesc, type_id, attr_size, attr_byvalue);
 		Datum datum   = heap_getattr(tuple, attnum, tupleDesc, &is_null);
 
 		/* Check not-null constraint on primary key early */
@@ -289,6 +308,8 @@ static Oid K2PgExecuteInsertInternal(Relation rel,
             .attr_num = attnum,
             .value = {
                 .type_id = type_id,
+                .attr_size = attr_size,
+                .attr_byvalue = attr_byvalue,
                 .datum = datum,
                 .is_null = is_null
             }
@@ -356,7 +377,11 @@ static void PrepareIndexWriteStmt(Relation index,
 	bool has_null_attr = false;
 	for (AttrNumber attnum = 1; attnum <= natts; ++attnum)
 	{
-		Oid   type_id = GetTypeId(attnum, tupdesc);
+		Oid   type_id;
+        int attr_size;
+        bool attr_byvalue;
+        GetTypeInfo(attnum, tupdesc, type_id, attr_size, attr_byvalue);
+
 		Datum value   = values[attnum - 1];
 		bool  is_null = isnull[attnum - 1];
 		has_null_attr = has_null_attr || is_null;
@@ -364,6 +389,8 @@ static void PrepareIndexWriteStmt(Relation index,
             .attr_num = attnum,
             .value = {
                 .type_id = type_id,
+                .attr_size = attr_size,
+                .attr_byvalue = attr_byvalue,
                 .datum = value,
                 .is_null = is_null
             }
@@ -383,6 +410,8 @@ static void PrepareIndexWriteStmt(Relation index,
             .attr_num = K2PgUniqueIdxKeySuffixAttributeNumber,
             .value = {
                 .type_id = BYTEAOID,
+                .attr_size = -1,
+                .attr_byvalue = false,
                 .datum = k2pgbasectid,
                 .is_null = !has_null_attr
             }
@@ -400,6 +429,8 @@ static void PrepareIndexWriteStmt(Relation index,
             .attr_num =	K2PgIdxBaseTupleIdAttributeNumber,
             .value = {
                 .type_id = BYTEAOID,
+                .attr_size = -1,
+                .attr_byvalue = false,
                 .datum = k2pgbasectid,
                 .is_null = false
             }
@@ -489,6 +520,8 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
         .attr_num = K2PgTupleIdAttributeNumber,
         .value = {
             .type_id = BYTEAOID,
+            .attr_size = -1,
+            .attr_byvalue = false,
             .datum = k2pgctid,
             .is_null = false
         }
@@ -558,6 +591,8 @@ void K2PgDeleteIndexRowsByBaseK2Pgctid(Relation index, Datum basek2pgctid)
     std::vector<K2PgConstraintDef> constraints{};
     K2PgConstant basectid {
         .type_id = BYTEAOID,
+        .attr_size = -1,
+        .attr_byvalue = false,
         .datum = basek2pgctid,
         .is_null = false
     };
@@ -578,6 +613,8 @@ void K2PgDeleteIndexRowsByBaseK2Pgctid(Relation index, Datum basek2pgctid)
             .attr_num = K2PgTupleIdAttributeNumber,
             .value = {
                 .type_id = BYTEAOID,
+                .attr_size = -1,
+                .attr_byvalue = false,
                 .datum = (Datum)syscols.k2pgctid,
                 .is_null = false
             }
@@ -625,6 +662,8 @@ bool K2PgExecuteUpdate(Relation rel,
         .attr_num = K2PgTupleIdAttributeNumber,
         .value = {
             .type_id = BYTEAOID,
+            .attr_size = -1,
+            .attr_byvalue = false,
             .datum = k2pgctid,
             .is_null = false
         }
@@ -673,6 +712,8 @@ bool K2PgExecuteUpdate(Relation rel,
             .attr_num = attnum,
             .value = {
                 .type_id = type_id,
+                .attr_size = att_desc->attlen,
+                .attr_byvalue = att_desc->attbyval,
                 .datum = d,
                 .is_null = is_null
             }
@@ -766,6 +807,8 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
         .attr_num = K2PgTupleIdAttributeNumber,
         .value = {
             .type_id = BYTEAOID,
+            .attr_size = -1,
+            .attr_byvalue = false,
             .datum = tuple->t_k2pgctid,
             .is_null = false
         }
@@ -789,6 +832,8 @@ void K2PgUpdateSysCatalogTuple(Relation rel, HeapTuple oldtuple, HeapTuple tuple
             .attr_num = attnum,
             .value = {
                 .type_id = TupleDescAttr(tupleDesc, idx)->atttypid,
+                .attr_size = TupleDescAttr(tupleDesc, idx)->attlen,
+                .attr_byvalue = TupleDescAttr(tupleDesc, idx)->attbyval,
                 .datum = d,
                 .is_null = is_null
             }

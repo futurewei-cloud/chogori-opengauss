@@ -45,7 +45,7 @@ typedef unsigned int K2PgOid;
 typedef struct k2pg::PgSysColumns K2PgSysColumns;
 typedef struct k2pg::PgTableProperties K2PgTableProperties;
 
-bool K2PgAllowForPrimaryKey(int type_oid);
+bool K2PgAllowForPrimaryKey(int type_oid, int attr_size, bool attr_byvalue);
 
 typedef struct PgCallbacks {
   void (*FetchUniqueConstraintName)(K2PgOid, char*, size_t);
