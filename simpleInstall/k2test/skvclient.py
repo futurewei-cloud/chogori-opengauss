@@ -80,7 +80,7 @@ class FieldType(int, Enum):
     BOOL:       int     = 10
     DECIMALD25: int     = 11
     DECIMALD50: int     = 12
-    DECIMALD100:int     = 12
+    DECIMALD100:int     = 13
 
     def serialize(self):
         return self.value
