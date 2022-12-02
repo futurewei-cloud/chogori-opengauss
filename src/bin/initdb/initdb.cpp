@@ -4562,11 +4562,10 @@ int main(int argc, char* argv[])
     printf(_("Setup system views ... \n"));
     (void)fflush(stdout);
     setup_sysviews();
-    
+
 #ifdef ENABLE_PRIVATEGAUSS
     setup_privsysviews();
 #endif
-    exit(0);
     printf(_("Setup perf views ... \n"));
     (void)fflush(stdout);
     setup_perfviews();
@@ -4625,6 +4624,7 @@ int main(int argc, char* argv[])
         vacuum_db();
     }
 
+    exit(0);
     printf(_("Make template0 ... \n"));
     (void)fflush(stdout);
     make_template0();
