@@ -256,7 +256,7 @@ K2PgStatus PgGate_InvalidateTableCacheByTableId(const char *table_uuid) {
 }
 
 // Make ColumnSchema from column information
-k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, int type_oid, bool is_key, bool is_desc, bool is_nulls_first) {
+k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, int type_oid, int attr_size, bool attr_byvalue, bool is_key, bool is_desc, bool is_nulls_first) {
     using SortingType = k2pg::ColumnSchema::SortingType;
     SortingType sorting_type = SortingType::kNotSpecified;
     if (is_key) {
@@ -267,7 +267,7 @@ k2pg::ColumnSchema makeColumn(const std::string& col_name, int order, int type_o
         }
     }
     bool is_nullable = !is_key;
-    return k2pg::ColumnSchema(col_name, type_oid, is_nullable, is_key, order, sorting_type);
+    return k2pg::ColumnSchema(col_name, type_oid, attr_size, attr_byvalue, is_nullable, is_key, order, sorting_type);
 }
 
 std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schema_name, const std::vector<K2PGColumnDef>& columns, bool add_primary_key) {
@@ -282,6 +282,7 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schem
         k2pgcols.push_back(makeColumn("k2pgrowid",
                 static_cast<int32_t>(k2pg::PgSystemAttrNum::kPgRowId),
                 BYTEAOID,
+                -1, false /* attr by value */,
                 true /* is_key */, false /* is_desc */, false /* is_nulls_first */));
         num_key_columns++;
     }
@@ -291,7 +292,7 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schem
             continue;
         }
         num_key_columns++;
-        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.type_oid, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.type_oid, col.attr_size, col.attr_byvalue, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Add data columns
     for (auto& col : columns) {
@@ -299,7 +300,7 @@ std::tuple<k2pg::Status, bool, k2pg::Schema> makeSchema(const std::string& schem
             continue;
         }
 
-        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.type_oid, col.is_key, col.is_desc, col.is_nulls_first));
+        k2pgcols.push_back(makeColumn(col.attr_name, col.attr_num, col.type_oid, col.attr_size, col.attr_byvalue, col.is_key, col.is_desc, col.is_nulls_first));
     }
     // Get column ids
     for (size_t i=0; i < k2pgcols.size(); i++) {
@@ -990,7 +991,7 @@ K2PgStatus PgGate_ExecSelect(
     bool convertToFullScan = false;
     if (isRangeScan) {
         for (const K2PgConstraintDef& constraint: constraints) {
-            if (constraint.constants.size() && !K2PgAllowForPrimaryKey(constraint.constants[0].type_id)) {
+            if (constraint.constants.size() && !K2PgAllowForPrimaryKey(constraint.constants[0].type_id, constraint.constants[0].attr_size, constraint.constants[0].attr_byvalue)) {
                 elog(WARNING, "Trying to range scan wih an unsupported type, converting to full scan");
                 convertToFullScan = true;
                 break;
@@ -1220,16 +1221,16 @@ const void* PgGate_GetThreadLocalErrMsg() {
   return PgGetThreadLocalErrMsg();
 }
 
-bool K2PgAllowForPrimaryKey(int type_oid) {
+bool K2PgAllowForPrimaryKey(int type_oid, int attr_size, bool attr_byvalue) {
     elog(LOG, "PgGateAPI: K2PgAllowForPrimaryKey");
-    skv::http::dto::FieldType skv_type = k2pg::OidToK2Type(type_oid);
+    skv::http::dto::FieldType skv_type = k2pg::OidToK2Type(type_oid, attr_size, attr_byvalue);
     switch (skv_type) {
         case skv::http::dto::FieldType::STRING:
         case skv::http::dto::FieldType::INT16T:
         case skv::http::dto::FieldType::INT32T:
         case skv::http::dto::FieldType::INT64T:
         case skv::http::dto::FieldType::BOOL:
-            return k2pg::isPushdownType(type_oid);
+            return k2pg::isPushdownType(type_oid, attr_size, attr_byvalue);
             break;
         default:
             return false;

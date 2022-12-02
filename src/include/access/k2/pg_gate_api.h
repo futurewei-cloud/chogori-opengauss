@@ -112,6 +112,8 @@ struct K2PGColumnDef {
     const char* attr_name;
     int attr_num;
     Oid type_oid;
+    int attr_size;    /* Only used if type_oid is a non-static type */
+    bool attr_byvalue; /* Only used if type_oid is a non-static type */
     bool is_key;
     bool is_desc;
     bool is_nulls_first;
@@ -191,6 +193,8 @@ K2PgStatus PgGate_ExecDropIndex(K2PgStatement handle);
 //--------------------------------------------------------------------------------------------------
 struct K2PgConstant {
     Oid type_id{0};
+    int attr_size{0};
+    bool attr_byvalue{false};
     Datum datum{0};
     bool is_null{true};
 };

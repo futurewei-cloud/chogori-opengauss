@@ -44,12 +44,16 @@ class ColumnDesc {
             int id,
             std::string name,
             uint32_t type_oid,
+            int attr_size,
+            bool attr_byvalue,
             bool is_primary,
             int32_t attr_num,
             ColumnSchema::SortingType sorting_type) {
     index_ = index,
     id_ = id;
     type_oid_ = type_oid;
+    attr_size_ = attr_size;
+    attr_byvalue_ = attr_byvalue;
     name_ = name;
     is_primary_ = is_primary;
     attr_num_ = attr_num;
@@ -84,6 +88,9 @@ class ColumnDesc {
     return type_oid_;
   }
 
+  int attr_size() const { return attr_size_; }
+  bool attr_byvalue() const { return attr_byvalue_; }
+
   ColumnSchema::SortingType sorting_type() const {
     return sorting_type_;
   }
@@ -92,6 +99,8 @@ class ColumnDesc {
   int index_ = -1;
   int id_ = -1;
   uint32_t type_oid_ = -1;
+  int attr_size_ = 0;
+  bool attr_byvalue_ = false;
   std::string name_;
   bool is_primary_ = false;
   int32_t attr_num_ = -1;
@@ -142,6 +151,9 @@ class PgColumn {
   uint32_t type_oid() const {
     return desc_.type_oid();
   }
+
+  int attr_size() const { return desc_.attr_size(); }
+  bool attr_byvalue() const { return desc_.attr_byvalue(); }
 
   bool is_system_column() {
     return attr_num() < 0;

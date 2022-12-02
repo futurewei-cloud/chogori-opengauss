@@ -149,10 +149,14 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
     PallocManager allocManager{};
     std::unordered_map<uint32_t, int> offset_to_attr;
     std::unordered_map<uint32_t, Oid> offset_to_oid;
+    std::unordered_map<uint32_t, int> offset_to_attrsize;
+    std::unordered_map<uint32_t, bool> offset_to_attrbyvalue;
     for (const auto& column : pg_table->columns()) {
         // we have two extra fields, i.e., table_id and index_id, in skv key
         offset_to_attr[column.index() + K2_FIELD_OFFSET] = column.attr_num();
         offset_to_oid[column.index() + K2_FIELD_OFFSET] = column.type_oid();
+        offset_to_attrsize[column.index() + K2_FIELD_OFFSET] = column.attr_size();
+        offset_to_attrbyvalue[column.index() + K2_FIELD_OFFSET] = column.attr_byvalue();
     }
 
     // Iterate through the SKV record's fields
@@ -167,6 +171,8 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         }
 
         Oid id = offset_to_oid[offset];
+        int attr_size = offset_to_attrsize[offset];
+        bool attr_byvalue = offset_to_attrbyvalue[offset];
         int datum_offset = offset_to_attr[offset] - 1;
 
         if (datum_offset > nattrs - 1) {
@@ -175,7 +181,7 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         }
 
         // Otherwise field is a normal user column
-        if (isStringType(id)) {
+        if (isStringType(id, attr_size, attr_byvalue)) {
             std::optional<std::string> value = record.deserializeNext<std::string>();
             if (value.has_value()) {
                 char* datum = allocManager.alloc(value->size() + VARHDRSZ);
@@ -207,28 +213,28 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
                 isnulls[datum_offset] = false;
             }
         }
-        else if (is1ByteIntType(id) || is2ByteIntType(id)) {
+        else if (is1ByteIntType(id, attr_size, attr_byvalue) || is2ByteIntType(id, attr_size, attr_byvalue)) {
             std::optional<int16_t> value = record.deserializeNext<int16_t>();
             if (value.has_value()) {
                 values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         }
-        else if (is4ByteIntType(id)) {
+        else if (is4ByteIntType(id, attr_size, attr_byvalue)) {
             std::optional<int32_t> value = record.deserializeNext<int32_t>();
             if (value.has_value()) {
                 values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         }
-        else if (is8ByteIntType(id)) {
+        else if (is8ByteIntType(id, attr_size, attr_byvalue)) {
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (value.has_value()) {
                 values[datum_offset] = (Datum)(*value);
                 isnulls[datum_offset] = false;
             }
         }
-        else if (isUnsignedPromotedType(id)) {
+        else if (isUnsignedPromotedType(id, attr_size, attr_byvalue)) {
             std::optional<int64_t> value = record.deserializeNext<int64_t>();
             if (value.has_value()) {
                 values[datum_offset] = (Datum)(uint32_t)(*value);
@@ -502,7 +508,7 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
         // TODO
         return skv::http::dto::expression::Value();
     }
-    else if (isStringType(constant.type_id)) {
+    else if (isStringType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         // Borrowed from MOT. This handles stripping the datum header for toasted or non-toasted data
         UntoastedDatum data = UntoastedDatum(constant.datum);
         size_t size = VARSIZE(data.untoasted);  // includes header len VARHDRSZ
@@ -518,23 +524,23 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
         char* bytes = DatumGetCString(constant.datum);
         return makeValueLiteral<std::string>(std::string(bytes));
     }
-    else if (is1ByteIntType(constant.type_id)) {
+    else if (is1ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
         return makeValueLiteral<int16_t>(std::move(byte));
     }
-    else if (is2ByteIntType(constant.type_id)) {
+    else if (is2ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int16_t byte2 = (int16_t)(((uintptr_t)(constant.datum)) & 0x0000ffff);
         return makeValueLiteral<int16_t>(std::move(byte2));
     }
-    else if (is4ByteIntType(constant.type_id)) {
+    else if (is4ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int32_t byte4 = (int32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
         return makeValueLiteral<int32_t>(std::move(byte4));
     }
-    else if (isUnsignedPromotedType(constant.type_id)) {
+    else if (isUnsignedPromotedType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int64_t byte8 = (int64_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
         return makeValueLiteral<int64_t>(std::move(byte8));
     }
-    else if (is8ByteIntType(constant.type_id)) {
+    else if (is8ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int64_t byte8 = (int64_t)constant.datum;
         return makeValueLiteral<int64_t>(std::move(byte8));
     }
@@ -561,7 +567,7 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
     expression::Expression opr_expr{};
 
     // Check for types we support for filter pushdown
-    if (!isPushdownType(constraint.constants[0].type_id)) {
+    if (!isPushdownType(constraint.constants[0].type_id, constraint.constants[0].attr_size, constraint.constants[0].attr_byvalue)) {
         return opr_expr;
     }
 
@@ -629,7 +635,7 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
         builder.serializeNull();
         return;
     }
-    else if (isStringType(constant.type_id)) {
+    else if (isStringType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         // Borrowed from MOT. This handles stripping the datum header for toasted or non-toasted data
         k2pg::UntoastedDatum data = k2pg::UntoastedDatum(constant.datum);
         size_t size = VARSIZE(data.untoasted);  // includes header len VARHDRSZ
@@ -645,23 +651,23 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
         char* bytes = DatumGetCString(constant.datum);
         return builder.serializeNext<std::string>(std::string(bytes));
     }
-    else if (is1ByteIntType(constant.type_id)) {
+    else if (is1ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int8_t byte = (int8_t)(((uintptr_t)(constant.datum)) & 0x000000ff);
         builder.serializeNext<int16_t>(byte);
     }
-    else if (is2ByteIntType(constant.type_id)) {
+    else if (is2ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int16_t byte2 = (int16_t)(((uintptr_t)(constant.datum)) & 0x0000ffff);
         builder.serializeNext<int16_t>(byte2);
     }
-    else if (is4ByteIntType(constant.type_id)) {
+    else if (is4ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int32_t byte4 = (int32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
         builder.serializeNext<int32_t>(byte4);
     }
-    else if (isUnsignedPromotedType(constant.type_id)) {
+    else if (isUnsignedPromotedType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int64_t uint = (int64_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
         builder.serializeNext<int64_t>(uint);
     }
-    else if (is8ByteIntType(constant.type_id)) {
+    else if (is8ByteIntType(constant.type_id, constant.attr_size, constant.attr_byvalue)) {
         int64_t byte8 = (int64_t)constant.datum;
         builder.serializeNext<int64_t>(byte8);
     }

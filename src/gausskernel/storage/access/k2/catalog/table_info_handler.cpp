@@ -861,7 +861,7 @@ IndexInfo TableInfoHandler::BuildIndexInfo(std::shared_ptr<TableInfo> base_table
         if (col_schema.is_primary()) {
             is_range = true;
         }
-        IndexColumn col(col_id, col_schema.name(), col_schema.type_oid(), col_schema.is_nullable(),
+        IndexColumn col(col_id, col_schema.name(), col_schema.type_oid(), col_schema.attr_size(), col_schema.is_attr_byvalue(), col_schema.is_nullable(),
                 is_range, col_schema.order(), col_schema.sorting_type(), base_column_id);
         columns.push_back(col);
     }
@@ -894,7 +894,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveSKVSchemaFromTableInfo(
     uint32_t count = 2;
     for (ColumnSchema col_schema : table->schema().columns()) {
         sh::dto::SchemaField field;
-        field.type = k2pg::OidToK2Type(col_schema.type_oid());
+        field.type = k2pg::OidToK2Type(col_schema.type_oid(), col_schema.attr_size(), col_schema.is_attr_byvalue());
         field.name = col_schema.name();
         switch (col_schema.sorting_type()) {
             case ColumnSchema::SortingType::kAscending: {
@@ -944,7 +944,7 @@ std::shared_ptr<sh::dto::Schema> TableInfoHandler::DeriveIndexSchema(const Index
     for (IndexColumn indexcolumn_schema : index_info.columns()) {
         sh::dto::SchemaField field;
         field.name = indexcolumn_schema.column_name;
-        field.type = k2pg::OidToK2Type(indexcolumn_schema.type_oid);
+        field.type = k2pg::OidToK2Type(indexcolumn_schema.type_oid, indexcolumn_schema.attr_size, indexcolumn_schema.attr_byvalue);
         switch (indexcolumn_schema.sorting_type) {
             case ColumnSchema::SortingType::kAscending: {
                 field.descending = false;
@@ -1065,6 +1065,10 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::DeriveTableColumnMetaRecords(c
         builder.serializeNext<sh::String>(col_schema.name());
         // ColumnTypeOid
         builder.serializeNext<int64_t>((int64_t)col_schema.type_oid());
+        // ColumnTypeAttrSize
+        builder.serializeNext<int32_t>(col_schema.attr_size());
+        // ColumnTypeAttrByValue
+        builder.serializeNext<bool>(col_schema.is_attr_byvalue());
         // IsNullable
         builder.serializeNext<bool>(col_schema.is_nullable());
         // IsPrimary
@@ -1096,6 +1100,10 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::DeriveIndexColumnMetaRecords(c
         builder.serializeNext<sh::String>(index_column.column_name);
         // ColumnTypeOid
         builder.serializeNext<int64_t>((int64_t)index_column.type_oid);
+        // ColumnTypeAttrSize
+        builder.serializeNext<int32_t>(index_column.attr_size);
+        // ColumnTypeAttrByValue
+        builder.serializeNext<bool>(index_column.attr_byvalue);
         // IsNullable
         builder.serializeNext<bool>(index_column.is_nullable);
         // IsRange
@@ -1302,6 +1310,10 @@ std::shared_ptr<TableInfo> TableInfoHandler::BuildTableInfo(const std::string& d
         std::string col_name = column.deserializeNext<sh::String>().value();
         // ColumnType Oid
         uint32_t col_type_oid = (uint32_t)column.deserializeNext<int64_t>().value();
+        // Attr size
+        int32_t attr_size = column.deserializeNext<int32_t>().value();
+        // Attr by value
+        bool attr_byvalue = column.deserializeNext<bool>().value();
         // IsNullable
         bool is_nullable = column.deserializeNext<bool>().value();
         // IsPrimary
@@ -1310,7 +1322,7 @@ std::shared_ptr<TableInfo> TableInfoHandler::BuildTableInfo(const std::string& d
         int32 col_order = column.deserializeNext<int32_t>().value();
         // SortingType
         int16_t sorting_type = column.deserializeNext<int16_t>().value();
-        ColumnSchema col_schema(col_name, col_type_oid, is_nullable, is_primary,
+        ColumnSchema col_schema(col_name, col_type_oid, attr_size, attr_byvalue, is_nullable, is_primary,
                 col_order, static_cast<ColumnSchema::SortingType>(sorting_type));
         cols.push_back(std::move(col_schema));
         ids.push_back(col_id);
@@ -1379,6 +1391,10 @@ IndexInfo TableInfoHandler::BuildIndexInfo(const std::string& collection_name, s
         std::string col_name = column.deserializeNext<sh::String>().value();
         // ColumnType OID
         uint32_t col_type_oid = (uint32_t)column.deserializeNext<int64_t>().value();
+        // ColumnTypeAttrSize
+        int32_t attr_size = column.deserializeNext<int32_t>().value();
+        // ColumnType OID
+        bool attr_byvalue = column.deserializeNext<bool>().value();
         // IsNullable
         bool is_nullable = column.deserializeNext<bool>().value();
         // IsRange
@@ -1390,7 +1406,7 @@ IndexInfo TableInfoHandler::BuildIndexInfo(const std::string& collection_name, s
         // BaseColumnId
         int32_t base_col_id = column.deserializeNext<int32_t>().value();
         // TODO: add support for expression in index
-        IndexColumn index_column(col_id, col_name, col_type_oid, is_nullable, is_range,
+        IndexColumn index_column(col_id, col_name, col_type_oid, attr_size, attr_byvalue, is_nullable, is_range,
                 col_order, static_cast<ColumnSchema::SortingType>(sorting_type), base_col_id);
         columns.push_back(std::move(index_column));
     }

@@ -66,12 +66,16 @@ namespace k2pg {
 
         ColumnSchema(std::string name,
                 PgTypeOid type_oid,
+                int attr_size,
+                bool attr_byvalue,
                 bool is_nullable,
                 bool is_primary,
                 int32_t order,
                 SortingType sorting_type)
             : name_(std::move(name)),
             type_oid_(type_oid),
+            attr_size_(attr_size),
+            attr_byvalue_(attr_byvalue),
             is_nullable_(is_nullable),
             is_primary_(is_primary),
             order_(order),
@@ -81,6 +85,8 @@ namespace k2pg {
        PgTypeOid type_oid() const {
             return type_oid_;
         }
+        int attr_size() const { return attr_size_; }
+        bool is_attr_byvalue() const { return attr_byvalue_; }
 
         void set_type_oid(PgTypeOid type_oid) {
             type_oid_ = type_oid;
@@ -140,6 +146,8 @@ namespace k2pg {
 
         std::string name_;
         PgTypeOid type_oid_;
+        int attr_size_;
+        bool attr_byvalue_;
         bool is_nullable_;
         bool is_primary_;
         int32_t order_;
@@ -371,6 +379,8 @@ namespace k2pg {
         ColumnId column_id;             // Column id in the index table.
         std::string column_name;        // Column name in the index table - colexpr.MangledName().
         PgTypeOid type_oid;             // Postgress Type Oid
+        int attr_size;
+        bool attr_byvalue;
         bool is_nullable;               // can be null or not
         bool is_range;                  // is range key
         int32_t order;                  // attr_num
@@ -378,11 +388,11 @@ namespace k2pg {
         ColumnId base_column_id;      // Corresponding column id in base table.
 
         explicit IndexColumn(ColumnId in_column_id, std::string in_column_name,
-                PgTypeOid in_type_oid, bool in_is_nullable, bool in_is_range,
+                PgTypeOid in_type_oid, int in_attr_size, bool in_attr_byvalue, bool in_is_nullable, bool in_is_range,
                 int32_t in_order, ColumnSchema::SortingType in_sorting_type,
                 ColumnId in_base_column_id)
                 : column_id(in_column_id), column_name(std::move(in_column_name)),
-                    type_oid(in_type_oid), is_nullable(in_is_nullable),
+                    type_oid(in_type_oid), attr_size(in_attr_size), attr_byvalue(in_attr_byvalue), is_nullable(in_is_nullable),
                     is_range(in_is_range), order(in_order), sorting_type(in_sorting_type),
                     base_column_id(in_base_column_id) {
         }

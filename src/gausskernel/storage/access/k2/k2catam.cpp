@@ -132,22 +132,23 @@ static void camLoadTableInfo(Relation relation, CamScanPlan scan_plan)
 	}
 }
 
-static Oid cam_get_atttypid(TupleDesc bind_desc, AttrNumber attnum)
+static void cam_get_att_type_info(TupleDesc bind_desc, AttrNumber attnum, Oid& atttypid, int& att_size, bool& att_byval)
 {
-	Oid	atttypid;
-
 	if (attnum > 0)
 	{
 		/* Get the type from the description */
-		atttypid = TupleDescAttr(bind_desc, attnum - 1)->atttypid;
+        auto tup_desc = TupleDescAttr(bind_desc, attnum - 1);
+		atttypid = tup_desc->atttypid;
+		att_size = tup_desc->attlen;
+		att_byval = tup_desc->attbyval;
 	}
 	else
 	{
 		/* This must be an OID column. */
 		atttypid = OIDOID;
+        att_size = 4;
+        att_byval = true;
 	}
-
-  return atttypid;
 }
 
 /*
@@ -155,9 +156,14 @@ static Oid cam_get_atttypid(TupleDesc bind_desc, AttrNumber attnum)
 */
 static void camBindColumn(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum, Datum value, bool is_null)
 {
-    Oid     atttypid = cam_get_atttypid(bind_desc, attnum);
+    Oid     atttypid;
+    int att_size;
+    bool att_byval;
+    cam_get_att_type_info(bind_desc, attnum, atttypid, att_size, att_byval);
     K2PgConstant constant {
         .type_id = atttypid,
+        .attr_size = att_size,
+        .attr_byvalue = att_byval,
         .datum = value,
         .is_null = is_null
     };
@@ -174,15 +180,22 @@ static void camBindColumn(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber a
 static void camBindColumnCondBetween(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum,
                                      bool start_valid, Datum value, bool end_valid, Datum value_end)
 {
-    Oid     atttypid = cam_get_atttypid(bind_desc, attnum);
+    Oid     atttypid;
+    int att_size;
+    bool att_byval;
+    cam_get_att_type_info(bind_desc, attnum, atttypid, att_size, att_byval);
 
     K2PgConstant start {
         .type_id = atttypid,
+        .attr_size = att_size,
+        .attr_byvalue = att_byval,
         .datum = value,
         .is_null = !start_valid
     };
     K2PgConstant end {
         .type_id = atttypid,
+        .attr_size = att_size,
+        .attr_byvalue = att_byval,
         .datum = value_end,
         .is_null = !end_valid
     };
@@ -203,7 +216,10 @@ static void camBindColumnCondIn(CamScanDesc camScan, TupleDesc bind_desc, AttrNu
 {
     std::vector<K2PgConstant> constants;
 
-	Oid	atttypid = cam_get_atttypid(bind_desc, attnum);
+	Oid	atttypid;
+    int att_size;
+    bool att_byval;
+    cam_get_att_type_info(bind_desc, attnum, atttypid, att_size, att_byval);
 
 	for (int i = 0; i < nvalues; i++) {
 		/*
@@ -213,6 +229,8 @@ static void camBindColumnCondIn(CamScanDesc camScan, TupleDesc bind_desc, AttrNu
 		 */
         K2PgConstant constant {
             .type_id = atttypid,
+            .attr_size = att_size,
+            .attr_byvalue = att_byval,
             .datum = values[i],
             .is_null = false
         };
@@ -1577,6 +1595,8 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
 	/* Bind k2pgctid to identify the current row. */
     K2PgConstant ctid_const = {
         .type_id = BYTEAOID,
+        .attr_size = -1,
+        .attr_byvalue = false,
         .datum = k2pgctid,
         .is_null = false
     };

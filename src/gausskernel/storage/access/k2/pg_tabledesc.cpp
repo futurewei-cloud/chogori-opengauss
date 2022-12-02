@@ -55,6 +55,8 @@ using k2pg::catalog::CatalogConsts;
                     idx,
                     "k2pgctid",
                     BYTEAOID,
+                    -1,
+                    false,
                     false,
                     idx,
                     ColumnSchema::SortingType::kNotSpecified);
@@ -89,6 +91,8 @@ using k2pg::catalog::CatalogConsts;
                     schema.column_id(idx),
                     col.name(),
                     col.type_oid(),
+                    col.attr_size(),
+                    col.is_attr_byvalue(),
                     idx < schema.num_key_columns(),
                     col.order() /* attr_num */,
                     col.sorting_type());
@@ -118,6 +122,8 @@ using k2pg::catalog::CatalogConsts;
                     col.column_id,
                     col.column_name,
                     col.type_oid,
+                    col.attr_size,
+                    col.attr_byvalue,
                     col.is_range,
                     col.order /* attr_num */,
                     col.sorting_type);
