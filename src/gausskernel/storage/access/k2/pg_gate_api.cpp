@@ -597,7 +597,7 @@ K2PgStatus PgGate_DmlBuildPgTupleId(Oid db_oid, Oid table_oid, const std::vector
 
     // This comes from cstring_to_text_with_len which is used to create a proper datum
     // that is prepended with the data length. Doing it by hand here to avoid the extra copy
-    char *datum = (char*)palloc(serializedStorage.size() + VARHDRSZ);
+    char *datum = (char*)palloc0(serializedStorage.size() + VARHDRSZ);
     SET_VARSIZE(datum, serializedStorage.size() + VARHDRSZ);
     memcpy(VARDATA(datum), serializedStorage.data(), serializedStorage.size());
     *k2pgctid = PointerGetDatum(datum);
