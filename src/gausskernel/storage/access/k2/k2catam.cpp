@@ -1085,11 +1085,11 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	 * refreshing the caches when we are behind.
 	 * Note: This works because we do not allow modifying schemas (alter/drop)
 	 * for system catalog tables.
+	 */
 	if (!IsSystemRelation(relation))
 	{
 		HandleK2PgStatus(PgGate_SetCatalogCacheVersion((K2PgStatement)camScan->handle, k2pg_catalog_cache_version));
 	}
-	 */
 
 	bms_free(scan_plan.hash_key);
 	bms_free(scan_plan.primary_key);
