@@ -207,6 +207,10 @@ Datum K2PgGetPgTupleIdFromSlot(TupleTableSlot *slot)
 
 /*
  * Get the k2pgctid from a tuple.
+ *
+ * Note that if the relation has a K2 PG RowId attribute, this will generate a new RowId value
+ * meaning the k2pgctid will be unique. Therefore you should only use this if the relation has
+ * a primary key or you're doing an insert.
  */
 Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 							   HeapTuple tuple,
@@ -218,59 +222,31 @@ Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 	std::vector<K2PgAttributeDef> attrs;
 	uint64_t tuple_id = 0;
 	int col = -1;
-
-    K2PgSelectIndexParams params{};
-    std::vector<int> targets{};
-    std::vector<K2PgConstraintDef> constraints{};
-    params.index_oid = kInvalidOid;
-    K2PgScanHandle* handle = nullptr;
-
-    HandleK2PgStatus(PgGate_NewSelect(dboid, relid, params, &handle));
-
 	while ((col = bms_next_member(pkey, col)) >= 0) {
 		AttrNumber attnum = col + minattr;
+		K2PgAttributeDef k2attr{};
+        k2attr.attr_num = attnum;
 		/*
-		 * Don't need to fill in for the K2 PG RowId column
+		 * Don't need to fill in for the K2 PG RowId column, however we still
+		 * need to add the column to the statement to construct the k2pgctid.
 		 */
-		if (attnum < 0) {
-            continue;
-        }
-        auto tupAttr = TupleDescAttr(tupleDesc, attnum - 1);
-        bool is_null;
-        Datum datum = heap_getattr(tuple, attnum, tupleDesc, &is_null);
-        K2PgConstant key_const {
-            .type_id = tupAttr->atttypid,
-            .attr_size = tupAttr->attlen,
-            .attr_byvalue = tupAttr->attbyval,
-            .datum = datum,
-            .is_null = is_null
-        };
-        K2PgConstraintDef constraint {
-            .attr_num =	attnum,
-            .constraint = K2PG_CONSTRAINT_EQ,
-            .constants = {key_const}
-        };
-        constraints.push_back(std::move(constraint));
+		if (attnum != K2PgRowIdAttributeNumber) {
+			// TODO double check this type_id is correct for system columns
+			k2attr.value.type_id = (attnum > 0) ?
+					TupleDescAttr(tupleDesc, attnum - 1)->atttypid : InvalidOid;
+			k2attr.value.datum = heap_getattr(tuple, attnum, tupleDesc, &k2attr.value.is_null);
+		} else {
+			// RowID is supposed to be used for tables without primary keys defined, not sure
+			// if this code adapted from chogori-sql is correct
+			k2attr.value.datum = 0;
+			k2attr.value.is_null = false;
+			k2attr.value.type_id = OIDOID;
+		}
+
+		attrs.push_back(k2attr);
 	}
 
-    HandleK2PgStatus(PgGate_ExecSelect(handle, constraints, targets, true /* forward */, K2PgSelectLimitParams{}));
-
-    bool has_data = false;
-    int count = 0;
-    Datum k2pgctid = 0;
-    K2PgSysColumns syscols{};
-    HandleK2PgStatus(PgGate_DmlFetch(handle, 0, nullptr, nullptr, &syscols, &has_data));
-    while (has_data) {
-        k2pgctid = (Datum)syscols.k2pgctid;
-        ++count;
-        HandleK2PgStatus(PgGate_DmlFetch(handle, 0, nullptr, nullptr, &syscols, &has_data));
-    }
-    if (count > 1) {
-		ereport(ERROR,
-		(errcode(ERRCODE_INTERNAL_ERROR), errmsg(
-			"More than one row returned in K2PgGetPgTupleIdFromTuple")));
-    }
-
+	HandleK2PgStatus(PgGate_DmlBuildPgTupleId(dboid, relid, attrs, &tuple_id));
 	return (Datum)tuple_id;
 }
 
@@ -540,7 +516,7 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	}
 	else
 	{
-	  k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
+		k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
 	}
 
 	if (k2pgctid == 0)
@@ -689,7 +665,7 @@ bool K2PgExecuteUpdate(Relation rel,
 	}
 	else
 	{
-	  k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
+		k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
 	}
 
 	if (k2pgctid == 0)
