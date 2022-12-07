@@ -118,11 +118,14 @@ boost::future<sh::Response<>> TxnManager::beginTxn() {
                 .priority= static_cast<sh::dto::TxnPriority>(txConf.get<uint8_t>("priority", 128)), // 0 is highest, 255 is lowest.
                 .syncFinalize = txConf.get<bool>("sync_finalize", false)
             });
+        Metric mt("beginTxn", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+        _txnMt = Metric("txnTotalDuration", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
         return _client->beginTxn(_txnOpts)
-        .then([this] (auto&& respFut) mutable {
+        .then([this, mt=std::move(mt)] (auto&& respFut) mutable {
+            mt.report();
             auto&& [status, handle] = respFut.get();
             if (status.is2xxOK()) {
-                K2LOG_DCT(k2log::k2pg, "Started new txn: {}", handle);
+                K2LOG_ICT(k2log::k2pg, "Started new txn: {}", handle);
                 _txn = std::make_unique<sh::TxnHandle>(std::move(handle));
             } else {
                 K2LOG_ECT(k2log::k2pg, "Unable to begin txn due to: {}", status);
@@ -137,11 +140,17 @@ boost::future<sh::Response<>> TxnManager::beginTxn() {
 boost::future<sh::Response<>> TxnManager::endTxn(sh::dto::EndAction endAction) {
     _init();
     if (_txn) {
-        K2LOG_DCT(k2log::k2pg, "end txn, with action: {}", endAction)
+        K2LOG_ICT(k2log::k2pg, "end txn {}, with action: {}", (*_txn), endAction);
+        Metric mt("endTxn", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
         return _txn->endTxn(endAction)
-            .then([this, endAction](auto&& respFut) mutable {
-                K2LOG_DCT(k2log::k2pg, "txn ended, with action: {}", endAction);
+            .then([this, endAction, mt=std::move(mt)](auto&& respFut) mutable {
+                _txnMt.report();
+                mt.report();
+                K2LOG_ICT(k2log::k2pg, "txn {} ended, with action: {}", (*_txn), endAction);
                 auto&& [status] = respFut.get();
+                if (!status.is2xxOK()) {
+                    K2LOG_ECT(k2log::k2pg, "error ending transaction{}: {}", (*_txn), status);
+                }
                 _txn.reset();
                 return sh::Response<>(std::move(status));
             });
@@ -155,21 +164,48 @@ boost::future<sh::Response<std::shared_ptr<sh::dto::Schema>>>
 TxnManager::getSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
     _init();
     K2LOG_DCT(k2log::k2pg, "cname: {}, sname: {}, version: {}", collectionName, schemaName, schemaVersion);
-    return _client->getSchema(collectionName, schemaName, schemaVersion);
+    Metric mt("getSchema", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    return _client->getSchema(collectionName, schemaName, schemaVersion)
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status, schema] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_WCT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<std::shared_ptr<sh::dto::Schema>>(std::move(status), schema);
+        });
 }
 
 boost::future<sh::Response<>>
 TxnManager::createSchema(const sh::String& collectionName, const sh::dto::Schema& schema) {
     _init();
     K2LOG_DCT(k2log::k2pg, "cname: {}, schema: {}", collectionName, schema);
-    return _client->createSchema(collectionName, schema);
+    Metric mt("createSchema", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    return _client->createSchema(collectionName, schema)
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_ECT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<>(std::move(status));
+        });
 }
 
 boost::future<sh::Response<>>
 TxnManager::createCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds) {
     _init();
     K2LOG_DCT(k2log::k2pg, "createCollection: {}, rends: {}", metadata, rangeEnds);
-    return _client->createCollection(metadata, rangeEnds);
+    Metric mt("createCollection", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    return _client->createCollection(metadata, rangeEnds)
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_ECT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<>(std::move(status));
+        });
 }
 
 boost::future<sh::Response<>>
@@ -203,15 +239,24 @@ boost::future<sh::Response<sh::dto::SKVRecord>>
 TxnManager::read(sh::dto::SKVRecord record) {
     record.constructKeyStrings();
     K2LOG_DRT(k2log::k2pg, "read: {}", record);
+    Metric mt("read", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
-        .then([this, record=std::move(record)](auto&& beginFut) mutable {
+        .then([this, record = std::move(record)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
             if (!beginStatus.is2xxOK()) {
                 return sh::MakeResponse<sh::dto::SKVRecord>(std::move(beginStatus), sh::dto::SKVRecord{});
             }
             return _txn->read(std::move(record));
         })
-        .unwrap();
+        .unwrap()
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status, rec] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_ERT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<sh::dto::SKVRecord>(std::move(status), rec);
+        });
 }
 
 boost::future<sh::Response<>>
@@ -219,30 +264,48 @@ TxnManager::write(sh::dto::SKVRecord record, bool erase,
                   sh::dto::ExistencePrecondition precondition) {
     record.constructKeyStrings();
     K2LOG_DWT(k2log::k2pg, "write: {}, erase: {}, precond: {}", record, erase, precondition);
+    Metric mt("write", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
-        .then([this, record=std::move(record), erase = erase, precondition = precondition](auto&& beginFut) mutable {
+        .then([this, record = std::move(record), erase = erase, precondition = precondition](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
             if (!beginStatus.is2xxOK()) {
                 return sh::MakeResponse<>(std::move(beginStatus));
             }
             return _txn->write(record, erase, precondition);
         })
-        .unwrap();
+        .unwrap()
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_EWT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<>(std::move(status));
+        });
 }
 
 boost::future<sh::Response<>>
 TxnManager::partialUpdate(sh::dto::SKVRecord record, std::vector<uint32_t> fieldsForPartialUpdate) {
     record.constructKeyStrings();
     K2LOG_DWT(k2log::k2pg, "partialUpdate: {}, fields: {}", record, fieldsForPartialUpdate);
+    Metric mt("partialUpdate", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
-        .then([this, record=std::move(record), fields = std::move(fieldsForPartialUpdate)](auto&& beginFut) mutable {
+        .then([this, record = std::move(record), fields = std::move(fieldsForPartialUpdate)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
             if (!beginStatus.is2xxOK()) {
                 return sh::MakeResponse<>(std::move(beginStatus));
             }
             return _txn->partialUpdate(record, std::move(fields));
         })
-        .unwrap();
+        .unwrap()
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_EWT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<>(std::move(status));
+        });
 }
 
 boost::future<sh::Response<sh::dto::QueryResponse>>
@@ -253,6 +316,7 @@ TxnManager::query(std::shared_ptr<sh::dto::QueryRequest> query) {
     else {
         K2LOG_ERT(k2log::k2pg, "null query");
     }
+    Metric mt("query", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, query = std::move(query)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
@@ -261,7 +325,15 @@ TxnManager::query(std::shared_ptr<sh::dto::QueryRequest> query) {
             }
             return _txn->query(std::move(query));
         })
-        .unwrap();
+        .unwrap()
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status, qresp] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_ERT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<sh::dto::QueryResponse>(std::move(status), std::move(qresp));
+        });
 }
 
 boost::future<sh::Response<std::shared_ptr<sh::dto::QueryRequest>>>
@@ -269,8 +341,9 @@ TxnManager::createQuery(sh::dto::SKVRecord startKey, sh::dto::SKVRecord endKey,
                         sh::dto::expression::Expression&& filter,
                         std::vector<std::string>&& projection, int32_t recordLimit,
                         bool reverseDirection, bool includeVersionMismatch) {
-    K2LOG_DCT(k2log::k2pg, "startKey={}, endKey={}, filter={}, projection={}, recordLimit={}, reverseDirection={}, includeVersionMismatch={}",
+    K2LOG_DRT(k2log::k2pg, "startKey={}, endKey={}, filter={}, projection={}, recordLimit={}, reverseDirection={}, includeVersionMismatch={}",
             startKey, endKey, filter, projection, recordLimit, reverseDirection, includeVersionMismatch);
+    Metric mt("createQuery", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, startKey=std::move(startKey), endKey=std::move(endKey), filter = std::move(filter),
                projection = std::move(projection), recordLimit, reverseDirection,
@@ -283,25 +356,42 @@ TxnManager::createQuery(sh::dto::SKVRecord startKey, sh::dto::SKVRecord endKey,
                                      std::move(projection), recordLimit, reverseDirection,
                                      includeVersionMismatch);
         })
-        .unwrap();
+        .unwrap()
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status, req] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_ERT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<std::shared_ptr<sh::dto::QueryRequest>>(std::move(status), std::move(req));
+        });
 }
 
 boost::future<sh::Response<>>
 TxnManager::destroyQuery(std::shared_ptr<sh::dto::QueryRequest> query) {
     if (query) {
-        K2LOG_DCT(k2log::k2pg, "query: {}", *query);
+        K2LOG_DRT(k2log::k2pg, "query: {}", *query);
     } else {
-        K2LOG_ECT(k2log::k2pg, "null query");
+        K2LOG_ERT(k2log::k2pg, "null query");
     }
+    Metric mt("destroyQuery", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
-        .then([this, query] (auto&& beginFut) mutable {
+        .then([this, query](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
             if (!beginStatus.is2xxOK()) {
                 return sh::MakeResponse<>(std::move(beginStatus));
             }
             return _txn->destroyQuery(query);
         })
-        .unwrap();
+        .unwrap()
+        .then([mt=std::move(mt)](auto&& respFut) {
+            mt.report();
+            auto&& [status] = respFut.get();
+            if (!status.is2xxOK()) {
+                K2LOG_ERT(k2log::k2pg, "error: {}", status);
+            }
+            return sh::Response<>(std::move(status));
+        });
 }
 
 } // ns

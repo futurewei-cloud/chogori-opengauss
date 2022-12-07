@@ -4,13 +4,14 @@
         "port": 30000
     },
     "txn_opts": {
-        "op_timeout_ms": 3600000,
+        "op_timeout_ms": 36000000,
         "sync_finalize": true,
         "priority": 128
     },
     "logging": {
         "level": "Info",
         "tracing": "rwc",
+        "op_latency_warn_threshold_ms": 20,
         "moduleOverrides": {
             "k2::pg": "Info",
             "skv::http::client": "Info"
