@@ -202,6 +202,10 @@ Datum K2PgGetPgTupleIdFromSlot(TupleTableSlot *slot)
 		}
 	}
 
+	// if (slot->tts_k2pgctid != 0) {
+	// 	return slot->tts_k2pgctid;
+	// }
+
 	return 0;
 }
 
@@ -240,7 +244,7 @@ Datum K2PgGetPgTupleIdFromTuple(Relation rel,
 			// if this code adapted from chogori-sql is correct
 			k2attr.value.datum = 0;
 			k2attr.value.is_null = false;
-			k2attr.value.type_id = OIDOID;
+			k2attr.value.type_id = BYTEAOID;
 		}
 
 		attrs.push_back(k2attr);
@@ -504,20 +508,8 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	/*
 	 * Look for k2pgctid. Raise error if k2pgctid is not found.
 	 *
-	 * If single row delete, generate k2pgctid from tuple values, otherwise
-	 * retrieve it from the slot.
 	 */
-	if (isSingleRow)
-	{
-		HeapTuple tuple = ExecMaterializeSlot(slot);
-		k2pgctid = K2PgGetPgTupleIdFromTuple(rel,
-										  tuple,
-										  slot->tts_tupleDescriptor);
-	}
-	else
-	{
-		k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
-	}
+	k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
 
 	if (k2pgctid == 0)
 	{
@@ -654,17 +646,10 @@ bool K2PgExecuteUpdate(Relation rel,
 	/*
 	 * Look for k2pgctid. Raise error if k2pgctid is not found.
 	 *
-	 * If single row update, generate k2pgctid from tuple values, otherwise
-	 * retrieve it from the slot.
 	 */
-	if (isSingleRow)
-	{
-		k2pgctid = K2PgGetPgTupleIdFromTuple(rel,
-										  tuple,
-										  slot->tts_tupleDescriptor);
-	}
-	else
-	{
+	if (tuple != NULL && tuple->t_k2pgctid != 0) {
+		k2pgctid = tuple->t_k2pgctid;
+	} else {
 		k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
 	}
 
