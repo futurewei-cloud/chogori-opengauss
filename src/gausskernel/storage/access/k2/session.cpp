@@ -125,7 +125,7 @@ boost::future<sh::Response<>> TxnManager::beginTxn() {
             mt.report();
             auto&& [status, handle] = respFut.get();
             if (status.is2xxOK()) {
-                K2LOG_ICT(k2log::k2pg, "Started new txn: {}", handle);
+                K2LOG_DCT(k2log::k2pg, "Started new txn: {}", handle);
                 _txn = std::make_unique<sh::TxnHandle>(std::move(handle));
             } else {
                 K2LOG_ECT(k2log::k2pg, "Unable to begin txn due to: {}", status);
@@ -140,13 +140,13 @@ boost::future<sh::Response<>> TxnManager::beginTxn() {
 boost::future<sh::Response<>> TxnManager::endTxn(sh::dto::EndAction endAction) {
     _init();
     if (_txn) {
-        K2LOG_ICT(k2log::k2pg, "end txn {}, with action: {}", (*_txn), endAction);
+        K2LOG_DCT(k2log::k2pg, "end txn {}, with action: {}", (*_txn), endAction);
         Metric mt("endTxn", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
         return _txn->endTxn(endAction)
             .then([this, endAction, mt=std::move(mt)](auto&& respFut) mutable {
                 _txnMt.report();
                 mt.report();
-                K2LOG_ICT(k2log::k2pg, "txn {} ended, with action: {}", (*_txn), endAction);
+                K2LOG_DCT(k2log::k2pg, "txn {} ended, with action: {}", (*_txn), endAction);
                 auto&& [status] = respFut.get();
                 if (!status.is2xxOK()) {
                     K2LOG_ECT(k2log::k2pg, "error ending transaction{}: {}", (*_txn), status);
