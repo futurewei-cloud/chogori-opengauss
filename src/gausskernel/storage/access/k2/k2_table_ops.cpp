@@ -476,7 +476,8 @@ void K2PgExecuteInsertIndex(Relation index,
 	Oid            dboid    = K2PgGetDatabaseOid(index);
 	Oid            relid    = RelationGetRelid(index);
     std::vector<K2PgAttributeDef> columns;
-    bool upsert = false;
+	// TODO: fix me
+    bool upsert = true;
 
 	PrepareIndexWriteStmt(index, values, isnull,
 						  RelationGetNumberOfAttributes(index),
