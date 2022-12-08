@@ -3938,7 +3938,8 @@ static uint64 CopyFrom(CopyState cstate)
      * inserting to, and act differently if the tuples that have already been
      * processed and prepared for insertion are not there.
      */
-    if ((resultRelInfo->ri_TrigDesc != NULL &&
+    if (IsK2PgRelation(cstate->rel) ||
+        (resultRelInfo->ri_TrigDesc != NULL &&
         (resultRelInfo->ri_TrigDesc->trig_insert_before_row || resultRelInfo->ri_TrigDesc->trig_insert_instead_row)) ||
         cstate->volatile_defexprs) {
         useHeapMultiInsert = false;

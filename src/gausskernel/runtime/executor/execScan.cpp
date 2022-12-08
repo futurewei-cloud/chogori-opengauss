@@ -23,6 +23,10 @@
 #include "executor/executor.h"
 #include "miscadmin.h"
 #include "utils/memutils.h"
+#include "utils/builtins.h"
+#include "access/itup.h"
+#include "access/k2/k2pg_aux.h"
+
 
 /*
  * ExecScanFetch -- fetch next potential tuple
@@ -192,6 +196,12 @@ TupleTableSlot* ExecScan(ScanState* node, ExecScanAccessMtd access_mtd, /* funct
          * ...
          */
         if (qual == NULL || ExecQual(qual, econtext, false)) {
+            if (IsK2PgEnabled()) {
+                if (slot->tts_tuple != NULL && slot->tts_k2pgctid == 0) {
+                    // assign tts_k2pgctid for slot
+                    HEAPTUPLE_COPY_K2PGTID(((HeapTuple)(slot->tts_tuple))->t_k2pgctid, slot->tts_k2pgctid);
+                }
+            }
             /*
              * Found a satisfactory scan tuple.
              */
@@ -202,6 +212,15 @@ TupleTableSlot* ExecScan(ScanState* node, ExecScanAccessMtd access_mtd, /* funct
                  * from this scan tuple, in which case continue scan.
                  */
                 result_slot = ExecProject(proj_info, &is_done);
+                if (IsK2PgEnabled()) {
+                    if (slot->tts_k2pgctid != 0) {
+                        HEAPTUPLE_COPY_K2PGTID(slot->tts_k2pgctid, result_slot->tts_k2pgctid);
+                    } else if (slot->tts_tuple != NULL && ((HeapTuple)slot->tts_tuple)->t_k2pgctid != 0) {
+                        HEAPTUPLE_COPY_K2PGTID(((HeapTuple)slot->tts_tuple)->t_k2pgctid, result_slot->tts_k2pgctid);
+                    } else {
+                        elog(WARNING, "Could not find k2pgctid from slot");
+                    }
+                }
 #ifdef PGXC
                 /* Copy the xcnodeoid if underlying scanned slot has one */
                 result_slot->tts_xcnodeoid = slot->tts_xcnodeoid;

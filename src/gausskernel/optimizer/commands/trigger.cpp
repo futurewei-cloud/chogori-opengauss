@@ -73,6 +73,8 @@
 #include "optimizer/pgxcship.h"
 #endif
 
+#include "access/k2/k2pg_aux.h"
+
 /*
  * Note that similar macros also exist in executor/execMain.c.  There does not
  * appear to be any good header to put them into, given the structures that
@@ -2911,7 +2913,7 @@ ltrmark:;
             tuple.t_self = *tid;
             tuple.t_tableOid = RelationGetRelid(fakeRelation);
             tuple.t_bucketId = RelationGetBktid(fakeRelation);
- 		    tuple.t_k2pgctid = PointerGetDatum(NULL);
+ 		    tuple.t_k2pgctid = (Datum) 0;
             HeapTupleCopyBaseFromPage(&tuple, page);
 #ifdef PGXC
             tuple.t_xc_node_id = u_sess->pgxc_cxt.PGXCNodeIdentifier;
@@ -2972,7 +2974,7 @@ static bool TriggerEnabled(EState* estate, ResultRelInfo* relinfo, Trigger* trig
 
         modified = false;
         for (i = 0; i < trigger->tgnattr; i++) {
-            if (bms_is_member(trigger->tgattr[i] - FirstLowInvalidHeapAttributeNumber, modifiedCols)) {
+            if (bms_is_member(trigger->tgattr[i] - K2PgGetFirstLowInvalidAttributeNumber(relinfo->ri_RelationDesc), modifiedCols)) {
                 modified = true;
                 break;
             }
