@@ -4624,7 +4624,6 @@ int main(int argc, char* argv[])
         vacuum_db();
     }
 
-    exit(0);
     printf(_("Make template0 ... \n"));
     (void)fflush(stdout);
     make_template0();
