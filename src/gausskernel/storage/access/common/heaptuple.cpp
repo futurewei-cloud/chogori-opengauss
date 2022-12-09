@@ -282,6 +282,10 @@ bool heap_attisnull(HeapTuple tup, int attnum, TupleDesc tupDesc)
             /* these are never null */
             break;
 
+	case K2PgTupleIdAttributeNumber:
+	    /* If selected, virtual K2PG columns are never null */
+	    break;
+
         default:
             ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN), errmsg("invalid attnum: %d", attnum)));
     }
@@ -770,6 +774,8 @@ HeapTuple heap_form_tuple(TupleDesc tupleDescriptor, Datum *values, bool *isnull
     HeapTupleHeaderSetDatumLength(td, len);
     HeapTupleHeaderSetTypeId(td, tupleDescriptor->tdtypeid);
     HeapTupleHeaderSetTypMod(td, tupleDescriptor->tdtypmod);
+    /* We also make sure that t_ctid is invalid unless explicitly set */
+    ItemPointerSetInvalid(&(td->t_ctid));
 
     HeapTupleHeaderSetNatts(td, numberOfAttributes);
     td->t_hoff = hoff;
@@ -3201,7 +3207,13 @@ HeapTuple heap_slot_copy_heap_tuple(TupleTableSlot *slot)
     /*
      * Otherwise we need to build a tuple from the Datum array.
      */
-    return heap_form_tuple(slot->tts_tupleDescriptor, slot->tts_values, slot->tts_isnull);
+    HeapTuple tup = heap_form_tuple(slot->tts_tupleDescriptor, slot->tts_values, slot->tts_isnull);
+    if (slot->tts_k2pgctid != 0) {
+        HEAPTUPLE_COPY_K2PGTID(slot->tts_k2pgctid, tup->t_k2pgctid);
+    } else if (slot->tts_tuple != NULL && ((HeapTuple)slot->tts_tuple)->t_k2pgctid != 0) {
+        HEAPTUPLE_COPY_K2PGTID(((HeapTuple)slot->tts_tuple)->t_k2pgctid, tup->t_k2pgctid);
+    }
+    return tup;
 }
 
 /*
