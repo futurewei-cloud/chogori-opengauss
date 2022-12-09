@@ -170,7 +170,7 @@ TxnManager::getSchema(const sh::String& collectionName, const sh::String& schema
             mt.report();
             auto&& [status, schema] = respFut.get();
             if (!status.is2xxOK()) {
-                K2LOG_WCT(k2log::k2pg, "error: {}", status);
+                K2LOG_DCT(k2log::k2pg, "error: {}", status);
             }
             return sh::Response<std::shared_ptr<sh::dto::Schema>>(std::move(status), schema);
         });
