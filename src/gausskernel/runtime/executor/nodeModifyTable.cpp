@@ -1711,8 +1711,6 @@ TupleTableSlot* ExecUpdate(ItemPointer tupleid,
         /* FDW might have changed tuple */
         tuple = tableam_tslot_get_tuple_from_slot(result_relation_desc, slot);
     } else if (IsK2PgRelation(result_relation_desc)) {
-        // TODO: double check the logic here
-
 		/*
 		 * Check the constraints of the tuple.
 		 */
@@ -2894,9 +2892,6 @@ TupleTableSlot* ExecModifyTable(ModifyTableState* node)
 					if (isNull)
 						elog(ERROR, "k2pgctid is NULL");
 
-					// old_tuple->t_k2pgctid = datum;
-
-					// // oldtuple = &oldtupdata;
                     tuple_id = (ItemPointer)DatumGetPointer(datum);
                     tuple_ctid = *tuple_id; /* be sure we don't free ctid!! */
                     tuple_id = &tuple_ctid;
@@ -3478,7 +3473,6 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
             case CMD_UPDATE:
             case CMD_DELETE:
             case CMD_MERGE:
- //               junk_filter_needed = true;
 				/*
 				 * If it's a K2PG single row UPDATE/DELETE we do not perform an
 				 * initial scan to populate the k2pgctid, so there is no junk

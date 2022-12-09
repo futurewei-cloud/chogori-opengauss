@@ -94,8 +94,6 @@
 #include "gs_ledger/ledger_utils.h"
 #include "gs_policy/gs_policy_masking.h"
 
-//#include "access/k2/k2pg_aux.h"
-
 /* Hooks for plugins to get control in ExecutorStart/Run/Finish/End */
 THR_LOCAL ExecutorStart_hook_type ExecutorStart_hook = NULL;
 THR_LOCAL ExecutorRun_hook_type ExecutorRun_hook = NULL;
@@ -2447,19 +2445,6 @@ void ExecConstraints(ResultRelInfo *resultRelInfo, TupleTableSlot *slot, EState 
 
 
         for (attrChk = 1; attrChk <= natts; attrChk++) {
-        	// Form_pg_attribute att = TupleDescAttr(tupdesc, attrChk - 1);
-
-			// if (mtstate && mtstate->k2pg_mt_is_single_row_update_or_delete &&
-			//     !bms_is_member(att->attnum - K2PgGetFirstLowInvalidAttributeNumber(rel), modifiedCols))
-			// {
-			// 	/*
-			// 	 * For single-row-updates, we only know the values of the
-			// 	 * modified columns. But in this case it is safe to skip the
-			// 	 * unmodified columns anyway.
-			// 	 */
-			// 	continue;
-			// }
-
             if (tupdesc->attrs[attrChk - 1]->attnotnull && tableam_tslot_attisnull(slot, attrChk)) {
                 char *val_desc = NULL;
                 bool rel_masked = u_sess->attr.attr_security.Enable_Security_Policy &&

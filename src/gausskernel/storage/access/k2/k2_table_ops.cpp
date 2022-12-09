@@ -186,10 +186,6 @@ Datum K2PgGetPgTupleIdFromSlot(TupleTableSlot *slot)
 		}
 	}
 
-	// if (slot->tts_k2pgctid != 0) {
-	// 	return slot->tts_k2pgctid;
-	// }
-
 	return 0;
 }
 
