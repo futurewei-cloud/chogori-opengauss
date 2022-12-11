@@ -2384,6 +2384,11 @@ void PostgresInitializer::RecheckDatabaseExists()
 
 void PostgresInitializer::SetDatabasePath()
 {
+    // No local physical path for the database in K2PG mode
+    if (g_instance.k2_cxt.isK2ModelEnabled) {
+        return;
+    }
+
     /*
      * Now we should be able to access the database directory safely. Verify
      * it's there and looks reasonable.
