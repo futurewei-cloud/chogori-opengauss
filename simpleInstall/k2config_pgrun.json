@@ -11,7 +11,7 @@
     "logging": {
         "level": "Info",
         "tracing": "rwc",
-        "op_latency_warn_threshold_ms": 20,
+        "op_latency_warn_threshold_ms": 2000,
         "moduleOverrides": {
             "k2::pg": "Info",
             "skv::http::client": "Info"
