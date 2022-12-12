@@ -702,7 +702,7 @@ bool K2PgExecuteUpdate(Relation rel,
 		 * might be triggers that modify the heap tuple to set (other) columns
 		 * (e.g. using the SPI module functions).
 		 */
-		int bms_idx = attnum - K2PgGetFirstLowInvalidAttributeNumber(rel);
+		int bms_idx = attnum - FirstLowInvalidHeapAttributeNumber;
 		if (isSingleRow && !whole_row && !bms_is_member(bms_idx, updatedCols))
 			continue;
 
