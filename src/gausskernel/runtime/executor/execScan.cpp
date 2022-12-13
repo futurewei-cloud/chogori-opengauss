@@ -197,7 +197,7 @@ TupleTableSlot* ExecScan(ScanState* node, ExecScanAccessMtd access_mtd, /* funct
          */
         if (qual == NULL || ExecQual(qual, econtext, false)) {
             if (IsK2PgEnabled()) {
-                if (slot->tts_tuple != NULL && slot->tts_k2pgctid == 0) {
+                if (slot->tts_tuple != NULL) {
                     // assign tts_k2pgctid for slot
                     HEAPTUPLE_COPY_K2PGTID(((HeapTuple)(slot->tts_tuple))->t_k2pgctid, slot->tts_k2pgctid);
                 }
