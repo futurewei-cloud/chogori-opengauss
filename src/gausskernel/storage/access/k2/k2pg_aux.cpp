@@ -263,7 +263,8 @@ void K2PgInitSession(const char *db_name) {
 			elog(INFO, "Initialize K2PG session for database: %s", db_name);
     		HandleK2PgStatus(PgGate_InitSession(db_name));
 		} else {
-			elog(INFO, "database name is null when Initialize K2PG session, skipping...");
+			elog(INFO, "database name is null when Initialize K2PG session, use default database %s ", DEFAULT_DATABASE);
+			HandleK2PgStatus(PgGate_InitSession(DEFAULT_DATABASE));
 		}
 	} else {
 		ereport(ERROR, (errmsg("K2PG backend has not been initialized for database: %s", db_name)));
