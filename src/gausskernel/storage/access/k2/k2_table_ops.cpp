@@ -202,10 +202,6 @@ Datum K2PgGetPgTupleIdFromSlot(TupleTableSlot *slot)
 		}
 	}
 
-	// if (slot->tts_k2pgctid != 0) {
-	// 	return slot->tts_k2pgctid;
-	// }
-
 	return 0;
 }
 
@@ -511,6 +507,9 @@ bool K2PgExecuteDelete(Relation rel, TupleTableSlot *slot, EState *estate, Modif
 	 *
 	 */
 	k2pgctid = K2PgGetPgTupleIdFromSlot(slot);
+    if (k2pgctid == 0) {
+		k2pgctid = slot->tts_k2pgctid;
+	}
 
 	if (k2pgctid == 0)
 	{
