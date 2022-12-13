@@ -153,14 +153,14 @@ class Metric {
         return *this;
     }
     void report() const {
-        if (_warnThr > 0ns) {
-            auto elapsed = k2::Clock::now() - _start;
-            if (elapsed >= _warnThr) {
-                K2LOG_WCT(k2log::k2pg, "Metric {} exceeded threshold {}: {}", _name, _warnThr, elapsed);
-            } else {
-                K2LOG_DCT(k2log::k2pg, "Metric {} with threshold {}: {}", _name, _warnThr, elapsed);
-            }
-        }
+        // if (_warnThr > 0ns) {
+        //     auto elapsed = k2::Clock::now() - _start;
+        //     if (elapsed >= _warnThr) {
+        //         K2LOG_WCT(k2log::k2pg, "Metric {} exceeded threshold {}: {}", _name, _warnThr, elapsed);
+        //     } else {
+        //         K2LOG_DCT(k2log::k2pg, "Metric {} with threshold {}: {}", _name, _warnThr, elapsed);
+        //     }
+        // }
     }
 
    private:
