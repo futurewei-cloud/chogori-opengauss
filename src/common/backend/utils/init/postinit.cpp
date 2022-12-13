@@ -1976,6 +1976,9 @@ void PostgresInitializer::InitStreamSession()
 
 void PostgresInitializer::InitSysCache()
 {
+    // make sure that we initialize PgGate session before load sys cache
+    K2PgInitSession(m_indbname == NULL ? DEFAULT_DATABASE : m_indbname);
+
     /*
      * Initialize the relation cache and the system catalog caches.  Note that
      * no catalog access happens here; we only set up the hashtable structure.
