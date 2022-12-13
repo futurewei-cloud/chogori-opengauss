@@ -442,6 +442,17 @@ void check_env_value(const char* input_env_value)
     }
 }
 
+static bool IsEnvSet(const char* name)
+{
+	const char* env_var_value = getenv(name);
+	return env_var_value != NULL && strcmp(env_var_value, "1") == 0;
+}
+
+static bool IsK2PgLocalNodeInitdb()
+{
+	return IsEnvSet("K2PG_LOCAL_NODE_INITDB");
+}
+
 /*
  * routines to check mem allocations and fail noisily.
  *
@@ -1426,33 +1437,33 @@ static void bootstrap_template1(void)
     }
 
     /* Substitute for various symbols used in the BKI file */
+    if (!IsK2PgLocalNodeInitdb()) {
+        nRet = sprintf_s(buf, BUF_LENGTH, "%d", NAMEDATALEN);
+        securec_check_ss_c(nRet, "\0", "\0");
+        bki_lines = replace_token(bki_lines, "NAMEDATALEN", buf);
 
-    nRet = sprintf_s(buf, BUF_LENGTH, "%d", NAMEDATALEN);
-    securec_check_ss_c(nRet, "\0", "\0");
-    bki_lines = replace_token(bki_lines, "NAMEDATALEN", buf);
+        nRet = sprintf_s(buf, BUF_LENGTH, "%d", (int)sizeof(Pointer));
+        securec_check_ss_c(nRet, "\0", "\0");
+        bki_lines = replace_token(bki_lines, "SIZEOF_POINTER", buf);
 
-    nRet = sprintf_s(buf, BUF_LENGTH, "%d", (int)sizeof(Pointer));
-    securec_check_ss_c(nRet, "\0", "\0");
-    bki_lines = replace_token(bki_lines, "SIZEOF_POINTER", buf);
+        bki_lines = replace_token(bki_lines, "ALIGNOF_POINTER", (sizeof(Pointer) == 4) ? "i" : "d");
 
-    bki_lines = replace_token(bki_lines, "ALIGNOF_POINTER", (sizeof(Pointer) == 4) ? "i" : "d");
+        bki_lines = replace_token(bki_lines, "FLOAT4PASSBYVAL", FLOAT4PASSBYVAL ? "true" : "false");
 
-    bki_lines = replace_token(bki_lines, "FLOAT4PASSBYVAL", FLOAT4PASSBYVAL ? "true" : "false");
+        bki_lines = replace_token(bki_lines, "FLOAT8PASSBYVAL", FLOAT8PASSBYVAL ? "true" : "false");
 
-    bki_lines = replace_token(bki_lines, "FLOAT8PASSBYVAL", FLOAT8PASSBYVAL ? "true" : "false");
+        bki_lines = replace_token(bki_lines, "POSTGRES", username);
 
-    bki_lines = replace_token(bki_lines, "POSTGRES", username);
+        bki_lines = replace_token(bki_lines, "ENCODING", encodingid);
 
-    bki_lines = replace_token(bki_lines, "ENCODING", encodingid);
+        buf_collate = escape_quotes(lc_collate);
+        bki_lines = replace_token(bki_lines, "LC_COLLATE", buf_collate);
+        FREE_AND_RESET_STR(buf_collate);
 
-    buf_collate = escape_quotes(lc_collate);
-    bki_lines = replace_token(bki_lines, "LC_COLLATE", buf_collate);
-    FREE_AND_RESET_STR(buf_collate);
-
-    buf_ctype = escape_quotes(lc_ctype);
-    bki_lines = replace_token(bki_lines, "LC_CTYPE", buf_ctype);
-    FREE_AND_RESET_STR(buf_ctype);
-
+        buf_ctype = escape_quotes(lc_ctype);
+        bki_lines = replace_token(bki_lines, "LC_CTYPE", buf_ctype);
+        FREE_AND_RESET_STR(buf_ctype);
+    }
     /*
      * "--dbcompatibility" is a required argument to set installed database compatibility.
      * We can choose --dbcompatibility=A\B\C.
@@ -1502,7 +1513,9 @@ static void bootstrap_template1(void)
     PG_CMD_OPEN;
 
     for (line = bki_lines; *line != NULL; line++) {
-        PG_CMD_PUTS(*line);
+        if (!IsK2PgLocalNodeInitdb()) {
+            PG_CMD_PUTS(*line);
+        }
         FREE_AND_RESET_STR(*line);
     }
 
@@ -4534,8 +4547,8 @@ int main(int argc, char* argv[])
     bootstrap_template1();
 
     /*
-     * Make the per-database PG_VERSION for template1 only after init'ing it
-     */
+    * Make the per-database PG_VERSION for template1 only after init'ing it
+    */
     printf(_("Write version file base/1 ... \n"));
     (void)fflush(stdout);
     write_version_file("base/1");
@@ -4544,104 +4557,111 @@ int main(int argc, char* argv[])
     (void)fflush(stdout);
     CreatePGDefaultTempDir();
 
-    /* Create the stuff we don't need to use bootstrap mode for */
+    if (!IsK2PgLocalNodeInitdb()) {
+        /* Create the stuff we don't need to use bootstrap mode for */
 
-    printf(_("Setup auth ... \n"));
-    (void)fflush(stdout);
-    setup_auth();
-    get_set_pwd();
-
-    printf(_("Setup depend ... \n"));
-    (void)fflush(stdout);
-    setup_depend();
-
-    printf(_("Load plpgsql ... \n"));
-    (void)fflush(stdout);
-    load_plpgsql();
-
-    printf(_("Setup system views ... \n"));
-    (void)fflush(stdout);
-    setup_sysviews();
-
-#ifdef ENABLE_PRIVATEGAUSS
-    setup_privsysviews();
-#endif
-    printf(_("Setup perf views ... \n"));
-    (void)fflush(stdout);
-    setup_perfviews();
-
-#ifdef PGXC
-    /* Initialize catalog information about the node self */
-    setup_nodeself();
-#endif
-
-    // TODO: should we exclude this step for k2_mode?
-    printf(_("Setup description ... \n"));
-    (void)fflush(stdout);
-    setup_description();
-
-    printf(_("Setup collation ... \n"));
-    (void)fflush(stdout);
-    setup_collation();
-
-    if (!k2_mode) {
-        printf(_("Setup conversion ... \n"));
+        printf(_("Setup auth ... \n"));
         (void)fflush(stdout);
-        setup_conversion();
+        setup_auth();
+        get_set_pwd();
 
-        printf(_("Setup directory ... \n"));
+        printf(_("Setup depend ... \n"));
         (void)fflush(stdout);
-        setup_dictionary();
-    }
+        setup_depend();
 
-    printf(_("Setup privileges ... \n"));
-    (void)fflush(stdout);
-    setup_privileges();
-
-    printf(_("Setup bucketmap len ... \n"));
-    (void)fflush(stdout);
-    setup_bucketmap_len();
-
-    printf(_("Setup schema ... \n"));
-    (void)fflush(stdout);
-    setup_schema();
-
-    printf(_("Load supported extension ... \n"));
-    (void)fflush(stdout);
-    load_supported_extension();
-
-    printf(_("Load update ... \n"));
-    (void)fflush(stdout);
-    setup_update();
-
-#ifndef ENABLE_MULTIPLE_NODES
-    setup_snapshots();
-#endif
-
-    if (!k2_mode) {
-        printf(_("Vacuum db ... \n"));
+        printf(_("Load plpgsql ... \n"));
         (void)fflush(stdout);
-        vacuum_db();
+        load_plpgsql();
+
+        printf(_("Setup system views ... \n"));
+        (void)fflush(stdout);
+        setup_sysviews();
+
+    #ifdef ENABLE_PRIVATEGAUSS
+        setup_privsysviews();
+    #endif
+        printf(_("Setup perf views ... \n"));
+        (void)fflush(stdout);
+        setup_perfviews();
+
+    #ifdef PGXC
+        /* Initialize catalog information about the node self */
+        setup_nodeself();
+    #endif
+
+        // TODO: should we exclude this step for k2_mode?
+        printf(_("Setup description ... \n"));
+        (void)fflush(stdout);
+        setup_description();
+
+        printf(_("Setup collation ... \n"));
+        (void)fflush(stdout);
+        setup_collation();
+
+        if (!k2_mode) {
+            printf(_("Setup conversion ... \n"));
+            (void)fflush(stdout);
+            setup_conversion();
+
+            printf(_("Setup directory ... \n"));
+            (void)fflush(stdout);
+            setup_dictionary();
+        }
+
+        printf(_("Setup privileges ... \n"));
+        (void)fflush(stdout);
+        setup_privileges();
+
+        printf(_("Setup bucketmap len ... \n"));
+        (void)fflush(stdout);
+        setup_bucketmap_len();
+
+        printf(_("Setup schema ... \n"));
+        (void)fflush(stdout);
+        setup_schema();
+
+        printf(_("Load supported extension ... \n"));
+        (void)fflush(stdout);
+        load_supported_extension();
+
+        printf(_("Load update ... \n"));
+        (void)fflush(stdout);
+        setup_update();
+
+    #ifndef ENABLE_MULTIPLE_NODES
+        setup_snapshots();
+    #endif
+
+        if (!k2_mode) {
+            printf(_("Vacuum db ... \n"));
+            (void)fflush(stdout);
+            vacuum_db();
+        }
+
+        printf(_("Make template0 ... \n"));
+        (void)fflush(stdout);
+        make_template0();
+
+        printf(_("Make postgres ... \n"));
+        (void)fflush(stdout);
+        make_postgres();
+
+    #ifdef PGXC
+        if (!k2_mode) {
+            vacuumfreeze("template0");
+            vacuumfreeze("template1");
+            vacuumfreeze("postgres");
+        }
+    #endif
+        if (authwarning != NULL)
+            write_stderr("%s", authwarning);
+
+        printf(_("Finished initdb steps ...\n "));
+        (void)fflush(stdout);
+    } else {
+        printf(_("Initdb has already been done, skip steps ... \n"));
+        (void)fflush(stdout);
     }
-
-    printf(_("Make template0 ... \n"));
-    (void)fflush(stdout);
-    make_template0();
-
-    printf(_("Make postgres ... \n"));
-    (void)fflush(stdout);
-    make_postgres();
-
-#ifdef PGXC
-    if (!k2_mode) {
-        vacuumfreeze("template0");
-        vacuumfreeze("template1");
-        vacuumfreeze("postgres");
-    }
-#endif
-
-    if (authwarning != NULL)
-        write_stderr("%s", authwarning);
 
     printf(_("Start executable ... \n"));
     (void)fflush(stdout);

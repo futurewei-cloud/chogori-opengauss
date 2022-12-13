@@ -99,6 +99,8 @@ my $catalogs = Catalog::Catalogs(@input_files);
 # version marker for .bki file
 print BKI "# PostgreSQL $major_version\n";
 
+print BKI "k2pg_check_if_initdb_is_already_done\n";
+
 # vars to hold data needed for schemapg.h
 my %schemapg_entries;
 my @tables_needing_macros;

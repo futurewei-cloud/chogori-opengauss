@@ -415,7 +415,7 @@ static void BootstrapModeMain(void)
      * In K2PG we only need to create the template1 database
      * (corresponding to creating the "base/1" subdir as its oid is hardcoded).
      */
-    if (IsK2PgEnabled())
+    if (IsK2PgEnabled() && !IsK2PgLocalNodeInitdbMode())
     {
         K2InitPGCluster();
 
@@ -443,7 +443,7 @@ static void BootstrapModeMain(void)
         RelationMapFinishBootstrap();
     }
 
-    if (IsK2PgEnabled())
+    if (IsK2PgEnabled() && !IsK2PgLocalNodeInitdbMode())
     {
         // set initDbDone to be true on K2 SKV
         K2FinishInitDB();
