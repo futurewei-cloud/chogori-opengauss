@@ -1919,6 +1919,8 @@ void PostgresInitializer::InitThread()
 
 void PostgresInitializer::InitSession()
 {
+    K2PgInitSession(m_dbname);
+
     /* Init rel cache for new session. */
     InitSysCache();
 
@@ -1974,6 +1976,9 @@ void PostgresInitializer::InitStreamSession()
 
 void PostgresInitializer::InitSysCache()
 {
+    // make sure that we initialize PgGate session before load sys cache
+    K2PgInitSession(m_indbname == NULL ? DEFAULT_DATABASE : m_indbname);
+
     /*
      * Initialize the relation cache and the system catalog caches.  Note that
      * no catalog access happens here; we only set up the hashtable structure.
@@ -2062,6 +2067,8 @@ void PostgresInitializer::CheckAtLeastOneRoles()
 
 void PostgresInitializer::SetSuperUserAndDatabase()
 {
+    K2PgInitSession(m_indbname);
+
     /*
      * In the wlm worker thread, we set the user is super user
      * and the database is default database, we will send the query

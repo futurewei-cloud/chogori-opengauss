@@ -63,6 +63,7 @@
 #include "instruments/dblink_query.h"
 #include "libpq/pqsignal.h"
 #include "pgxc/groupmgr.h"
+#include "access/k2/k2pg_aux.h"
 
 const int PGSTAT_RESTART_INTERVAL = 60;
 #define MAX_INT ((unsigned)(-1) >> 1)
@@ -1438,6 +1439,8 @@ NON_EXEC_STATIC void SnapshotMain()
 #ifndef EXEC_BACKEND
     InitProcess();
 #endif
+
+    K2PgInitPostgresBackend("SnapshotMain");
 
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser((char*)pstrdup(DEFAULT_DATABASE), InvalidOid, username);
     t_thrd.proc_cxt.PostInit->InitSnapshotWorker();
