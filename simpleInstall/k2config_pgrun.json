@@ -29,6 +29,12 @@
         },
         "postgres": {
             "range_ends": [""]
+        },
+        "finance": {
+            "range_ends": [""]
+        },
+        "school": {
+            "range_ends": [""]
         }
     }
 }
