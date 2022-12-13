@@ -51,6 +51,7 @@
 #include "optimizer/bucketinfo.h"
 #include "storage/tcap.h"
 #include "gs_ledger/ledger_utils.h"
+#include "access/k2/k2pg_aux.h"
 
 static RangeTblEntry* scanNameSpaceForRefname(ParseState* pstate, const char* refname, int location);
 static RangeTblEntry* scanNameSpaceForRelid(ParseState* pstate, Oid relid, int location);
@@ -711,7 +712,7 @@ static void markRTEForSelectPriv(ParseState* pstate, RangeTblEntry* rte, int rti
         /* Make sure the rel as a whole is marked for SELECT access */
         rte->requiredPerms |= ACL_SELECT;
         /* Must offset the attnum to fit in a bitmapset */
-        rte->selectedCols = bms_add_member(rte->selectedCols, col - FirstLowInvalidHeapAttributeNumber);
+        rte->selectedCols = bms_add_member(rte->selectedCols, col - K2PgGetFirstLowInvalidAttributeNumberFromOid(rte->relid));
     } else if (rte->rtekind == RTE_JOIN) {
         if (col == InvalidAttrNumber) {
             /*
@@ -1006,7 +1007,7 @@ static Oid getPartitionOidForRTE(RangeTblEntry* rte, RangeVar* relation, ParseSt
 
             /* partition does not exist. */
             if (!OidIsValid(partitionOid)) {
-                if (rel->partMap->type == PART_TYPE_RANGE || 
+                if (rel->partMap->type == PART_TYPE_RANGE ||
                     rel->partMap->type == PART_TYPE_LIST || rel->partMap->type == PART_TYPE_HASH) {
                     ereport(ERROR,
                         (errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -1900,7 +1901,7 @@ void addRTEtoQuery(
     if (addToRelNameSpace || addToVarNameSpace)
     {
         ParseNamespaceItem *nsitem;
-    
+
         nsitem = (ParseNamespaceItem *) palloc(sizeof(ParseNamespaceItem));
         nsitem->p_rte = rte;
         nsitem->p_lateral_only = false;
@@ -2883,9 +2884,9 @@ void errorMissingRTE(ParseState* pstate, RangeVar* relation, bool hasplus)
         ereport(ERROR,
             (errcode(ERRCODE_UNDEFINED_TABLE),
                 errmsg("invalid reference to FROM-clause entry for table \"%s\"", relation->relname),
-                (badAlias ? errhint("Perhaps you meant to reference the table alias \"%s\".", badAlias) 
+                (badAlias ? errhint("Perhaps you meant to reference the table alias \"%s\".", badAlias)
                 : errhint("There is an entry for table \"%s\", but it cannot be referenced from this part of "
-                "the query.", 
+                "the query.",
                 rte->eref->aliasname)),
                 parser_errposition(pstate, relation->location)));
     } else if (rte != NULL && hasplus) {

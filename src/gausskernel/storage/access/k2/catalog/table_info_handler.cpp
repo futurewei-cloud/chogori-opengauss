@@ -293,6 +293,8 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(
                     target_index_name_map[secondary_index.second.table_name()] = &secondary_index.second;
                 }
                 for (std::pair<TableId, IndexInfo> secondary_index : source_table->secondary_indexes()) {
+                    K2LOG_I(log::catalog, "Checking non-shared table {} with secondary index {} : {}", source_table_oid,
+                        secondary_index.second.table_oid(), secondary_index.second.is_shared());
                     K2ASSERT(log::catalog, !secondary_index.second.is_shared(), "Index for a non-shared table must not be shared");
                     // search for target index by name
                     auto found = target_index_name_map.find(secondary_index.second.table_name());
