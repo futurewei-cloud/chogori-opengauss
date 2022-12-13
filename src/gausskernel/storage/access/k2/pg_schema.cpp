@@ -302,6 +302,7 @@ namespace k2pg {
         std::shared_ptr<TableInfo> new_table_info = std::make_shared<TableInfo>(database_id, database_name, table_info->table_oid(), table_name, table_uuid, table_info->schema());
         new_table_info->set_next_column_id(table_info->next_column_id());
         new_table_info->set_is_sys_table(table_info->is_sys_table());
+        new_table_info->set_is_shared_table(table_info->is_shared());
         if (table_info->has_secondary_indexes()) {
             for (std::pair<std::string, IndexInfo> secondary_index : table_info->secondary_indexes()) {
                 new_table_info->add_secondary_index(secondary_index.first, secondary_index.second);
