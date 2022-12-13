@@ -2596,7 +2596,7 @@ Oid DefineRelation(CreateStmt* stmt, char relkind, Oid ownerId, bool isCTAS)
 	if (IsK2PgEnabled())
 	{
 		CheckIsK2PgSupportedRelationByKind(relkind);
-		K2PgCreateTable(stmt, relkind, descriptor, relationId, namespaceId);
+		K2PgCreateTable(stmt, relkind, relisshared, descriptor, relationId, namespaceId);
 	}
 
 #ifdef PGXC
