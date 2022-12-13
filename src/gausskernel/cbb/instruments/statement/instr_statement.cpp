@@ -65,7 +65,7 @@
 #include "utils/relcache.h"
 #include "commands/copy.h"
 
-#include "access/k2/pg_gate_api.h"
+#include "access/k2/k2pg_aux.h"
 
 #define MAX_SLOW_QUERY_RETENSION_DAYS 604800
 #define MAX_FULL_SQL_RETENSION_SEC 86400
@@ -649,6 +649,8 @@ NON_EXEC_STATIC void StatementFlushMain()
 #ifndef EXEC_BACKEND
     InitProcess();
 #endif
+
+    K2PgInitPostgresBackend("StatementFlushMain");
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser((char*)pstrdup(DEFAULT_DATABASE), InvalidOid, username);
     t_thrd.proc_cxt.PostInit->InitStatementWorker();
     SetProcessingMode(NormalProcessing);
@@ -1422,7 +1424,7 @@ void instr_stmt_report_basic_info()
         ResourceOwnerDelete(tmpOwner);
         if (to_update_db_name || to_update_user_name || to_update_client_addr) {
             // start a new PG Gate session if any changes in db, user name, or client address
-            PgGate_InitSession(u_sess->statement_cxt.db_name);
+            K2PgInitSession(u_sess->statement_cxt.db_name);
         }
     }
 }

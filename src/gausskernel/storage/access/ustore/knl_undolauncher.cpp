@@ -46,6 +46,7 @@
 #include "gssignal/gs_signal.h"
 #include "access/ustore/knl_undoworker.h"
 #include "access/ustore/knl_undorequest.h"
+#include "access/k2/k2pg_aux.h"
 
 static void UndolauncherSighupHandler(SIGNAL_ARGS);
 static void UndolauncherSigusr2Handler(SIGNAL_ARGS);
@@ -218,6 +219,7 @@ NON_EXEC_STATIC void UndoLauncherMain()
     InitProcess();
 #endif
 
+    K2PgInitPostgresBackend("UndoLauncherMain");
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser(NULL, InvalidOid, NULL);
     t_thrd.proc_cxt.PostInit->InitUndoLauncher();
 

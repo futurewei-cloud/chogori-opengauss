@@ -69,6 +69,7 @@
 #include "job/job_shmem.h"
 #include "job/job_scheduler.h"
 #include "gssignal/gs_signal.h"
+#include "access/k2/k2pg_aux.h"
 
 /* the minimum allowed time between two awakenings of the launcher */
 #define MIN_JOB_SCHEDULE_SLEEPTIME 100  /* milliseconds */
@@ -196,6 +197,7 @@ NON_EXEC_STATIC void JobScheduleMain()
     InitProcess();
 #endif
 
+    K2PgInitPostgresBackend("JobScheduleMain");
     /* Initialize openGauss with DEFAULT_DATABASE, since it cannot be dropped */
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser(dbname, InvalidOid, username);
     t_thrd.proc_cxt.PostInit->InitJobScheduler();

@@ -148,9 +148,9 @@ extern void HandleK2PgTableDescStatus(const K2PgStatus& status, K2PgTableDesc ta
  * K2PG initialization that needs to happen when a PostgreSQL backend process
  * is started. Reports errors using ereport.
  */
-extern void K2PgInitPostgresBackend(const char *program_name,
-								  const char *db_name,
-								  const char *user_name);
+extern void K2PgInitPostgresBackend(const char *program_name);
+
+extern void K2PgInitSession(const char *db_name);
 
 /*
  * This should be called on all exit paths from the PostgreSQL backend process.

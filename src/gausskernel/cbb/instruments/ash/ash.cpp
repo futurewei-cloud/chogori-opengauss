@@ -61,6 +61,7 @@
 #include "utils/snapmgr.h"
 #include "access/tableam.h"
 #include "utils/fmgroids.h"
+#include "access/k2/k2pg_aux.h"
 
 #define NUM_UNIQUE_SQL_PARTITIONS 64
 #define UINT32_ACCESS_ONCE(var) ((uint32)(*((volatile uint32*)&(var))))
@@ -1092,6 +1093,8 @@ NON_EXEC_STATIC void ActiveSessionCollectMain()
 #ifndef EXEC_BACKEND
     InitProcess();
 #endif
+
+    K2PgInitPostgresBackend("ActiveSessionCollectMain");
     t_thrd.proc_cxt.PostInit->SetDatabaseAndUser((char*)pstrdup(DEFAULT_DATABASE), InvalidOid, username);
     t_thrd.proc_cxt.PostInit->InitAspWorker();
     SetProcessingMode(NormalProcessing);
