@@ -224,6 +224,8 @@ void K2PgDecrementDdlNestingLevel(bool success);
 
 #define K2PG_INITDB_ALREADY_DONE_EXIT_CODE 125
 
+extern bool IsK2PgLocalNodeInitdbMode();
+
 /**
  * Checks if the given environment variable is set to a "true" value (e.g. "1").
  */
