@@ -36,6 +36,17 @@ Copyright(c) 2022 Futurewei Cloud
 #include "access/k2/storage.h"
 #include "session.h"
 
+// Undefined behavior to get bytes of a float using pointer casting, need to use a union
+union FloatConv{
+    float m_v;
+    uint32_t m_r;
+};
+
+union DoubleConv {
+    double m_v;
+    uint64_t m_r;
+};
+
 namespace k2pg {
 namespace gate {
 
@@ -244,14 +255,18 @@ K2PgStatus populateDatumsFromSKVRecord(skv::http::dto::SKVRecord& record, std::s
         else if (id == FLOAT4OID) {
             std::optional<float> value = record.deserializeNext<float>();
             if (value.has_value()) {
-                values[datum_offset] = (Datum)(*value);
+                FloatConv x{};
+                x.m_v = *value;
+                values[datum_offset] = (Datum)(x.m_r);
                 isnulls[datum_offset] = false;
             }
         }
         else if (id == FLOAT8OID) {
             std::optional<double> value = record.deserializeNext<double>();
             if (value.has_value()) {
-                values[datum_offset] = (Datum)(*value);
+                DoubleConv x{};
+                x.m_v = *value;
+                values[datum_offset] = (Datum)(x.m_r);
                 isnulls[datum_offset] = false;
             }
         } else {
@@ -545,15 +560,16 @@ skv::http::dto::expression::Value serializePGConstToValue(const K2PgConstant& co
         return makeValueLiteral<int64_t>(std::move(byte8));
     }
     else if (constant.type_id == FLOAT4OID) {
-        uint32_t fbytes = (uint32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
+        FloatConv x{};
+        x.m_r = GET_4_BYTES(constant.datum);
         // We don't want to convert, we want to treat the bytes directly as the float's bytes
-        float fval = *(float*)&fbytes;
-        return makeValueLiteral<float>(std::move(fval));
+        return makeValueLiteral<float>(std::move(x.m_v));
     }
     else if (constant.type_id == FLOAT8OID) {
         // We don't want to convert, we want to treat the bytes directly as the double's bytes
-        double dval = *(double*)&(constant.datum);
-        return makeValueLiteral<double>(std::move(dval));
+        DoubleConv x{};
+        x.m_r = (uint64_t)constant.datum;
+        return makeValueLiteral<double>(std::move(x.m_v));
     } else {
         // Anything else we treat as opaque bytes and include the datum header
         UntoastedDatum data = UntoastedDatum(constant.datum);
@@ -672,15 +688,16 @@ void serializePGConstToK2SKV(skv::http::dto::SKVRecordBuilder& builder, K2PgCons
         builder.serializeNext<int64_t>(byte8);
     }
     else if (constant.type_id == FLOAT4OID) {
-        uint32_t fbytes = (uint32_t)(((uintptr_t)(constant.datum)) & 0xffffffff);
+        FloatConv x{};
+        x.m_r = GET_4_BYTES(constant.datum);
         // We don't want to convert, we want to treat the bytes directly as the float's bytes
-        float fval = *(float*)&fbytes;
-        builder.serializeNext<float>(fval);
+        builder.serializeNext<float>(x.m_v);
     }
     else if (constant.type_id == FLOAT8OID) {
         // We don't want to convert, we want to treat the bytes directly as the double's bytes
-        double dval = *(double*)&(constant.datum);
-        builder.serializeNext<double>(dval);
+        DoubleConv x{};
+        x.m_r = (uint64_t)(constant.datum);
+        builder.serializeNext<double>(x.m_v);
     } else {
         // Anything else we treat as opaque bytes and include the datum header
         k2pg::UntoastedDatum data = k2pg::UntoastedDatum(constant.datum);
