@@ -105,6 +105,8 @@
 #include "tsdb/storage/part.h"
 #endif   /* ENABLE_MULTIPLE_NODES */
 
+#include "access/k2/k2pg_aux.h"
+
 extern void CodeGenThreadTearDown();
 extern void CleanupDfsHandlers(bool isTop);
 extern void deleteGlobalOBSInstrumentation();
@@ -401,13 +403,13 @@ void InitTopTransactionState(void)
 
 /* ----------------------------------------------------------------
  *      Transaction routines for store procedure
- *     
- * For supporting transaction state in transaction block(transaction is started 
- * by begin/start statement) transforms with transaction state in STP's. When the 
- * STP run in transaction started by begin/start statement and STP contains transaction 
- * statement, it should call SaveCurrentSTPTopTransactionState() to save Top 
+ *
+ * For supporting transaction state in transaction block(transaction is started
+ * by begin/start statement) transforms with transaction state in STP's. When the
+ * STP run in transaction started by begin/start statement and STP contains transaction
+ * statement, it should call SaveCurrentSTPTopTransactionState() to save Top
  * Transaction's state and restore transaction state with RestoreCurrentSTPTopTransactionState.
- * to keep the Top transaction state. 
+ * to keep the Top transaction state.
  *
  * ----------------------------------------------------------------
  */
@@ -418,16 +420,16 @@ void SaveCurrentSTPTopTransactionState()
 
     /* Only support call this in STP.*/
     if (u_sess->SPI_cxt._stack == NULL || !u_sess->SPI_cxt.is_stp) {
-        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE), 
+        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE),
             errmsg("SaveCurrentSTPTopTransactionState can only be called in STP.")));
     }
 
     /* TBLOCK_STARTED: the transaction block state when call or select STP immediately. */
     /* TBLOCK_INPROGRESS: the transaction block state when call or select STP in existed transactions. */
-    if (s->blockState != TBLOCK_STARTED 
+    if (s->blockState != TBLOCK_STARTED
         && s->blockState != TBLOCK_INPROGRESS) {
-        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE), 
-            errmsg("SaveCurrentSTPTopTransactionState: unexpected state %s", 
+        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE),
+            errmsg("SaveCurrentSTPTopTransactionState: unexpected state %s",
             BlockStateAsString(s->blockState))));
     }
 
@@ -441,23 +443,23 @@ void RestoreCurrentSTPTopTransactionState()
 
     /* Only support call this in STP.*/
     if (u_sess->SPI_cxt._stack == NULL || !u_sess->SPI_cxt.is_stp) {
-        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE), 
+        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE),
             errmsg("RestoreCurrentSTPTopTransactionState can only be called in STP.")));
     }
 
-    /* STP's transaction state can't be TBLOCK_DEFAULT. */	
+    /* STP's transaction state can't be TBLOCK_DEFAULT. */
     if (SavedSTPTransactionBlockState == TBLOCK_DEFAULT) {
-        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE), 
+        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE),
             errmsg("RestoreCurrentSTPTopTransactionState:NULL, call RestoreCurrentSTPTopTransactionState firstly.")));
     }
 
-    /* TBLOCK_STARTED: The transaction block state whatever call or select STP immediately or in */ 
+    /* TBLOCK_STARTED: The transaction block state whatever call or select STP immediately or in */
     /* outer transaction block. */
     /* TBLOCK_INPROGRESS: the transaction block state when call or select STP in existed sub transaction. */
     if (s->blockState != TBLOCK_STARTED
         && s->blockState != TBLOCK_INPROGRESS) {
-        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE), 
-            errmsg("RestoreCurrentSTPTopTransactionState: unexpected state %s", 
+        ereport(FATAL, (errcode(ERRCODE_INVALID_TRANSACTION_STATE),
+            errmsg("RestoreCurrentSTPTopTransactionState: unexpected state %s",
             BlockStateAsString(s->blockState))));
     }
 
@@ -467,11 +469,11 @@ void RestoreCurrentSTPTopTransactionState()
     SavedSTPTransactionState = TRANS_DEFAULT;
 }
 
-bool IsStpInOuterSubTransaction() 
+bool IsStpInOuterSubTransaction()
 {
     TransactionState s = CurrentTransactionState;
     if (s->blockState >= TBLOCK_SUBBEGIN
-        && u_sess->SPI_cxt.is_stp 
+        && u_sess->SPI_cxt.is_stp
         && s->nestingLevel > u_sess->SPI_cxt.portal_stp_exception_counter + 1) {
         return true;
     }
@@ -511,18 +513,18 @@ bool IsTransactionState(void)
     return (s->state == TRANS_INPROGRESS);
 }
 
-#ifdef ENABLE_MULTIPLE_NODES 
+#ifdef ENABLE_MULTIPLE_NODES
 static void CheckDeleteLock(bool is_commit)
 {
     ereport(DEBUG2, (errcode(ERRCODE_INVALID_TABLE_DEFINITION), errmsg("check delete query enter.")));
-    if (g_instance.attr.attr_common.enable_tsdb  && 
+    if (g_instance.attr.attr_common.enable_tsdb  &&
         Tsdb::TableStatus::GetInstance().is_in_deletion()) {
         Tsdb::TableStatus::GetInstance().remove_query();
     }
 
-    return;    
+    return;
 }
-#endif   /* ENABLE_MULTIPLE_NODES */ 
+#endif   /* ENABLE_MULTIPLE_NODES */
 
 bool WorkerThreadCanSeekAnotherMission(ThreadStayReason* reason)
 {
@@ -956,7 +958,7 @@ static void AssignTransactionId(TransactionState s)
 #else
     s->transactionId = GetNewTransactionId(isSubXact);
 #endif
-    
+
     if (!isSubXact) {
         ProcXactHashTableAdd(s->transactionId, t_thrd.proc->pgprocno);
     }
@@ -1334,9 +1336,9 @@ bool TransactionIdIsCurrentTransactionId(TransactionId xid)
      * We always say that BootstrapTransactionId is "not my transaction ID"
      * even when it is (ie, during bootstrap).	Along with the fact that
      * transam.c always treats BootstrapTransactionId as already committed,
-     * this causes the heapam_visibility.c routines to see all tuples as 
-     * committed, which is what we need during bootstrap.  (Bootstrap mode 
-     * only inserts tuples, it never updates or deletes them, so all tuples 
+     * this causes the heapam_visibility.c routines to see all tuples as
+     * committed, which is what we need during bootstrap.  (Bootstrap mode
+     * only inserts tuples, it never updates or deletes them, so all tuples
      * can be presumed good immediately.)
      *
      * Likewise, InvalidTransactionId and FrozenTransactionId are certainly
@@ -1563,7 +1565,7 @@ CommitSeqNo getLocalNextCSN()
 
 void UpdateNextMaxKnownCSN(CommitSeqNo csn)
 {
-    /* 
+    /*
      * GTM-Free mode use getLocalNextCSN to update nextCommitSeqNo,
      * GTM mode update nextCommitSeqNo in UpdateCSNAtTransactionCommit.
      * GTM-Lite mode update nextCommitSeqNo in this function.
@@ -1611,6 +1613,12 @@ static TransactionId RecordTransactionCommit(void)
     int library_length = 0;
     bool RelcacheInitFileInval = false;
     bool wrote_xlog = false;
+
+	if (IsK2PgEnabled())
+	{
+		return latestXid;
+	}
+
     bool isExecCN = (IS_PGXC_COORDINATOR && !IsConnFromCoord());
     XLogRecPtr globalDelayDDLLSN = InvalidXLogRecPtr;
     XLogRecPtr commitRecLSN = InvalidXLogRecPtr;
@@ -2826,7 +2834,7 @@ static void CommitTransaction(bool STP_commit)
                  * and that will lead to transaction abortion.
                  */
                 Assert(GlobalTransactionIdIsValid(s->transactionId));
-                
+
                 /* let gs_clean know local prepared xact is running */
                 t_thrd.pgxact->prepare_xid = GetCurrentTransactionIdIfAny();
 
@@ -3285,10 +3293,10 @@ static void CommitTransaction(bool STP_commit)
     AtEOXact_Remote();
     /* flush all profile log about this worker thread */
     flush_plog();
-#ifdef ENABLE_MULTIPLE_NODES 
+#ifdef ENABLE_MULTIPLE_NODES
     CheckDeleteLock(true);
     Tsdb::PartCacheMgr::GetInstance().commit_item();
-#endif   /* ENABLE_MULTIPLE_NODES */        
+#endif   /* ENABLE_MULTIPLE_NODES */
     print_leak_warning_at_commit();
 #ifdef ENABLE_MULTIPLE_NODES
     closeAllVfds();
@@ -3656,8 +3664,10 @@ static void PrepareTransaction(bool STP_commit)
     StartPrepare(gxact);
 
     AtPrepare_Notify();
-    AtPrepare_Locks();
-    AtPrepare_PredicateLocks();
+    if (!IsK2PgEnabled()) {
+        AtPrepare_Locks();
+        AtPrepare_PredicateLocks();
+    }
     AtPrepare_PgStat();
     AtPrepare_MultiXact();
     AtPrepare_RelationMap();
@@ -3718,8 +3728,11 @@ static void PrepareTransaction(bool STP_commit)
 
     PostPrepare_MultiXact(xid);
 
-    PostPrepare_Locks(xid);
-    PostPrepare_PredicateLocks(xid);
+    if (!IsK2PgEnabled()) {
+        PostPrepare_Locks(xid);
+        PostPrepare_PredicateLocks(xid);
+    }
+
     if (IS_PGXC_DATANODE)
         u_sess->storage_cxt.twoPhaseCommitInProgress = true;
     t_thrd.xact_cxt.needRemoveTwophaseState = false;
@@ -3887,11 +3900,11 @@ static void AbortTransaction(bool PerfectRollback, bool STP_rollback)
      */
     AtAbort_ResourceOwner();
 
-#ifdef ENABLE_MULTIPLE_NODES 
+#ifdef ENABLE_MULTIPLE_NODES
     /* check and release delete LW lock for timeseries store */
     CheckDeleteLock(false);
     Tsdb::PartCacheMgr::GetInstance().abort_item();
-#endif   /* ENABLE_MULTIPLE_NODES */   
+#endif   /* ENABLE_MULTIPLE_NODES */
 
     /* CStoreMemAlloc Reset is not allowed interrupt */
     CStoreMemAlloc::Reset();
@@ -3918,7 +3931,9 @@ static void AbortTransaction(bool PerfectRollback, bool STP_rollback)
      * Releasing LW locks is critical since we might try to grab them again
      * while cleaning up!
      */
-    LWLockReleaseAll();
+    if (!IsK2PgEnabled()) {
+        LWLockReleaseAll();
+    }
 
     RESUME_INTERRUPTS();
 
@@ -4077,7 +4092,9 @@ static void AbortTransaction(bool PerfectRollback, bool STP_rollback)
      * Also clean up any open wait for lock, since the lock manager will choke
      * if we try to wait for another lock before doing this.
      */
-    LockErrorCleanup();
+    if (!IsK2PgEnabled()) {
+        LockErrorCleanup();
+    }
 
     RESUME_INTERRUPTS();
 
@@ -4531,7 +4548,7 @@ void CommitTransactionCommand(bool STP_commit)
              * state.)
              */
         case TBLOCK_SUBBEGIN:
-            // Recording Portal's ResourceOwner for rebuilding resource chain 
+            // Recording Portal's ResourceOwner for rebuilding resource chain
             // when procedure contain transaction and exception statement.
             // nestingLevel = 2: Top ResourceOwner -> Portal ResourceOwner (current).
             if (CurrentTransactionState->nestingLevel == 2 && STP_commit) {
@@ -7234,7 +7251,7 @@ static void xact_redo_forget_alloc_segs(TransactionId xid, TransactionId *subXid
                         t_thrd.xact_cxt.ShmemVariableCache->oldestXid)));
             continue;
         }
-        
+
         if (extentTag->xid != xid && !xact_redo_match_xids(subXids, subXidCnt, xid)) {
             ereport(DEBUG5, (errmodule(MOD_SEGMENT_PAGE),
                     errmsg("Extent [%u, %u, %u, %d] xid %lu, remain type %u is not equal xid %lu.",
@@ -7258,7 +7275,7 @@ static void xact_redo_forget_alloc_segs(TransactionId xid, TransactionId *subXid
                         extentTag->xid, extentTag->remainExtentType)));
         }
     }
-    
+
     remainSegsLock.unLock();
 }
 
