@@ -192,4 +192,3 @@ extern void copyDroppedAttribute(Form_pg_attribute target, Form_pg_attribute sou
 extern char GetGeneratedCol(TupleDesc tupdesc, int atti);
 
 #endif /* TUPDESC_H */
-
