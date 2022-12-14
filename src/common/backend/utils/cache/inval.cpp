@@ -1142,7 +1142,7 @@ void CacheInvalidateRelcache(Relation relation)
     Oid relationId;
 
     relationId = RelationGetRelid(relation);
-    if (relation->rd_rel->relisshared) {
+    if (relation->rd_rel && relation->rd_rel->relisshared) {
         databaseId = InvalidOid;
     } else {
         databaseId = u_sess->proc_cxt.MyDatabaseId;

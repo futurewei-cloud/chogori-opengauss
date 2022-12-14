@@ -3061,8 +3061,8 @@ SetCatCacheTuple(CatCache *cache, HeapTuple tup, TupleDesc desc)
     for (dlelem = DLGetHead(&cache->cc_bucket[hashIndex]); dlelem; dlelem = DLGetSucc(dlelem)) {
         cTup = (CatCTup *) DLE_VAL(dlelem);
  		bool res = false;
-        if (cTup->dead)
-            continue; /* ignore dead entries */
+        if (cTup->dead || cTup->negative)
+            continue; /* ignore dead or negative entries */
 
 		if (cTup->hash_value != hashValue)
 			continue;            /* quickly skip entry if wrong hash val */

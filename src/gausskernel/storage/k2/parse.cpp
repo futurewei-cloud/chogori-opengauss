@@ -595,7 +595,7 @@ void parse_conditions(List *exprs, ParamListInfo paramLI, std::vector<K2PgConstr
             // just the one
             foreach(rlc, ref_values.const_values) {
                 FDWConstValue* cval = (FDWConstValue *)lfirst(rlc);
-                K2PgConstant constant {.type_id=cval->atttypid, .datum=cval->value, .is_null=cval->is_null};
+                K2PgConstant constant {.type_id=cval->atttypid, .attr_size=cval->attlen, .attr_byvalue=cval->attbyval, .datum=cval->value, .is_null=cval->is_null};
                 cdef.constants.push_back(std::move(constant));
             }
 
@@ -692,6 +692,8 @@ void parse_const(Const *node, FDWExprRefValues *ref_values) {
     FDWConstValue *val = (FDWConstValue *)palloc0(sizeof(FDWConstValue));
     val->atttypid = node->consttype;
     val->is_null = node->constisnull;
+    val->attlen = node->constlen;
+    val->attbyval = node->constbyval;
 
     val->value = 0;
     if (node->constisnull || node->constbyval)
@@ -729,6 +731,8 @@ void parse_param(Param *node, FDWExprRefValues *ref_values) {
     val->value = 0;
 
     get_typlenbyval(node->paramtype, &typLen, &typByVal);
+    val->attlen = typLen;
+    val->attbyval = typByVal;
     if (prm->isnull || typByVal)
         val->value = prm->value;
     else
