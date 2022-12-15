@@ -214,7 +214,7 @@ function set_environment() {
 
 function single_install() {
     info "[step 6]: init datanode"
-    ${RUN_WITH} gs_initdb -w $password -D $app/data/single_node --debug --noclean --nodename "sgnode" --locale="en_US.UTF-8"
+    ${RUN_WITH} gs_initdb -w $password -D $app/data/single_node --debug --nodename "sgnode" --locale="en_US.UTF-8"
     if [ X$port != X$default_port  ]
     then
         sed -i "/^#port =/c\port = $port" $app/data/single_node/postgresql.conf
