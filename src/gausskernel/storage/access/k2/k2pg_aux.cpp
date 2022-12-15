@@ -63,7 +63,7 @@ bool IsK2PgRelation(Relation relation)
 
 	/* Currently only support regular tables and indexes.
 	 * Temp tables and views are supported, but they are not K2PG relations. */
-	return (relkind == RELKIND_RELATION || relkind == RELKIND_INDEX || relation->rd_rel->relkind == RELKIND_VIEW)
+	return (relkind == RELKIND_RELATION || relkind == RELKIND_INDEX)
 				 && relation->rd_rel->relpersistence != RELPERSISTENCE_TEMP;
 }
 
