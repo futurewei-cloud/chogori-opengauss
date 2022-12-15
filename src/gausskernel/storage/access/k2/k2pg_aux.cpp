@@ -18,11 +18,7 @@
 #include "access/k2/pg_gate_api.h"
 
 #include <iostream>
-//#include "access/k2/log.h"
-
-#define BOOST_STACKTRACE_USE_ADDR2LINE
-#include "boost/stacktrace.hpp"
-#include <string>
+#include "access/k2/log.h"
 
 uint64_t k2pg_catalog_cache_version = K2PG_CATCACHE_VERSION_UNINITIALIZED;
 
@@ -184,10 +180,8 @@ void HandleK2PgStatus(const K2PgStatus& status)
         return;
     }
 
-	std::string backtrace = boost::stacktrace::to_string(boost::stacktrace::stacktrace());
-    elog(INFO, "Status: %s: %s, stacktrace: %s", status.msg.c_str(), status.detail.c_str(), backtrace.c_str());
+ 	std::cout << "Error status: " << status.msg << " with stacktrace: " << k2log::TR << std::endl;
 
- //	std::cout << "Error status: " << status.msg << " with stacktrace: " << k2log::TR << std::endl;
     ereport(ERROR, (errcode(status.pg_code), errmsg("Status: %s: %s", status.msg.c_str(), status.detail.c_str())));
 }
 
