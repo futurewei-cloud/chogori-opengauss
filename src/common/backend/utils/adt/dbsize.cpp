@@ -70,6 +70,7 @@
 #include "storage/smgr/segment.h"
 #include "storage/cstore/cstore_compress.h"
 #include "vecexecutor/vecnodes.h"
+#include "access/k2/k2pg_aux.h"
 
 #ifdef PGXC
 static Datum pgxc_database_size(Oid dbOid);
@@ -936,9 +937,9 @@ int64 CalculateCStorePartitionedRelationSize(Relation rel, ForkNumber forknum)
     return size;
 }
 
-#ifdef ENABLE_MULTIPLE_NODES 
-/* 
- * @description: Calcute timeseries cudesc relation size. 
+#ifdef ENABLE_MULTIPLE_NODES
+/*
+ * @description: Calcute timeseries cudesc relation size.
  * @param {rel}: partition relation
  * @param {forknum} : forknum of file name
  * @return {int64} : relation size
@@ -981,8 +982,8 @@ int64 CalculateTsCudescRelationSize(const Relation rel, ForkNumber forknum)
     return totalsize;
 }
 
-/* 
- * @description: Calcute timeseries tag relation size. 
+/*
+ * @description: Calcute timeseries tag relation size.
  * @param {rel}: partition relation
  * @param {forknum} : forknum of file name
  * @return {int64} : relation size
@@ -1001,7 +1002,7 @@ int64 CalculateTsTagRelationSize(const Relation rel, ForkNumber forknum)
         }
         relation_close(tstag_rel, AccessShareLock);
 
-        // Add TsTag Index's size(todo, add more index) 
+        // Add TsTag Index's size(todo, add more index)
         Oid tstag_idx_oid = get_tag_index_relid(RelationGetRelationName(tstag_rel));
         Relation tstag_idx_rel = try_relation_open(tstag_idx_oid, AccessShareLock);
         if (tstag_idx_rel != NULL) {
@@ -1012,7 +1013,7 @@ int64 CalculateTsTagRelationSize(const Relation rel, ForkNumber forknum)
     return totalsize;
 }
 
-/* 
+/*
  * @description: Calcute timeseries column file size. Relation size includs:
  *               1.pg_tags_*** relation size
  *               2.pg_cudesc_*** relation size
@@ -1026,7 +1027,7 @@ int64 CalculateTStoreRelationSize(Relation rel, ForkNumber forknum)
     int64 totalsize = 0;
 
     // Add delta table's size
-    
+
     int64 file_size = CalculateTsCudescRelationSize(rel, forknum);
     if (file_size == 0) {
         // No part exist in this partition
@@ -1068,12 +1069,12 @@ int64 CalculateTStoreRelationSize(Relation rel, ForkNumber forknum)
             custore.Destroy();
         }
     }
-    
+
     return totalsize;
 }
 
-/* 
- * @description: Calcute timeseries column file size by partition. 
+/*
+ * @description: Calcute timeseries column file size by partition.
  * @param {rel}: relation
  * @param {forknum}
  * @return {int64} : relation size
@@ -1442,6 +1443,12 @@ Datum pg_table_size(PG_FUNCTION_ARGS)
 
     if (!RelationIsValid(rel)) {
         PG_RETURN_NULL();
+    }
+
+    if (IsK2PgRelation(rel)) {
+        // k2 table does not provide table size information, return a dummy value here
+        size = 1000;
+        PG_RETURN_INT64(size);
     }
 
 #ifdef PGXC
