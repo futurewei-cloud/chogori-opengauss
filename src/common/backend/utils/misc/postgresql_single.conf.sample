@@ -764,3 +764,5 @@ job_queue_processes = 10        # Number of concurrent jobs, optional: [0..1000]
 # DCF OPTIONS
 #------------------------------------------------------------------------------
 #enable_dcf = off
+# Disable 2pccleaner
+gs_clean_timeout = 0
