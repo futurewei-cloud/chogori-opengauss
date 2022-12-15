@@ -218,7 +218,7 @@ TupleTableSlot* ExecScan(ScanState* node, ExecScanAccessMtd access_mtd, /* funct
                     } else if (slot->tts_tuple != NULL && ((HeapTuple)slot->tts_tuple)->t_k2pgctid != 0) {
                         HEAPTUPLE_COPY_K2PGTID(((HeapTuple)slot->tts_tuple)->t_k2pgctid, result_slot->tts_k2pgctid);
                     } else {
-                        elog(WARNING, "Could not find k2pgctid from slot");
+                        elog(DEBUG1, "Could not find k2pgctid from slot");
                     }
                 }
 #ifdef PGXC
