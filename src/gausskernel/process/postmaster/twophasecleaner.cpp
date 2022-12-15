@@ -446,7 +446,7 @@ static PGconn* LoginDatabase(char* host, int port, char* user, char* password,
     keywords[6] = "client_encoding";
     values[6] = encoding;
     keywords[7] = "connect_timeout";
-    values[7] = "5";
+    values[7] = "60";
     keywords[8] = "options";
     /* this mode: remove timeout */
     values[8] = "-c xc_maintenance_mode=on";
