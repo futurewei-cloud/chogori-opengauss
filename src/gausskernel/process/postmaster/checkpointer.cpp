@@ -57,6 +57,7 @@
 #include "utils/memutils.h"
 #include "utils/resowner.h"
 #include "gssignal/gs_signal.h"
+#include "access/k2/k2pg_aux.h"
 
 /* ----------
  * Shared memory area for communication between checkpointer and backends
@@ -1007,6 +1008,11 @@ void RequestCheckpoint(int flags)
         return;
     }
 
+	if (IsK2PgEnabled()) {
+        // k2 maintain its own txn data and no need to process checkpoint for k2 storage
+        return;
+    }
+
     /*
      * Atomically set the request flags, and take a snapshot of the counters.
      * When we see ckpt_started > old_started, we know the flags we set here
@@ -1040,18 +1046,18 @@ void RequestCheckpoint(int flags)
                             errmsg("could not request checkpoint because checkpointer not running")));
                 } else {
                     ereport(LOG, (errmsg("could not request checkpoint because checkpointer not running")));
-                }   
+                }
                 break;
             }
         } else if (gs_signal_send(t_thrd.checkpoint_cxt.CheckpointerShmem->checkpointer_pid, SIGINT) != 0) {
             /* max wait CheckPointWaitTime secs */
-            if (ntries >= (u_sess->attr.attr_storage.CheckPointWaitTimeOut * 10)) { 
+            if (ntries >= (u_sess->attr.attr_storage.CheckPointWaitTimeOut * 10)) {
                 if (flags & CHECKPOINT_WAIT) {
                     ereport(ERROR,
                         (errcode(ERRCODE_WITH_CHECK_OPTION_VIOLATION), errmsg("could not signal for checkpoint: %m")));
                 } else {
                     ereport(LOG, (errmsg("could not signal for checkpoint: %m")));
-                } 
+                }
                 break;
             }
         } else {
@@ -1527,4 +1533,3 @@ int64 CheckPointGetFsyncRequset()
 
     return request;
 }
-
