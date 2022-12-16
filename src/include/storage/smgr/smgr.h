@@ -80,7 +80,7 @@ typedef struct SMgrRelationData {
 
     struct SegmentDesc** seg_desc;
     struct SegSpace* seg_space;
-    
+
     /* This variable is used for expansion. */
     void *fileState;
 

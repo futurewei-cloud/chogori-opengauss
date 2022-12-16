@@ -41,6 +41,10 @@
 #include "pg_trace.h"
 #include "pgstat.h"
 
+#define BOOST_STACKTRACE_USE_ADDR2LINE
+#include "boost/stacktrace.hpp"
+#include <string>
+
 /* Populate a file tag describing an md.cpp segment file. */
 #define INIT_MD_FILETAG(tag, rNode, forkNum, segNo)                         \
     do                                                                      \
@@ -357,7 +361,7 @@ static void mdunlinkfork(const RelFileNodeBackend& rnode, ForkNumber forkNum, bo
     int ret;
 
     path = relpath(rnode, forkNum);
-    
+
     /*
      * Delete or truncate the first segment.
      */
@@ -582,6 +586,10 @@ static MdfdVec *mdopen(SMgrRelation reln, ForkNumber forknum, ExtensionBehavior 
                 pfree(path);
                 return NULL;
             }
+
+            std::string backtrace = boost::stacktrace::to_string(boost::stacktrace::stacktrace());
+            elog(WARNING, "could not open file %s, stacktrace: %s", path, backtrace.c_str());
+
             ereport(ERROR, (errcode_for_file_access(), errmsg("could not open file \"%s\": %m", path)));
         }
     }
