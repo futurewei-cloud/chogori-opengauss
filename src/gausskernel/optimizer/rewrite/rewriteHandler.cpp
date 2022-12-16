@@ -41,6 +41,7 @@
 #include "utils/rel_gs.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/namespace.h"
+#include "access/k2/k2pg_aux.h"
 
 #ifdef PGXC
 #include "pgxc/locator.h"
@@ -768,8 +769,8 @@ static List* rewriteTargetListIU(List* targetList, CmdType commandType, Relation
          * For an UPDATE on a view, provide a dummy entry whenever there is no
          * explicit assignment.
          */
-        if (new_tle == NULL && commandType == CMD_UPDATE && 
-            (target_relation->rd_rel->relkind == RELKIND_VIEW 
+        if (new_tle == NULL && commandType == CMD_UPDATE &&
+            (target_relation->rd_rel->relkind == RELKIND_VIEW
             || target_relation->rd_rel->relkind == RELKIND_CONTQUERY)) {
             Node* new_expr = NULL;
 
@@ -1268,15 +1269,41 @@ static void rewriteTargetListUD(Query* parsetree, RangeTblEntry* target_rte, Rel
         }
     }
 #endif
+	if (IsK2PgRelation(target_relation))
+	{
+		/*
+		 * If there are secondary indices on the target table, or if we have a
+		 * row-level trigger corresponding to the operations, then also return
+		 * the whole row.
+		 */
+		if (K2PgRelHasOldRowTriggers(target_relation, parsetree->commandType) ||
+		    K2PgRelHasSecondaryIndices(target_relation))
+		{
+			var = makeWholeRowVar(target_rte,
+								  parsetree->resultRelation,
+								  0,
+								  false);
+			attrname = "wholerow";
+		}
 
-    if (target_relation->rd_rel->relkind == RELKIND_RELATION || target_relation->rd_rel->relkind == RELKIND_MATVIEW) {
+		/*
+		 * Emit k2pgctid so that executor can find the row to update or delete from K2PG tables.
+		 */
+		var = makeVar(parsetree->resultRelation,
+					  K2PgTupleIdAttributeNumber,
+					  BYTEAOID,
+					  -1,
+					  InvalidOid,
+					  0);
+		attrname = "k2pgctid";
+	} else if (target_relation->rd_rel->relkind == RELKIND_RELATION || target_relation->rd_rel->relkind == RELKIND_MATVIEW) {
         /*
          * Emit CTID so that executor can find the row to update or delete.
          */
         var = makeVar(parsetree->resultRelation, SelfItemPointerAttributeNumber, TIDOID, -1, InvalidOid, 0);
 
         attrname = "ctid";
-    } else if (target_relation->rd_rel->relkind == RELKIND_FOREIGN_TABLE 
+    } else if (target_relation->rd_rel->relkind == RELKIND_FOREIGN_TABLE
                || target_relation->rd_rel->relkind == RELKIND_STREAM) {
         /*
          * Let the foreign table's FDW add whatever junk TLEs it wants.
@@ -1989,7 +2016,7 @@ static Query* CopyAndAddInvertedQual(Query* parsetree, Node* rule_qual, int rt_i
     return parsetree;
 }
 /*
- * Generated column can not be manually insert or updated. 
+ * Generated column can not be manually insert or updated.
  */
 static void CheckGeneratedColConstraint(CmdType commandType, Form_pg_attribute attTup, const TargetEntry *newTle)
 {
@@ -2091,7 +2118,7 @@ static List* rewriteTargetListMergeInto(
          */
         apply_default = ((new_tle == NULL && commandType == CMD_INSERT) ||
                          (new_tle && new_tle->expr && IsA(new_tle->expr, SetToDefault)));
-        
+
         bool isGeneratedCol = ISGENERATEDCOL(target_relation->rd_att, attrno - 1);
 
 
@@ -2857,7 +2884,7 @@ char* GetCreateTableStmt(Query* parsetree, CreateTableAsStmt* stmt)
         TargetEntry* tle = (TargetEntry*)lfirst(col);
         ColumnDef* coldef = NULL;
         TypeName* tpname = NULL;
-    
+
         if (IsA(tle->expr, Var)) {
             Var* ColTypProperty = (Var*)(tle->expr);
             /*
@@ -2874,21 +2901,21 @@ char* GetCreateTableStmt(Query* parsetree, CreateTableAsStmt* stmt)
                             format_type_be(ColTypProperty->vartype)),
                         errhint("Use the COLLATE clause to set the collation explicitly.")));
         }
-    
+
         /* Ignore junk columns from the targetlist */
         if (tle->resjunk)
             continue;
-    
+
         coldef = makeNode(ColumnDef);
         tpname = makeNode(TypeName);
-    
+
         /* Take the column name specified if any */
         if (lc != NULL) {
             coldef->colname = strVal(lfirst(lc));
             lc = lnext(lc);
         } else
             coldef->colname = pstrdup(tle->resname);
-    
+
         coldef->inhcount = 0;
         coldef->is_local = true;
         coldef->is_not_null = false;
@@ -2900,24 +2927,24 @@ char* GetCreateTableStmt(Query* parsetree, CreateTableAsStmt* stmt)
         coldef->raw_default = NULL;
         coldef->cooked_default = NULL;
         coldef->constraints = NIL;
-    
+
         /*
          * Set typeOid and typemod. The name of the type is derived while
          * generating query
          */
         tpname->typeOid = exprType((Node*)tle->expr);
         tpname->typemod = exprTypmod((Node*)tle->expr);
-    
+
         coldef->typname = tpname;
-    
+
         tableElts = lappend(tableElts, coldef);
     }
-    
+
     if (lc != NULL)
         ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
                 errmsg("%s specifies too many column names",
                        stmt->relkind == OBJECT_MATVIEW ? "CREATE MATERIALIZED VIEW" : "CREATE TABLE AS")));
-    
+
     /*
      * Set column information and the distribution mechanism (which will be
      * NULL for SELECT INTO and the default mechanism will be picked)
@@ -2936,7 +2963,7 @@ char* GetCreateTableStmt(Query* parsetree, CreateTableAsStmt* stmt)
      * Check consistency of arguments
      */
     if (create_stmt->oncommit != ONCOMMIT_NOOP &&
-        create_stmt->relation->relpersistence != RELPERSISTENCE_TEMP && 
+        create_stmt->relation->relpersistence != RELPERSISTENCE_TEMP &&
         create_stmt->relation->relpersistence != RELPERSISTENCE_GLOBAL_TEMP) {
         ereport(ERROR,
             (errcode(ERRCODE_INVALID_TABLE_DEFINITION), errmsg("ON COMMIT can only be used on temporary tables")));
@@ -2987,7 +3014,7 @@ char* GetInsertIntoStmt(CreateTableAsStmt* stmt)
     StringInfo cquery = makeStringInfo();
     deparse_query((Query*)stmt->query, cquery, NIL, false, false, stmt->parserSetupArg);
     char* selectstr = pstrdup(cquery->data);
-    
+
     /* Now, finally build the INSERT INTO statement */
     initStringInfo(cquery);
 
