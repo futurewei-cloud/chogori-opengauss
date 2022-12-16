@@ -4448,7 +4448,7 @@ BlockNumber RelationGetNumberOfBlocksInFork(Relation relation, ForkNumber fork_n
 {
     BlockNumber result = 0;
 
-    if (IsK2PgRelation(relation)) {
+    if (IsK2PgBackedRelation(relation)) {
         return result;
     }
 
