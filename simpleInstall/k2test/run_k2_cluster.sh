@@ -6,7 +6,7 @@ PROTO="tcp+k2rpc"
 
 CPODIR=${CPODIR:=/tmp/___cpo_integ_test}
 rm -rf ${CPODIR}
-DEFAULT_EPS=("${PROTO}://0.0.0.0:10000" "${PROTO}://0.0.0.0:10001" "${PROTO}://0.0.0.0:10002" "${PROTO}://0.0.0.0:10003" "${PROTO}://0.0.0.0:10004")
+DEFAULT_EPS=("${PROTO}://0.0.0.0:10000" "${PROTO}://0.0.0.0:10001" "${PROTO}://0.0.0.0:10002" "${PROTO}://0.0.0.0:10003" "${PROTO}://0.0.0.0:10004" "${PROTO}://0.0.0.0:10005" "${PROTO}://0.0.0.0:10006" "${PROTO}://0.0.0.0:10007")
 EPS=( ${EPS:=${DEFAULT_EPS[@]}} )
 NUMCORES=${NUMCORES:=`nproc`}
 # core on which to run the TSO poller thread. Pick 4 if we have that many, or the highest-available otherwise
