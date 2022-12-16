@@ -14,4 +14,5 @@ cd ${GAUSSHOME}/simpleInstall/
 export SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 export K2_CONFIG_FILE=${SCRIPT_DIR}/k2config_pgrun.json
 
-gdb --args gaussdb --single --localxid -F -O -c search_path=pg_catalog -c exit_on_error=true template1
+#gdb --args gaussdb --single --localxid -F -O -c search_path=pg_catalog -c exit_on_error=true template1
+gdb --args gaussdb -D /opt/opengauss/data/single_node --single_node

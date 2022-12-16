@@ -8116,6 +8116,8 @@ void K2PgPreloadRelCache()
 						 errhint("Database might have been dropped by another user")));
 	}
 
+    elog(INFO, "K2Pg preloading RelCache for database %d, name %s", dboid, dbname == NULL ? "NULL" : dbname);
+
 	/*
 	 * Loading the relation cache requires per-relation lookups to a number of related system tables
 	 * to assemble the relation data (e.g. columns, indexes, foreign keys, etc).
