@@ -11630,22 +11630,23 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 
 	*need_retry = false;
 
-    return;
 	/*
 	 * A retry is only required if the transaction is handled by K2PG.
 	 */
 	if (!IsK2PgEnabled() || t_thrd.log_cxt.errordata_stack_depth < 0)
 		return;
 
+    elog(INFO, "K2PgPrepareCacheRefreshIfNeeded is called");
+
 	/* Get error data */
 	ErrorData *edata = NULL;
 	MemoryContextSwitchTo(oldcontext);
 	edata = CopyErrorData();
 
-        if(edata != NULL) {
-            elog(INFO, "ErrorData: file: %s, func: %s, line: %d, message: %s, detail: %s\n", edata->filename, edata->funcname,
-                        edata->lineno, edata->message ? edata->message : "", edata->detail ? edata->detail : "");
-        }
+        // if(edata != NULL) {
+        //     elog(INFO, "ErrorData: file: %s, func: %s, line: %d, message: %s, detail: %s\n", edata->filename, edata->funcname,
+        //                 edata->lineno, edata->message ? edata->message : "", edata->detail ? edata->detail : "");
+        // }
 
 	bool is_retryable_err = K2PgNeedRetryAfterCacheRefresh(edata);
 	if ((table_to_refresh = strstr(edata->message,
