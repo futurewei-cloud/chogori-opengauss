@@ -1081,6 +1081,7 @@ K2PgStatus PgGate_ExecSelect(
         where_conds = Expression();
     }
 
+    K2LOG_I(k2log::k2pg, "Create Query with limit %d", limit);
     auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();
     if (!status.is2xxOK()) {
         K2LOG_ERT(k2log::k2pg, "error creating query: {}", status);
