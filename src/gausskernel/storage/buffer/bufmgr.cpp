@@ -81,6 +81,7 @@
 #include "gstrace/storage_gstrace.h"
 #include "tsan_annotation.h"
 #include "tde_key_management/tde_key_storage.h"
+#include "access/k2/k2pg_aux.h"
 
 const int ONE_MILLISECOND = 1;
 const int TEN_MICROSECOND = 10;
@@ -1354,7 +1355,7 @@ void PageListBackWrite(uint32 *buf_list, int32 nbufs, uint32 flags = 0, SMgrRela
             Assert(smgrReln->smgr_rnode.node.dbNode == bufHdr->tag.rnode.dbNode);
             Assert(smgrReln->smgr_rnode.node.relNode == bufHdr->tag.rnode.relNode);
             Assert(smgrReln->smgr_rnode.node.bucketNode == bufHdr->tag.rnode.bucketNode);
-            
+
             /* PageListBackWrite: jeh XLogFlush blocking? */
             /*
              * Force XLOG flush up to buffer's LSN.  This implements the basic WAL
@@ -1712,8 +1713,8 @@ Buffer ReadBufferExtended(Relation reln, ForkNumber fork_num, BlockNumber block_
  *		a relcache entry for the relation.
  *
  * NB: At present, this function may only be used on permanent relations, which
- * is OK, because we only use it during XLOG replay and segment-page copy relation data.  
- * If in the future we want to use it on temporary or unlogged relations, we could pass 
+ * is OK, because we only use it during XLOG replay and segment-page copy relation data.
+ * If in the future we want to use it on temporary or unlogged relations, we could pass
  * additional parameters.
  */
 Buffer ReadBufferWithoutRelcache(const RelFileNode &rnode, ForkNumber fork_num, BlockNumber block_num,
@@ -1726,7 +1727,7 @@ Buffer ReadBufferWithoutRelcache(const RelFileNode &rnode, ForkNumber fork_num, 
     return ReadBuffer_common(smgr, RELPERSISTENCE_PERMANENT, fork_num, block_num, mode, strategy, &hit, pblk);
 }
 
-Buffer ReadUndoBufferWithoutRelcache(const RelFileNode& rnode, ForkNumber forkNum, 
+Buffer ReadUndoBufferWithoutRelcache(const RelFileNode& rnode, ForkNumber forkNum,
     BlockNumber blockNum, ReadBufferMode mode, BufferAccessStrategy strategy,
     char relpersistence)
 {
@@ -2116,7 +2117,7 @@ static Buffer ReadBuffer_common(SMgrRelation smgr, char relpersistence, ForkNumb
         if (smgr->encrypt) {
             bufHdr->encrypt = true;
         }
-        
+
         if (found) {
             u_sess->instr_cxt.pg_buffer_usage->local_blks_hit++;
         } else {
@@ -2132,7 +2133,7 @@ static Buffer ReadBuffer_common(SMgrRelation smgr, char relpersistence, ForkNumb
         if (smgr->encrypt) {
             bufHdr->encrypt = true;
         }
-        
+
         if (found) {
             u_sess->instr_cxt.pg_buffer_usage->shared_blks_hit++;
         } else {
@@ -2504,7 +2505,7 @@ static BufferDesc *BufferAlloc(SMgrRelation smgr, char relpersistence, ForkNumbe
          * after re-locking the buffer header.
          */
         if (old_flags & BM_DIRTY) {
-            
+
             /* backend should not flush dirty pages if PageWriter is there */
             if (!backend_can_flush_dirty_page()) {
                 UnpinBuffer(buf, true);
@@ -2684,7 +2685,7 @@ static BufferDesc *BufferAlloc(SMgrRelation smgr, char relpersistence, ForkNumbe
          * over with a new victim buffer.
          */
         old_flags = buf_state & BUF_FLAG_MASK;
-        if (BUF_STATE_GET_REFCOUNT(buf_state) == 1 && !(old_flags & BM_DIRTY) 
+        if (BUF_STATE_GET_REFCOUNT(buf_state) == 1 && !(old_flags & BM_DIRTY)
             && !(old_flags & BM_IS_META)) {
             break;
         }
@@ -2697,7 +2698,7 @@ static BufferDesc *BufferAlloc(SMgrRelation smgr, char relpersistence, ForkNumbe
         LWLockRelease(new_partition_lock);
         UnpinBuffer(buf, true);
     }
-    
+
 #ifdef USE_ASSERT_CHECKING
     PageCheckWhenChosedElimination(buf, old_flags);
 #endif
@@ -2777,7 +2778,7 @@ static BufferDesc *BufferAlloc(SMgrRelation smgr, char relpersistence, ForkNumbe
  * to acquire the necessary locks; if so, don't mess it up.
  */
 void InvalidateBuffer(BufferDesc *buf)
-{    
+{
     BufferTag old_tag;
     uint32 old_hash;                   /* hash value for oldTag */
     LWLock *old_partition_lock = NULL; /* buffer partition lock for it */
@@ -4270,8 +4271,8 @@ char* PageDataEncryptForBuffer(Page page, BufferDesc *bufdesc, bool is_segbuf)
     if (bufdesc->encrypt) {
         tde_info = TDE::TDEBufferCache::get_instance().search_cache(bufdesc->tag.rnode);
         if (tde_info == NULL) {
-            ereport(ERROR, (errmodule(MOD_SEC_TDE), errcode(ERRCODE_UNEXPECTED_NULL_VALUE), 
-                errmsg("page buffer get TDE buffer cache entry failed"), errdetail("N/A"), 
+            ereport(ERROR, (errmodule(MOD_SEC_TDE), errcode(ERRCODE_UNEXPECTED_NULL_VALUE),
+                errmsg("page buffer get TDE buffer cache entry failed"), errdetail("N/A"),
                 errcause("TDE cache miss this key"), erraction("check cache status")));
         }
         bufToWrite = PageDataEncryptIfNeed(page, tde_info, true, is_segbuf);
@@ -4446,6 +4447,11 @@ void FlushBuffer(void *buf, SMgrRelation reln, ReadBufferMethod flushmethod)
 BlockNumber RelationGetNumberOfBlocksInFork(Relation relation, ForkNumber fork_num, bool estimate)
 {
     BlockNumber result = 0;
+
+    if (IsK2PgRelation(relation)) {
+        return result;
+    }
+
     /*
      * When this backend not init gtt storage
      * return 0
@@ -4742,7 +4748,7 @@ void DropRelFileNodeAllBuffersUsingHash(HTAB *relfilenode_hashtbl)
         } else {
             equal = RelFileNodeEquals(buf_desc->tag.rnode, rd_node_snapshot);
         }
-        
+
         if (equal == true) {
             InvalidateBuffer(buf_desc); /* releases spinlock */
         } else {
@@ -4808,7 +4814,7 @@ static FORCE_INLINE void ScanCompareAndInvalidateBuffer(const RelFileNode *rnode
     if (!find_dir) {
         match_idx = CheckRnodeMatchResult(rnodes, rnode_len, &tag_rnode);
     }
-    
+
     if (SECUREC_LIKELY(-1 == match_idx)) {
         return;
     }
@@ -4871,7 +4877,7 @@ void DropDatabaseBuffers(Oid dbid)
      * database isn't our own.
      */
     gstrace_entry(GS_TRC_ID_DropDatabaseBuffers);
-    
+
     for (i = 0; i < TOTAL_BUFFER_NUM; i++) {
         BufferDesc *buf_desc = GetBufferDescriptor(i);
         uint32 buf_state;
@@ -6539,8 +6545,8 @@ void TdeTableEncryptionInsert(Relation reln)
     result = TDE::TDEBufferCache::get_instance().insert_cache(reln->rd_node, tde_info);
     if (!result) {
         pfree_ext(tde_info);
-        ereport(ERROR, (errmodule(MOD_SEC_TDE), errcode(ERRCODE_UNEXPECTED_NULL_VALUE), 
-            errmsg("insert TDE buffer cache entry failed"), errdetail("N/A"), 
+        ereport(ERROR, (errmodule(MOD_SEC_TDE), errcode(ERRCODE_UNEXPECTED_NULL_VALUE),
+            errmsg("insert TDE buffer cache entry failed"), errdetail("N/A"),
             errcause("initialize cache memory failed"), erraction("check cache out of memory or system cache")));
     }
     pfree_ext(tde_info);
@@ -6561,7 +6567,7 @@ bool StandbyTdeTableEncryptionInsert(TdeInfo* tde_info, RelFileNode rnode)
     if (!result) {
         ereport(ERROR, (errmodule(MOD_SEC_TDE), errcode(ERRCODE_UNEXPECTED_NULL_VALUE),
             errmsg("insert TDE buffer cache entry failed"), errdetail("N/A"),
-            errcause("initialize cache memory failed"), 
+            errcause("initialize cache memory failed"),
             erraction("check cache out of memory or system cache")));
     }
     return result;
