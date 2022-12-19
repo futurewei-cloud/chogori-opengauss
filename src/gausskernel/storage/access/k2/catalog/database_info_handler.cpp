@@ -132,7 +132,7 @@ sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases() {
         }
 
         for (auto& storage : result.records) {
-            dto::SKVRecord record(collection_name_, schema_ptr_, std::move(storage), true);
+            dto::SKVRecord record(collection_name_, schema_ptr_, std::move(storage));
             DatabaseInfo info = getInfo(record);
             infos.push_back(std::move(info));
         }
