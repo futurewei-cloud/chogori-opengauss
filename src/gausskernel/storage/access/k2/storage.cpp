@@ -347,7 +347,7 @@ skv::http::dto::SKVRecord makePrimaryKeyFromSecondary(skv::http::dto::SKVRecord&
     if (!success) {
         throw std::runtime_error("Failed to deserialize SKVRecord storage in makePrimaryKeyFromSecondary");
     }
-    return skv::http::dto::SKVRecord(secondary.collectionName, primarySchema, std::move(storage), true).getSKVKeyRecord();
+    return skv::http::dto::SKVRecord(secondary.collectionName, primarySchema, std::move(storage)).getSKVKeyRecord();
 }
 
 // Checks if the value children structure of an expression match what is expected by BuildRangeRecords and throws if not
@@ -715,7 +715,7 @@ skv::http::dto::SKVRecord tupleIDDatumToSKVRecord(Datum tuple_id, std::string co
     skv::http::MPackReader reader(binary);
     skv::http::dto::SKVRecord::Storage storage;
     reader.read(storage);
-    return skv::http::dto::SKVRecord(collection, schema, std::move(storage), true);
+    return skv::http::dto::SKVRecord(collection, schema, std::move(storage));
 }
 
 K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_oid,

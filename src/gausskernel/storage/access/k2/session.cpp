@@ -237,7 +237,6 @@ TxnManager::createCollection(const std::string& collection_name, const std::stri
 
 boost::future<sh::Response<sh::dto::SKVRecord>>
 TxnManager::read(sh::dto::SKVRecord record) {
-    record.constructKeyStrings();
     K2LOG_DRT(k2log::k2pg, "read: {}", record);
     Metric mt("read", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
@@ -262,7 +261,6 @@ TxnManager::read(sh::dto::SKVRecord record) {
 boost::future<sh::Response<>>
 TxnManager::write(sh::dto::SKVRecord record, bool erase,
                   sh::dto::ExistencePrecondition precondition) {
-    record.constructKeyStrings();
     K2LOG_DWT(k2log::k2pg, "write: {}, erase: {}, precond: {}", record, erase, precondition);
     Metric mt("write", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
@@ -286,7 +284,6 @@ TxnManager::write(sh::dto::SKVRecord record, bool erase,
 
 boost::future<sh::Response<>>
 TxnManager::partialUpdate(sh::dto::SKVRecord record, std::vector<uint32_t> fieldsForPartialUpdate) {
-    record.constructKeyStrings();
     K2LOG_DWT(k2log::k2pg, "partialUpdate: {}, fields: {}", record, fieldsForPartialUpdate);
     Metric mt("partialUpdate", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()

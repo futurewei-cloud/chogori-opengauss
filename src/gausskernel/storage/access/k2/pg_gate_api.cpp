@@ -514,7 +514,7 @@ K2PgStatus PgGate_DmlFetch(K2PgScanHandle* handle, int32_t nattrs, uint64_t *val
         // Save the result records from the query
         for (skv::http::dto::SKVRecord::Storage& storage : resp.records) {
             std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
-            skv::http::dto::SKVRecord record(handle->primaryTable->collection_name(), schema, std::move(storage), true);
+            skv::http::dto::SKVRecord record(handle->primaryTable->collection_name(), schema, std::move(storage));
             handle->queryRecords.push_back(std::move(record));
         }
 
