@@ -210,7 +210,7 @@ sh::Response<std::vector<std::string>> TableInfoHandler::ListTableIds(const std:
             done = result.done;
             for (sh::dto::SKVRecord::Storage& storage : result.records) {
                 // TODO(ahsank): Query response should return schema or shcema version to support multi version schema
-                sh::dto::SKVRecord record(collection_name, table_meta_SKVSchema_, std::move(storage), true);
+                sh::dto::SKVRecord record(collection_name, table_meta_SKVSchema_, std::move(storage));
                 // deserialize table meta
                 // SchemaTableId
                 record.deserializeNext<int64_t>();
@@ -364,7 +364,7 @@ sh::Status TableInfoHandler::CopySKVTable(
 
         for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
             // clone and persist SKV record to target table
-            sh::dto::SKVRecord target_record(target_coll_name, target_schema, std::move(storage), true);
+            sh::dto::SKVRecord target_record(target_coll_name, target_schema, std::move(storage));
             auto [upsert_status] = TXMgr.write(target_record).get();
             if (!upsert_status.is2xxOK()) {
                 K2LOG_ECT(log::catalog, "Failed to upsert target_record due to {}", upsert_status);
@@ -1172,7 +1172,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexMetaSKVRecords(const
         }
 
         for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
-            sh::dto::SKVRecord record(collection_name, table_meta_SKVSchema_, std::move(storage), true);
+            sh::dto::SKVRecord record(collection_name, table_meta_SKVSchema_, std::move(storage));
             records.push_back(std::move(record));
         }
         // if the query is not done, the query itself is updated with the pagination token for the next call
@@ -1210,7 +1210,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchTableColumnMetaSKVRecords
         }
 
         for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
-            sh::dto::SKVRecord record(collection_name, tablecolumn_meta_SKVSchema_, std::move(storage), true);
+            sh::dto::SKVRecord record(collection_name, tablecolumn_meta_SKVSchema_, std::move(storage));
             records.push_back(std::move(record));
         }
         // if the query is not done, the query itself is updated with the pagination token for the next call
@@ -1249,7 +1249,7 @@ std::vector<sh::dto::SKVRecord> TableInfoHandler::FetchIndexColumnMetaSKVRecords
         }
 
         for (sh::dto::SKVRecord::Storage& storage : query_result.records) {
-            sh::dto::SKVRecord record(collection_name, indexcolumn_meta_SKVSchema_, std::move(storage), true);
+            sh::dto::SKVRecord record(collection_name, indexcolumn_meta_SKVSchema_, std::move(storage));
             records.push_back(std::move(record));
         }
         done = query_result.done;
