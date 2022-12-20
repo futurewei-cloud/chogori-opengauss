@@ -27,9 +27,6 @@ CREATE TABLE stock ( \
   s_dist_10 char(24) NOT NULL, \
   PRIMARY KEY (s_w_id,s_i_id) \
 );
-INSERT INTO stock VALUES (1, 1, 10.0, 10.0, 0, 0, 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a');
-INSERT INTO stock VALUES (1, 2, 10.0, 10.0, 0, 0, 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a');
-INSERT INTO stock VALUES (1, 3, 10.0, 10.0, 0, 0, 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a');
 CREATE TABLE oorder ( \
   o_w_id int NOT NULL, \
   o_d_id int NOT NULL, \
@@ -38,9 +35,8 @@ CREATE TABLE oorder ( \
   o_carrier_id int DEFAULT NULL, \
   o_ol_cnt decimal(2,0) NOT NULL, \
   o_all_local decimal(1,0) NOT NULL, \
-  o_entry_d timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, \
-  PRIMARY KEY (o_w_id,o_d_id,o_id), \
-  UNIQUE (o_w_id,o_d_id,o_c_id,o_id) \
+  o_entry_d timestamp NOT NULL, \
+  PRIMARY KEY (o_w_id,o_d_id,o_id) \
 );
 CREATE TABLE history ( \
   h_c_id int NOT NULL, \
@@ -48,11 +44,10 @@ CREATE TABLE history ( \
   h_c_w_id int NOT NULL, \
   h_d_id int NOT NULL, \
   h_w_id int NOT NULL, \
-  h_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+  h_date timestamp NOT NULL, \
   h_amount decimal(6,2) NOT NULL, \
   h_data varchar(24) NOT NULL \
 );
-INSERT INTO history VALUES (1, 1, 1, 1, 1, '1999-01-08 04:05:06', 100.0, 'data');
 CREATE TABLE customer ( \
   c_w_id int NOT NULL, \
   c_d_id int NOT NULL, \
@@ -72,12 +67,11 @@ CREATE TABLE customer ( \
   c_state char(2) NOT NULL, \
   c_zip char(9) NOT NULL, \
   c_phone char(16) NOT NULL, \
-  c_since timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+  c_since timestamp NOT NULL, \
   c_middle char(2) NOT NULL, \
   c_data varchar(500) NOT NULL, \
   PRIMARY KEY (c_w_id,c_d_id,c_id) \
 );
-INSERT INTO customer VALUES (1, 1, 1, 0.05, 'a', 'a', 'b', 10.0, 0.0, 100.0, 1, 1, 'abc', 'abc', 'abc', 'wa', '99999', '555', '1999-01-08 04:05:06', 'r', 'data');
 CREATE TABLE district ( \
   d_w_id int NOT NULL, \
   d_id int NOT NULL, \
@@ -92,7 +86,6 @@ CREATE TABLE district ( \
   d_zip char(9) NOT NULL, \
   PRIMARY KEY (d_w_id,d_id) \
 );
-INSERT INTO district VALUES (1, 1, 100.0, 0.08, 4, 'a', 'abc', 'abc', 'abc', 'wa', '99999');
 CREATE TABLE item ( \
   i_id int NOT NULL, \
   i_name varchar(24) NOT NULL, \
@@ -101,9 +94,6 @@ CREATE TABLE item ( \
   i_im_id int NOT NULL, \
   PRIMARY KEY (i_id) \
 );
-INSERT INTO item VALUES (1, 'a', 10.0, 'data', 1);
-INSERT INTO item VALUES (2, 'b', 12.0, 'data', 2);
-INSERT INTO item VALUES (3, 'c', 13.0, 'data', 3);
 CREATE TABLE warehouse ( \
   w_id int NOT NULL, \
   w_ytd decimal(12,2) NOT NULL, \
@@ -116,6 +106,5 @@ CREATE TABLE warehouse ( \
   w_zip char(9) NOT NULL, \
   PRIMARY KEY (w_id) \
 );
-INSERT INTO warehouse VALUES (1, 100.0, 0.08, 'a', 'abc', 'abc', 'abc', 'wa', '99999');
 CREATE INDEX idx_customer_name ON customer (c_w_id,c_d_id,c_last,c_first);
 CREATE INDEX idx_order ON oorder (o_w_id,o_d_id,o_c_id,o_id);
