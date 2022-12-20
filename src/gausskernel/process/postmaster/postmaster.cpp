@@ -2170,7 +2170,7 @@ int PostmasterMain(int argc, char* argv[])
         g_instance.pid_cxt.AlarmCheckerPID = startAlarmChecker();
 
     /* start reaper backend thread which is always alive. */
-    g_instance.pid_cxt.ReaperBackendPID = initialize_util_thread(REAPER);
+    //g_instance.pid_cxt.ReaperBackendPID = initialize_util_thread(REAPER);
 
     /*
      * Reset whereToSendOutput from DestDebug (its starting state) to
@@ -3004,6 +3004,7 @@ static int ServerLoop(void)
         /*
         * Start the Undo launcher thread if we need to.
         */
+/*
         if (g_instance.pid_cxt.UndoLauncherPID == 0 && pmState == PM_RUN && !dummyStandbyMode) {
             g_instance.pid_cxt.UndoLauncherPID = initialize_util_thread(UNDO_LAUNCHER);
         }
@@ -3011,7 +3012,7 @@ static int ServerLoop(void)
         if (g_instance.pid_cxt.GlobalStatsPID == 0 && pmState == PM_RUN && !dummyStandbyMode) {
             g_instance.pid_cxt.GlobalStatsPID = initialize_util_thread(GLOBALSTATS_THREAD);
         }
-
+*/
         /*
          * If we have lost the job scheduler, try to start a new one.
          *
@@ -3040,12 +3041,14 @@ static int ServerLoop(void)
         }
 
         /* If we have lost the barrier creator thread, try to start a new one */
+/*
         if (START_BARRIER_CREATOR && g_instance.pid_cxt.BarrierCreatorPID == 0 &&
             pmState == PM_RUN && g_instance.archive_obs_cxt.obs_slot_num != 0) {
             g_instance.pid_cxt.BarrierCreatorPID = initialize_util_thread(BARRIER_CREATOR);
         }
-
+*/
         /* If we have lost the archiver, try to start a new one */
+/*
         if (!dummyStandbyMode) {
             if (g_instance.pid_cxt.PgArchPID == 0 && pmState == PM_RUN && XLogArchivingActive() &&
                 (XLogArchiveCommandSet() || XLogArchiveDestSet())) {
@@ -3055,36 +3058,39 @@ static int ServerLoop(void)
                 ArchObsThreadManage();
             }
         }
-
+*/
         /* If we have lost the stats collector, try to start a new one */
-        if (g_instance.pid_cxt.PgStatPID == 0 && (pmState == PM_RUN || pmState == PM_HOT_STANDBY) && !dummyStandbyMode)
-            g_instance.pid_cxt.PgStatPID = pgstat_start();
+        //if (g_instance.pid_cxt.PgStatPID == 0 && (pmState == PM_RUN || pmState == PM_HOT_STANDBY) && !dummyStandbyMode)
+        //    g_instance.pid_cxt.PgStatPID = pgstat_start();
 
         /* If we have lost the snapshot capturer, try to start a new one */
-        if (ENABLE_TCAP_VERSION && (g_instance.role == VSINGLENODE) && pmState == PM_RUN && g_instance.pid_cxt.TxnSnapCapturerPID == 0 && !dummyStandbyMode)
-            g_instance.pid_cxt.TxnSnapCapturerPID = StartTxnSnapCapturer();
+        //if (ENABLE_TCAP_VERSION && (g_instance.role == VSINGLENODE) && pmState == PM_RUN && g_instance.pid_cxt.TxnSnapCapturerPID == 0 && !dummyStandbyMode)
+        //    g_instance.pid_cxt.TxnSnapCapturerPID = StartTxnSnapCapturer();
 
         /* If we have lost the rbcleaner, try to start a new one */
-        if (ENABLE_TCAP_RECYCLEBIN && (g_instance.role == VSINGLENODE) && pmState == PM_RUN && g_instance.pid_cxt.RbCleanrPID == 0 && !dummyStandbyMode)
-            g_instance.pid_cxt.RbCleanrPID = StartRbCleaner();
+        //if (ENABLE_TCAP_RECYCLEBIN && (g_instance.role == VSINGLENODE) && pmState == PM_RUN && g_instance.pid_cxt.RbCleanrPID == 0 && !dummyStandbyMode)
+         //   g_instance.pid_cxt.RbCleanrPID = StartRbCleaner();
 
         /* If we have lost the stats collector, try to start a new one */
+/*
         if ((IS_PGXC_COORDINATOR || (g_instance.role == VSINGLENODE)) && g_instance.pid_cxt.SnapshotPID == 0 &&
             pmState == PM_RUN)
             g_instance.pid_cxt.SnapshotPID = snapshot_start();
-
         if (ENABLE_ASP && g_instance.pid_cxt.AshPID == 0 && pmState == PM_RUN && !dummyStandbyMode)
             g_instance.pid_cxt.AshPID = initialize_util_thread(ASH_WORKER);
 
+*/
         /* If we have lost the full sql flush thread, try to start a new one */
+/*
         if (ENABLE_STATEMENT_TRACK && g_instance.pid_cxt.StatementPID == 0 && pmState == PM_RUN)
             g_instance.pid_cxt.StatementPID = initialize_util_thread(TRACK_STMT_WORKER);
 
         if ((IS_PGXC_COORDINATOR || IS_SINGLE_NODE) && g_instance.pid_cxt.PercentilePID == 0 &&
             pmState == PM_RUN)
             g_instance.pid_cxt.PercentilePID = initialize_util_thread(PERCENTILE_WORKER);
-
+*/
         /* if workload manager is off, we still use this thread to build user hash table */
+/*
         if ((ENABLE_WORKLOAD_CONTROL || !WLMIsInfoInit()) && g_instance.pid_cxt.WLMCollectPID == 0 &&
             pmState == PM_RUN && !dummyStandbyMode)
             g_instance.pid_cxt.WLMCollectPID = initialize_util_thread(WLM_WORKER);
@@ -3100,8 +3106,9 @@ static int ServerLoop(void)
         if (IS_PGXC_COORDINATOR && g_instance.attr.attr_sql.max_resource_package &&
             (g_instance.pid_cxt.CPMonitorPID == 0) && (pmState == PM_RUN) && !dummyStandbyMode)
             g_instance.pid_cxt.CPMonitorPID = initialize_util_thread(WLM_CPMONITOR);
-
+*/
         /* If we have lost the twophase cleaner, try to start a new one */
+/*
         if (
 #ifdef ENABLE_MULTIPLE_NODES
             IS_PGXC_COORDINATOR &&
@@ -3112,37 +3119,38 @@ static int ServerLoop(void)
             u_sess->attr.attr_common.upgrade_mode != 1 &&
             g_instance.pid_cxt.TwoPhaseCleanerPID == 0 && pmState == PM_RUN)
             g_instance.pid_cxt.TwoPhaseCleanerPID = initialize_util_thread(TWOPASECLEANER);
-
+*/
         /* If we have lost the LWLock monitor, try to start a new one */
-        if (g_instance.pid_cxt.FaultMonitorPID == 0 && pmState == PM_RUN)
-            g_instance.pid_cxt.FaultMonitorPID = initialize_util_thread(FAULTMONITOR);
+ //       if (g_instance.pid_cxt.FaultMonitorPID == 0 && pmState == PM_RUN)
+ //           g_instance.pid_cxt.FaultMonitorPID = initialize_util_thread(FAULTMONITOR);
 
         /* If we have lost the heartbeat service, try to start a new one */
-        if (NeedHeartbeat())
-            g_instance.pid_cxt.HeartbeatPID = initialize_util_thread(HEARTBEAT);
+ //       if (NeedHeartbeat())
+  //          g_instance.pid_cxt.HeartbeatPID = initialize_util_thread(HEARTBEAT);
 
         /* If we have lost the csnmin sync thread, try to start a new one */
-        if (GTM_LITE_CN && g_instance.csnminsync_cxt.is_fcn_ccn &&
-            g_instance.pid_cxt.CsnminSyncPID == 0 && pmState == PM_RUN) {
-            g_instance.pid_cxt.CsnminSyncPID = initialize_util_thread(CSNMIN_SYNC);
-        }
+    //    if (GTM_LITE_CN && g_instance.csnminsync_cxt.is_fcn_ccn &&
+     //       g_instance.pid_cxt.CsnminSyncPID == 0 && pmState == PM_RUN) {
+     //       g_instance.pid_cxt.CsnminSyncPID = initialize_util_thread(CSNMIN_SYNC);
+      //  }
 
-        if (g_instance.pid_cxt.UndoRecyclerPID == 0 && pmState == PM_RUN) {
-            g_instance.pid_cxt.UndoRecyclerPID = initialize_util_thread(UNDO_RECYCLER);
-        }
+      //  if (g_instance.pid_cxt.UndoRecyclerPID == 0 && pmState == PM_RUN) {
+      //      g_instance.pid_cxt.UndoRecyclerPID = initialize_util_thread(UNDO_RECYCLER);
+       // }
 
-        if (g_instance.pid_cxt.GlobalStatsPID == 0 && pmState == PM_RUN) {
-            g_instance.pid_cxt.GlobalStatsPID = initialize_util_thread(GLOBALSTATS_THREAD);
-        }
+      //  if (g_instance.pid_cxt.GlobalStatsPID == 0 && pmState == PM_RUN) {
+      //      g_instance.pid_cxt.GlobalStatsPID = initialize_util_thread(GLOBALSTATS_THREAD);
+      //  }
 
         /* If we need to signal the autovacuum launcher, do so now */
+/*
         if (t_thrd.postmaster_cxt.avlauncher_needs_signal) {
             t_thrd.postmaster_cxt.avlauncher_needs_signal = false;
 
             if (g_instance.pid_cxt.AutoVacPID != 0)
                 gs_signal_send(g_instance.pid_cxt.AutoVacPID, SIGUSR2);
         }
-
+*/
 #ifdef ENABLE_MULTIPLE_NODES
         if (IS_PGXC_DATANODE && g_instance.attr.attr_common.enable_tsdb &&
             g_instance.pid_cxt.TsCompactionPID == 0 && pmState == PM_RUN &&
