@@ -7562,6 +7562,10 @@ static void ATRewriteCatalogs(List** wqueue, LOCKMODE lockmode)
         }
     }
 
+	// K2PG doesn't support toast tables
+	if (IsK2PgEnabled())
+		return;
+
     /* Check to see if a toast table must be added. */
     foreach (ltab, *wqueue) {
         AlteredTableInfo* tab = (AlteredTableInfo*)lfirst(ltab);
@@ -12196,6 +12200,13 @@ static void ATExecDropConstraint(Relation rel, const char* constrName, DropBehav
             heap_close(frel, NoLock);
         }
 #endif
+
+		if (IsK2PgEnabled() && con->contype == CONSTRAINT_PRIMARY)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("dropping a primary key constraint is not supported")));
+		}
 
         /*
          * Perform the actual constraint deletion
