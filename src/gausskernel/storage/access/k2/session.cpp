@@ -112,14 +112,14 @@ boost::future<sh::Response<>> TxnManager::beginTxn() {
     auto status = sh::Statuses::S200_OK;
     if (!_txn) {
         K2LOG_DCT(k2log::k2pg, "Starting new transaction");
-        auto txConf = Config().sub("txn_opts");
+        auto txConf = _config.sub("txn_opts");
         setSessionTxnOpts(sh::dto::TxnOptions{
                 .timeout= txConf.getDurationMillis("op_timeout_ms", 1s),
                 .priority= static_cast<sh::dto::TxnPriority>(txConf.get<uint8_t>("priority", 128)), // 0 is highest, 255 is lowest.
                 .syncFinalize = txConf.get<bool>("sync_finalize", false)
             });
-        Metric mt("beginTxn", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
-        _txnMt = Metric("txnTotalDuration", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+        Metric mt("beginTxn", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+        _txnMt = Metric("txnTotalDuration", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
         return _client->beginTxn(_txnOpts)
         .then([this, mt=std::move(mt)] (auto&& respFut) mutable {
             mt.report();
@@ -141,7 +141,7 @@ boost::future<sh::Response<>> TxnManager::endTxn(sh::dto::EndAction endAction) {
     _init();
     if (_txn) {
         K2LOG_DCT(k2log::k2pg, "end txn {}, with action: {}", (*_txn), endAction);
-        Metric mt("endTxn", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+        Metric mt("endTxn", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
         return _txn->endTxn(endAction)
             .then([this, endAction, mt=std::move(mt)](auto&& respFut) mutable {
                 _txnMt.report();
@@ -164,7 +164,7 @@ boost::future<sh::Response<std::shared_ptr<sh::dto::Schema>>>
 TxnManager::getSchema(const sh::String& collectionName, const sh::String& schemaName, int64_t schemaVersion) {
     _init();
     K2LOG_DCT(k2log::k2pg, "cname: {}, sname: {}, version: {}", collectionName, schemaName, schemaVersion);
-    Metric mt("getSchema", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("getSchema", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return _client->getSchema(collectionName, schemaName, schemaVersion)
         .then([mt=std::move(mt)](auto&& respFut) {
             mt.report();
@@ -180,7 +180,7 @@ boost::future<sh::Response<>>
 TxnManager::createSchema(const sh::String& collectionName, const sh::dto::Schema& schema) {
     _init();
     K2LOG_DCT(k2log::k2pg, "cname: {}, schema: {}", collectionName, schema);
-    Metric mt("createSchema", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("createSchema", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return _client->createSchema(collectionName, schema)
         .then([mt=std::move(mt)](auto&& respFut) {
             mt.report();
@@ -196,7 +196,7 @@ boost::future<sh::Response<>>
 TxnManager::createCollection(sh::dto::CollectionMetadata metadata, std::vector<sh::String> rangeEnds) {
     _init();
     K2LOG_DCT(k2log::k2pg, "createCollection: {}, rends: {}", metadata, rangeEnds);
-    Metric mt("createCollection", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("createCollection", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return _client->createCollection(metadata, rangeEnds)
         .then([mt=std::move(mt)](auto&& respFut) {
             mt.report();
@@ -238,7 +238,7 @@ TxnManager::createCollection(const std::string& collection_name, const std::stri
 boost::future<sh::Response<sh::dto::SKVRecord>>
 TxnManager::read(sh::dto::SKVRecord record) {
     K2LOG_DRT(k2log::k2pg, "read: {}", record);
-    Metric mt("read", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("read", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, record = std::move(record)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
@@ -262,7 +262,7 @@ boost::future<sh::Response<>>
 TxnManager::write(sh::dto::SKVRecord record, bool erase,
                   sh::dto::ExistencePrecondition precondition) {
     K2LOG_DWT(k2log::k2pg, "write: {}, erase: {}, precond: {}", record, erase, precondition);
-    Metric mt("write", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("write", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, record = std::move(record), erase = erase, precondition = precondition](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
@@ -285,7 +285,7 @@ TxnManager::write(sh::dto::SKVRecord record, bool erase,
 boost::future<sh::Response<>>
 TxnManager::partialUpdate(sh::dto::SKVRecord record, std::vector<uint32_t> fieldsForPartialUpdate) {
     K2LOG_DWT(k2log::k2pg, "partialUpdate: {}, fields: {}", record, fieldsForPartialUpdate);
-    Metric mt("partialUpdate", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("partialUpdate", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, record = std::move(record), fields = std::move(fieldsForPartialUpdate)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
@@ -313,7 +313,7 @@ TxnManager::query(std::shared_ptr<sh::dto::QueryRequest> query) {
     else {
         K2LOG_ERT(k2log::k2pg, "null query");
     }
-    Metric mt("query", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("query", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, query = std::move(query)](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
@@ -340,7 +340,7 @@ TxnManager::createQuery(sh::dto::SKVRecord startKey, sh::dto::SKVRecord endKey,
                         bool reverseDirection, bool includeVersionMismatch) {
     K2LOG_DRT(k2log::k2pg, "startKey={}, endKey={}, filter={}, projection={}, recordLimit={}, reverseDirection={}, includeVersionMismatch={}",
             startKey, endKey, filter, projection, recordLimit, reverseDirection, includeVersionMismatch);
-    Metric mt("createQuery", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("createQuery", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, startKey=std::move(startKey), endKey=std::move(endKey), filter = std::move(filter),
                projection = std::move(projection), recordLimit, reverseDirection,
@@ -371,7 +371,7 @@ TxnManager::destroyQuery(std::shared_ptr<sh::dto::QueryRequest> query) {
     } else {
         K2LOG_ERT(k2log::k2pg, "null query");
     }
-    Metric mt("destroyQuery", Config().sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
+    Metric mt("destroyQuery", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, query](auto&& beginFut) mutable {
             auto&& [beginStatus] = beginFut.get();
