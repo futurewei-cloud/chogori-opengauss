@@ -7569,6 +7569,10 @@ static void ATRewriteCatalogs(List** wqueue, LOCKMODE lockmode)
         }
     }
 
+	// K2PG doesn't support toast tables
+	if (IsK2PgEnabled())
+		return;
+
     /* Check to see if a toast table must be added. */
     foreach (ltab, *wqueue) {
         AlteredTableInfo* tab = (AlteredTableInfo*)lfirst(ltab);
@@ -8444,10 +8448,16 @@ static void ATRewriteTableInternal(AlteredTableInfo* tab, Relation oldrel, Relat
 
                     switch (con->contype) {
                         case CONSTR_CHECK:
-                            if (!ExecQual(con->qualstate, econtext, true))
+                            if (!ExecQual(con->qualstate, econtext, true)) {
+                                // If K2PG is enabled, the add constraint operation is not atomic, so we must delete the relevant entries from the catalog tables
+                                if (IsK2PgEnabled())
+                                {
+                                    ATExecDropConstraint(oldrel, con->name, DROP_RESTRICT, true, false, false, lockmode);
+                                }
                                 ereport(ERROR,
                                     (errcode(ERRCODE_CHECK_VIOLATION),
                                         errmsg("check constraint \"%s\" is violated by some row", con->name)));
+                            }
                             break;
                         case CONSTR_FOREIGN:
                             /* Nothing to do here */
@@ -12203,6 +12213,13 @@ static void ATExecDropConstraint(Relation rel, const char* constrName, DropBehav
             heap_close(frel, NoLock);
         }
 #endif
+
+		if (IsK2PgEnabled() && contype == CONSTRAINT_PRIMARY)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("dropping a primary key constraint is not supported")));
+		}
 
         /*
          * Perform the actual constraint deletion
