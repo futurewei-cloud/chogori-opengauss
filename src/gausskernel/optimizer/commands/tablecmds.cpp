@@ -8450,10 +8450,10 @@ static void ATRewriteTableInternal(AlteredTableInfo* tab, Relation oldrel, Relat
                         case CONSTR_CHECK:
                             if (!ExecQual(con->qualstate, econtext, true)) {
                                 // If K2PG is enabled, the add constraint operation is not atomic, so we must delete the relevant entries from the catalog tables
-                                if (IsK2PgEnabled())
-                                {
-                                    ATExecDropConstraint(oldrel, con->name, DROP_RESTRICT, true, false, false, lockmode);
-                                }
+                                // if (IsK2PgEnabled())
+                                // {
+                                //     ATExecDropConstraint(oldrel, con->name, DROP_RESTRICT, true, false, false, lockmode);
+                                // }
                                 ereport(ERROR,
                                     (errcode(ERRCODE_CHECK_VIOLATION),
                                         errmsg("check constraint \"%s\" is violated by some row", con->name)));
@@ -12214,7 +12214,7 @@ static void ATExecDropConstraint(Relation rel, const char* constrName, DropBehav
         }
 #endif
 
-		if (IsK2PgEnabled() && contype == CONSTRAINT_PRIMARY)
+		if (IsK2PgEnabled() && con->contype == CONSTRAINT_PRIMARY)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
