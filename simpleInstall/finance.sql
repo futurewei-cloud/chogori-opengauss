@@ -20,10 +20,10 @@ CREATE TABLE bank_card
 (
     b_number CHAR(30) PRIMARY KEY,
     b_type CHAR(20),
-    b_c_id INT NOT NULL
+    b_c_id INT NOT NULL REFERENCES client(c_id)
 );
 -- 给表bank_card添加外键约束
-ALTER TABLE bank_card ADD CONSTRAINT fk_c_id FOREIGN KEY (b_c_id) REFERENCES client(c_id) ON DELETE CASCADE;
+-- ALTER TABLE bank_card ADD CONSTRAINT fk_c_id FOREIGN KEY (b_c_id) REFERENCES client(c_id) ON DELETE CASCADE;
 
 -- 创建表finances_product
 CREATE TABLE finances_product
@@ -60,7 +60,7 @@ CREATE TABLE fund
 -- 创建表property
 CREATE TABLE property
 (
-    pro_c_id INT NOT NULL,
+    pro_c_id INT NOT NULL REFERENCES client(c_id),
     pro_id INT PRIMARY KEY,
     pro_status CHAR(20),
     pro_quantity INT,
@@ -68,7 +68,7 @@ CREATE TABLE property
     pro_purchase_time DATE
 );
 -- 给表property添加外键约束
-ALTER TABLE property ADD CONSTRAINT fk_pro_c_id FOREIGN KEY (pro_c_id) REFERENCES client(c_id) ON DELETE CASCADE;
+-- ALTER TABLE property ADD CONSTRAINT fk_pro_c_id FOREIGN KEY (pro_c_id) REFERENCES client(c_id) ON DELETE CASCADE;
 
 -- 插入数据
 INSERT INTO client(c_id,c_name,c_mail,c_id_card,c_phone,c_password) VALUES (1,'张一','zhangyi@huawei.com','340211199301010001','18815650001','gaussdb_001');

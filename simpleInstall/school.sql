@@ -31,20 +31,20 @@ CREATE TABLE class
 (
     cla_id INT PRIMARY KEY,
     cla_name VARCHAR(20) NOT NULL,
-    cla_teacher INT NOT NULL
+    cla_teacher INT NOT NULL REFERENCES teacher(tec_id)
 );
 -- 给表class添加外键约束
-ALTER TABLE class ADD CONSTRAINT fk_tec_id FOREIGN KEY (cla_teacher) REFERENCES teacher(tec_id) ON DELETE CASCADE;
+--ALTER TABLE class ADD CONSTRAINT fk_tec_id FOREIGN KEY (cla_teacher) REFERENCES teacher(tec_id) ON DELETE CASCADE;
 
 -- 创建表school_department
 CREATE TABLE school_department
 (
     depart_id INT PRIMARY KEY,
     depart_name VARCHAR(30) NOT NULL,
-    depart_teacher INT NOT NULL
+    depart_teacher INT NOT NULL REFERENCES teacher(tec_id)
 );
 -- 给表school_department添加外键约束
-ALTER TABLE school_department ADD CONSTRAINT fk_depart_tec_id FOREIGN KEY (depart_teacher) REFERENCES teacher(tec_id) ON DELETE CASCADE;
+-- ALTER TABLE school_department ADD CONSTRAINT fk_depart_tec_id FOREIGN KEY (depart_teacher) REFERENCES teacher(tec_id) ON DELETE CASCADE;
 
 -- 创建表course
 CREATE TABLE course
