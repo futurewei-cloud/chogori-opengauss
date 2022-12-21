@@ -24,6 +24,7 @@ Copyright(c) 2022 Futurewei Cloud
 #include <string>
 #include <unordered_map>
 
+#include "utils/elog.h"
 #include "utils/errcodes.h"
 
 #include "access/k2/pg_memctx.h"
@@ -57,17 +58,12 @@ PgMemctx *PgMemctx::Create() {
 
 Status PgMemctx::Destroy(PgMemctx *handle) {
   if (handle != NULL) {
-    if(postgres_process_memctxs.find(handle) == postgres_process_memctxs.end()) {
-        Status status {
-            .pg_code = ERRCODE_INTERNAL_ERROR,
-            .k2_code = 500,
-            .msg = "Invalid memory context handle",
-            .detail = ""
-        };
-        return status;
+    if(postgres_process_memctxs.find(handle) != postgres_process_memctxs.end()) {
+        postgres_process_memctxs.erase(handle);
+    } else {
+        elog(WARNING, "cannot find PgMemctx %p, skip it ...", handle);
     }
 
-    postgres_process_memctxs.erase(handle);
     handle = NULL;
   }
 
