@@ -43,10 +43,6 @@
 #include "catalog/namespace.h"
 #include "access/k2/k2pg_aux.h"
 
-#define BOOST_STACKTRACE_USE_ADDR2LINE
-#include "boost/stacktrace.hpp"
-#include <string>
-
 #ifdef PGXC
 #include "pgxc/locator.h"
 #include "pgxc/nodemgr.h"
@@ -1521,8 +1517,6 @@ static Query* ApplyRetrieveRule(Query* parsetree, RewriteRule* rule, int rt_inde
     }
 
     if (!relation_level) {
-        std::string backtrace = boost::stacktrace::to_string(boost::stacktrace::stacktrace());
-        elog(WARNING, "cannot handle per-attribute ON SELECT rule, relation_level: %d, stacktrace: %s", relation_level, backtrace.c_str());
         ereport(ERROR,
             (errcode(ERRCODE_OPTIMIZER_INCONSISTENT_STATE), errmsg("cannot handle per-attribute ON SELECT rule")));
     }
