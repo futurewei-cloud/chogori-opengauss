@@ -102,6 +102,7 @@
 #include "catalog/pg_proc.h"
 #include "vectorsonic/vsonichash.h"
 #include "pgxc/pgxc.h"
+#include "access/k2/k2pg_aux.h"
 
 /* The default value of the column row width */
 #define COL_TUPLE_WIDTH 30
@@ -709,7 +710,7 @@ void cost_seqscan(Path* path, PlannerInfo* root, RelOptInfo* baserel, ParamPathI
     get_restriction_qual_cost(root, baserel, param_info, &qpqual_cost);
 
     startup_cost += qpqual_cost.startup;
-    if (!u_sess->attr.attr_sql.enable_seqscan || disable_path)
+    if (!u_sess->attr.attr_sql.enable_seqscan || disable_path || IsK2PgEnabled())
         startup_cost += g_instance.cost_cxt.disable_cost;
 
     /*
@@ -725,7 +726,7 @@ void cost_seqscan(Path* path, PlannerInfo* root, RelOptInfo* baserel, ParamPathI
     path->total_cost = startup_cost + run_cost;
     path->stream_cost = 0;
 
-    if (!u_sess->attr.attr_sql.enable_seqscan || disable_path)
+    if (!u_sess->attr.attr_sql.enable_seqscan || disable_path || IsK2PgEnabled())
         path->total_cost *=
             (g_instance.cost_cxt.disable_cost_enlarge_factor * g_instance.cost_cxt.disable_cost_enlarge_factor);
 }
@@ -945,8 +946,8 @@ void cost_tsstorescan(Path *path, PlannerInfo *root, RelOptInfo *baserel)
         startup_cost += g_instance.cost_cxt.disable_cost;
     }
 
-    /* 
-     * When we parallel the scan node, then the disk costs and cpu costs 
+    /*
+     * When we parallel the scan node, then the disk costs and cpu costs
      * wiil be equal division to all parallelism thread.
      */
     run_cost += u_sess->opt_cxt.smp_thread_cost * (dop - 1);
@@ -960,7 +961,7 @@ void cost_tsstorescan(Path *path, PlannerInfo *root, RelOptInfo *baserel)
     path->stream_cost = 0;
 
     if (!u_sess->attr.attr_sql.enable_seqscan) {
-        path->total_cost *= 
+        path->total_cost *=
             (g_instance.cost_cxt.disable_cost_enlarge_factor * g_instance.cost_cxt.disable_cost_enlarge_factor);
     }
 }
@@ -971,7 +972,7 @@ void cost_tsstorescan(Path *path, PlannerInfo *root, RelOptInfo *baserel)
  *     Apply a logistic filter on the resulting MAX/MIN costs;
  * This mod is effective when dealing with small tables with small amount of random accesses.
  *
- * Note1: random_page_cost measures how efficient to do random accesses on drives, we assume it is somewhat 
+ * Note1: random_page_cost measures how efficient to do random accesses on drives, we assume it is somewhat
  * related to the number of pages just for now.
  *
  * Note2: We do want to evaluate the costs dynamically base on the number of pages because for smaller tables,
@@ -1279,10 +1280,10 @@ void cost_index(IndexPath* path, PlannerInfo* root, double loop_count)
         } else {
             min_IO_cost = 0;
         }
-        
+
         /*
-         * When database keep running without vacuum, the number of relpages may inflate quickly 
-         * and finally cause min_IO_cost overestimated. So, adjust min_IO_cost to ensure 
+         * When database keep running without vacuum, the number of relpages may inflate quickly
+         * and finally cause min_IO_cost overestimated. So, adjust min_IO_cost to ensure
          * min_IO_cost < max_IO_cost.
          */
         min_IO_cost = Min(min_IO_cost, max_IO_cost);
@@ -1559,7 +1560,7 @@ void cost_bitmap_heap_scan(
         if (!check_bitmap_heap_path_index_unusable(bitmapqual, baserel)) {
             disable_path = true;
         }
-        
+
         /* If the bitmap path contains both global and local partition index, set enable_bitmapscan to off */
         if (CheckBitmapHeapPathContainGlobalOrLocal(bitmapqual)) {
             disable_path = true;
@@ -3193,7 +3194,7 @@ void initial_cost_mergejoin(PlannerInfo* root, JoinCostWorkspace* workspace, Joi
         run_cost += (outer_path->total_cost - outer_path->startup_cost) * (outerendsel - outerstartsel);
     }
 
-    if (innersortkeys || IsA(inner_path, StreamPath)) { /* do we need to sort inner? */       
+    if (innersortkeys || IsA(inner_path, StreamPath)) { /* do we need to sort inner? */
         int inner_width = get_path_actual_total_width(inner_path, root->glob->vectorized, OP_SORT);
 
         cost_sort(&sort_path,
@@ -3300,7 +3301,7 @@ void final_cost_mergejoin(
      * would amount to optimizing for the case where the join method is
      * disabled, which doesn't seem like the way to bet.
      */
-    if (!u_sess->attr.attr_sql.enable_mergejoin && hasalternative)
+    if ((!u_sess->attr.attr_sql.enable_mergejoin && hasalternative) || IsK2PgEnabled())
         startup_cost += g_instance.cost_cxt.disable_cost;
 
     /*
@@ -5063,7 +5064,7 @@ double approx_tuple_count(PlannerInfo* root, JoinPath* path, List* quals)
         tuples = get_local_rows(tuples,
                                 path->path.multiple,
                                 IsLocatorReplicated(path->path.locator_type),
-                                ng_get_dest_num_data_nodes(&path->path)) / 
+                                ng_get_dest_num_data_nodes(&path->path)) /
                  dop;
     } else
         tuples = selec * outer_tuples * inner_tuples;
