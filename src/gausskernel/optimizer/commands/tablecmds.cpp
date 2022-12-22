@@ -199,10 +199,6 @@
 #include "access/k2/k2cat_cmds.h"
 #include "access/k2/k2pg_aux.h"
 
-#define BOOST_STACKTRACE_USE_ADDR2LINE
-#include "boost/stacktrace.hpp"
-#include <string>
-
 extern void vacuum_set_xid_limits(Relation rel, int64 freeze_min_age, int64 freeze_table_age, TransactionId* oldestXmin,
     TransactionId* freezeLimit, TransactionId* freezeTableLimit);
 
@@ -6099,9 +6095,7 @@ void CheckTableNotInUse(Relation rel, const char* stmt)
     int expected_refcnt;
 
     expected_refcnt = rel->rd_isnailed ? 2 : 1;
-    if (rel->rd_refcnt != expected_refcnt) {
-        std::string backtrace = boost::stacktrace::to_string(boost::stacktrace::stacktrace());
-        elog(WARNING, "cannot %s %s because it is being used by active queries in this session, stacktrace: %s", stmt, RelationGetRelationName(rel), backtrace.c_str());
+    if (rel->rd_refcnt != expected_refcnt)
         ereport(ERROR,
             (errcode(ERRCODE_OBJECT_IN_USE),
                 /* translator: first %s is a SQL command, eg ALTER TABLE */
@@ -6109,7 +6103,6 @@ void CheckTableNotInUse(Relation rel, const char* stmt)
                        "it is being used by active queries in this session",
                     stmt,
                     RelationGetRelationName(rel))));
-    }
 
     if (!RelationIsIndex(rel) && AfterTriggerPendingOnRel(RelationGetRelid(rel)))
         ereport(ERROR,
