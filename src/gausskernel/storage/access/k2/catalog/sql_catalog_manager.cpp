@@ -329,7 +329,7 @@ sh::Response<std::shared_ptr<DatabaseInfo>>  SqlCatalogManager::CreateDatabase(c
     K2LOG_D(log::catalog, "Creating system tables for target database {}", new_ns->database_id);
     if (auto status = table_info_handler_.CreateMetaTables(new_ns->database_id); !status.is2xxOK()) {
         // K2LOG_ECT(log::catalog, "Failed to create meta tables for target database {} due to {}",
-        new_ns->database_id, status);
+        // new_ns->database_id, status);
         AbortTransaction();
         return std::make_tuple(status, std::shared_ptr<DatabaseInfo>());
     }
