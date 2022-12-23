@@ -1083,7 +1083,7 @@ K2PgStatus PgGate_ExecSelect(
 
     auto [status, query] = k2pg::TXMgr.createQuery(start.build(), end.build(), std::move(where_conds), std::move(projection), limit, !forward_scan).get();
     if (!status.is2xxOK()) {
-        K2LOG_ERT(k2log::k2pg, "error creating query: {}", status);
+ //       K2LOG_ERT(k2log::k2pg, "error creating query: {}", status);
         return k2pg::K2StatusToK2PgStatus(std::move(status));
     }
     handle->query = query;

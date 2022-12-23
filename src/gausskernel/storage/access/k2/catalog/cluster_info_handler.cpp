@@ -39,7 +39,7 @@ ClusterInfoHandler::~ClusterInfoHandler() {
 sh::Status ClusterInfoHandler::InitClusterInfo(ClusterInfo& cluster_info) {
     auto [status] = TXMgr.createSchema(collection_name_, schema_).get();
     if (!status.is2xxOK()) {
-        K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}", schema_ptr_->name, collection_name_, status);
+        // K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}", schema_ptr_->name, collection_name_, status);
         return status;
     }
 
@@ -57,7 +57,7 @@ sh::Status ClusterInfoHandler::UpdateClusterInfo(ClusterInfo& cluster_info) {
 
     auto [status] = TXMgr.write(record, false).get();
     if (!status.is2xxOK()) {
-        K2LOG_ECT(log::catalog, "Failed to upsert cluster info record due to {}", status);
+        // K2LOG_ECT(log::catalog, "Failed to upsert cluster info record due to {}", status);
         return status;
     }
     return status;
@@ -71,7 +71,7 @@ sh::Response<ClusterInfo> ClusterInfoHandler::GetClusterInfo(const std::string& 
 
     auto [status, record] = TXMgr.read(key).get();
     if (!status.is2xxOK()) {
-        K2LOG_ECT(log::catalog, "Failed to read SKV record due to {}", status);
+        // K2LOG_ECT(log::catalog, "Failed to read SKV record due to {}", status);
         return std::make_tuple(status, info);
     }
 

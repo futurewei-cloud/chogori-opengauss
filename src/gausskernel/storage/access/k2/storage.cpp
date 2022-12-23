@@ -394,7 +394,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
 
     if (range_conds.op != Operation::AND) {
         std::string msg = "Only AND top-level condition is supported in range expression";
-        K2LOG_ERT(k2log::k2pg, "{}", msg);
+        // K2LOG_ERT(k2log::k2pg, "{}", msg);
         //return STATUS(InvalidCommand, msg);
         throw std::invalid_argument(msg);
     }
@@ -604,13 +604,13 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
             opr_expr.op = expression::Operation::GTE;
             break;
         default:
-            K2LOG_WCT(k2log::k2pg, "Ignoring scan constraint of type: {}", constraint.constraint);
+            // K2LOG_WCT(k2log::k2pg, "Ignoring scan constraint of type: {}", constraint.constraint);
             return opr_expr;
     }
 
     auto it = attr_to_offset.find(constraint.attr_num);
     if (it == attr_to_offset.end()) {
-        K2LOG_WCT(k2log::k2pg, "Attr_num not found in map for buildScanExpr: {}, constants size {}", constraint.attr_num, constraint.constants.size());
+        // K2LOG_WCT(k2log::k2pg, "Attr_num not found in map for buildScanExpr: {}, constants size {}", constraint.attr_num, constraint.constants.size());
         return expression::Expression();
     }
     uint32_t offset = it->second;
@@ -737,7 +737,7 @@ K2PgStatus makeSKVBuilderWithKeysSerialized(K2PgOid database_oid, K2PgOid table_
                 record = tupleIDDatumToSKVRecord(attribute.value.datum, builder->getCollectionName(), builder->getSchema());
                 use_tupleID = true;
             } else {
-                K2LOG_WCT(k2log::k2pg, "TupeId is NULL in makeSKVBuilderWithKeys for schema {}", *(builder->getSchema()));
+                // K2LOG_WCT(k2log::k2pg, "TupeId is NULL in makeSKVBuilderWithKeys for schema {}", *(builder->getSchema()));
             }
         }
     }
@@ -915,7 +915,7 @@ K2PgStatus makeSKVRecordFromK2PgAttributes(K2PgOid database_oid, K2PgOid table_o
                                            base_attr,
                                            base_builder);
                 if (base_status.pg_code != ERRCODE_SUCCESSFUL_COMPLETION) {
-                    K2LOG_WCT(k2log::k2pg, "Bad basetupleid (base_status)");
+                    // K2LOG_WCT(k2log::k2pg, "Bad basetupleid (base_status)");
                     return base_status;
                 }
             }

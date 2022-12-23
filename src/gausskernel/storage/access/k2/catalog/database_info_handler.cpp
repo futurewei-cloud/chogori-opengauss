@@ -43,10 +43,10 @@ sh::Status DatabaseInfoHandler::InitDatabaseTable() {
     auto status = std::get<0>(result);
     if (status.code != 404) {  // expect NotFound
         if (status.is2xxOK()) {
-            K2LOG_ECT(log::catalog, "Unexpected DatabaseInfo SKV schema already exists during init.");
+            // K2LOG_ECT(log::catalog, "Unexpected DatabaseInfo SKV schema already exists during init.");
             return sh::Statuses::S500_Internal_Server_Error("Unexpected DatabaseInfo SKV schema already exists during init.");
         }
-        K2LOG_ECT(log::catalog, "Unexpected DatabaseInfo SKV schema read error during init.{}", status);
+        // K2LOG_ECT(log::catalog, "Unexpected DatabaseInfo SKV schema read error during init.{}", status);
         return status;
     }
 
@@ -54,11 +54,11 @@ sh::Status DatabaseInfoHandler::InitDatabaseTable() {
     auto createResult = TXMgr.createSchema(collection_name_, schema_).get();
     status = std::get<0>(createResult);
     if (!status.is2xxOK()) {
-        K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}", schema_ptr_->name, collection_name_, status);
+        // K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}", schema_ptr_->name, collection_name_, status);
         return status;
     }
 
-    K2LOG_DCT(log::catalog, "succeeded schema as {} in {}", schema_ptr_->name, collection_name_);
+    // K2LOG_DCT(log::catalog, "succeeded schema as {} in {}", schema_ptr_->name, collection_name_);
     return status;
 }
 
@@ -86,7 +86,7 @@ sh::Status DatabaseInfoHandler::UpsertDatabase(const DatabaseInfo& database_info
     dto::SKVRecord record = getRecord(database_info);
     auto [write_status] = TXMgr.write(record, false).get();
     if (!write_status.is2xxOK()) {
-        K2LOG_EWT(log::catalog, "Failed to upsert databaseinfo record {} due to {}", database_info.database_id, write_status);
+        // K2LOG_EWT(log::catalog, "Failed to upsert databaseinfo record {} due to {}", database_info.database_id, write_status);
         return write_status;
     }
     return write_status;
@@ -99,7 +99,7 @@ sh::Response<DatabaseInfo> DatabaseInfoHandler::GetDatabase(const std::string& d
 
     auto [read_status, value] = TXMgr.read(rec).get();
     if (!read_status.is2xxOK()) {
-        K2LOG_ERT(log::catalog, "Failed to read SKV record {} {} {} due to {}", collection_name_, schema_ptr_->name, database_id, read_status);
+        // K2LOG_ERT(log::catalog, "Failed to read SKV record {} {} {} due to {}", collection_name_, schema_ptr_->name, database_id, read_status);
         return sh::Response<DatabaseInfo>(read_status, {});
     }
     DatabaseInfo info = getInfo(value);
@@ -118,7 +118,7 @@ sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases() {
 
     auto [create_status, query] = TXMgr.createQuery(startKey, endKey).get();
     if (!create_status.is2xxOK()) {
-        K2LOG_ERT(log::catalog, "Failed to create scan read for ListDatabases due to {} in collection {}.", create_status, collection_name_);
+        // K2LOG_ERT(log::catalog, "Failed to create scan read for ListDatabases due to {} in collection {}.", create_status, collection_name_);
         return std::make_tuple(create_status, infos);
     }
 
@@ -127,7 +127,7 @@ sh::Response< std::vector<DatabaseInfo>> DatabaseInfoHandler::ListDatabases() {
         auto [status, result] = TXMgr.query( query).get();
 
         if (!status.is2xxOK()) {
-            K2LOG_ERT(log::catalog, "Failed to run scan read due to {}", status);
+            // K2LOG_ERT(log::catalog, "Failed to run scan read due to {}", status);
             return std::make_tuple(status, infos);
         }
 
@@ -146,7 +146,7 @@ sh::Status DatabaseInfoHandler::DeleteDatabase(DatabaseInfo& info) {
     sh::dto::SKVRecord record = getRecord(info);
     auto [status]  = TXMgr.write(record, true).get();
     if (!status.is2xxOK()) {
-        K2LOG_ECT(log::catalog, "Failed to delete database ID {} in Collection {}, due to {}",
+        // K2LOG_ECT(log::catalog, "Failed to delete database ID {} in Collection {}, due to {}",
             info.database_id, collection_name_, status);
         return status;
     }
