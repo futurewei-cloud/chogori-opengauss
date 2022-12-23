@@ -339,7 +339,7 @@ TxnManager::createQuery(sh::dto::SKVRecord startKey, sh::dto::SKVRecord endKey,
                         std::vector<std::string>&& projection, int32_t recordLimit,
                         bool reverseDirection, bool includeVersionMismatch) {
     // K2LOG_DRT(k2log::k2pg, "startKey={}, endKey={}, filter={}, projection={}, recordLimit={}, reverseDirection={}, includeVersionMismatch={}",
-            startKey, endKey, filter, projection, recordLimit, reverseDirection, includeVersionMismatch);
+            // startKey, endKey, filter, projection, recordLimit, reverseDirection, includeVersionMismatch);
     Metric mt("createQuery", _config.sub("logging").getDurationMillis("op_latency_warn_threshold_ms", 100ms));
     return beginTxn()
         .then([this, startKey=std::move(startKey), endKey=std::move(endKey), filter = std::move(filter),

@@ -515,7 +515,7 @@ sh::Response<std::shared_ptr<TableInfo>> SqlCatalogManager::CreateTable(const Cr
             // abort the transaction
             AbortTransaction();
             // K2LOG_ECT(log::catalog, "Failed to create table id: {}, name: {} in {}, due to {}", new_table_info->table_id(), new_table_info->table_name(),
-                database_info->database_id, status);
+                // database_info->database_id, status);
             return std::make_tuple(status, new_table_info);
         }
 
@@ -580,8 +580,8 @@ sh::Response<std::shared_ptr<IndexInfo>> SqlCatalogManager::CreateIndexTable(con
     if (!status.is2xxOK()) {
         AbortTransaction();
         // K2LOG_ECT(log::catalog, "Failed to create index ns name: {}, ns oid: {}, index name: {}, index oid: {}, base table oid: {}",
-                request.databaseName, request.databaseOid, request.tableName,
-                request.tableOid, request.baseTableOid);
+                // request.databaseName, request.databaseOid, request.tableName,
+                // request.tableOid, request.baseTableOid);
 
         return std::make_tuple(status, indexInfo);
     }

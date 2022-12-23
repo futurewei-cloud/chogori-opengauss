@@ -147,7 +147,7 @@ sh::Status DatabaseInfoHandler::DeleteDatabase(DatabaseInfo& info) {
     auto [status]  = TXMgr.write(record, true).get();
     if (!status.is2xxOK()) {
         // K2LOG_ECT(log::catalog, "Failed to delete database ID {} in Collection {}, due to {}",
-            info.database_id, collection_name_, status);
+            // info.database_id, collection_name_, status);
         return status;
     }
     return status;

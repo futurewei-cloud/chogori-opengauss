@@ -55,19 +55,19 @@ sh::Status TableInfoHandler::CreateMetaTables(const std::string& collection_name
     try {
         if (auto [status] = TXMgr.createSchema(collection_name, *table_meta_SKVSchema_).get(); !status.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
-                table_meta_SKVSchema_->name, collection_name, status);
+                // table_meta_SKVSchema_->name, collection_name, status);
             return status;
         }
 
         if (auto [status] = TXMgr.createSchema(collection_name, *tablecolumn_meta_SKVSchema_).get(); !status.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
-                tablecolumn_meta_SKVSchema_->name, collection_name, status);
+                // tablecolumn_meta_SKVSchema_->name, collection_name, status);
             return status;
         }
 
         if (auto [status] = TXMgr.createSchema(collection_name, *indexcolumn_meta_SKVSchema_).get(); !status.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
-                indexcolumn_meta_SKVSchema_->name, collection_name, status);
+                // indexcolumn_meta_SKVSchema_->name, collection_name, status);
             return status;
         } else {
             K2LOG_D(log::catalog, "Created SKV schemas for meta tables successfully");
@@ -111,7 +111,7 @@ sh::Status TableInfoHandler::CreateOrUpdateTable(const std::string& collection_n
             auto status = CreateTableSKVSchema(collection_name, table);
             if (!status.is2xxOK()) {
                 // K2LOG_ECT(log::catalog, "Failed to persist table SKV schema id: {}, name: {}, in {} due to {}", table->table_id(), table->table_name(),
-                    table->database_id(), status);
+                    // table->database_id(), status);
                 return status;
             }
         } else {
@@ -334,7 +334,7 @@ sh::Status TableInfoHandler::CopySKVTable(
     auto [target_status, target_schema] = TXMgr.getSchema(target_coll_name, target_schema_name, target_version).get();
     if (!target_status.is2xxOK()) {
         // K2LOG_ECT(log::catalog, "Failed to get SKV schema for table {} in {} with version {} due to {}",
-            target_schema_name, target_coll_name, target_version,target_status);
+            // target_schema_name, target_coll_name, target_version,target_status);
         return target_status;
     }
 
@@ -342,7 +342,7 @@ sh::Status TableInfoHandler::CopySKVTable(
     auto [source_status, source_schema] = TXMgr.getSchema(source_coll_name, source_schema_name, source_version).get();
     if (!source_status.is2xxOK()) {
         // K2LOG_ECT(log::catalog, "Failed to get SKV schema for table {} in {} with version {} due to {}",
-            source_schema_name, source_coll_name, source_version, source_status);
+            // source_schema_name, source_coll_name, source_version, source_status);
         return source_status;
     }
     auto startScanRecord = buildRangeRecord(source_coll_name, source_schema, source_table_oid, source_index_oid, std::nullopt);
@@ -361,7 +361,7 @@ sh::Status TableInfoHandler::CopySKVTable(
         auto [status, query_result] = TXMgr.query(query).get();
         if (!status.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to run scan read for table {} in {} due to {}",
-                source_schema_name, source_coll_name, status);
+                // source_schema_name, source_coll_name, status);
             return status;
         }
 
@@ -404,7 +404,7 @@ sh::Status TableInfoHandler::CreateTableSKVSchema(const std::string& collection_
         auto [createStatus] = TXMgr.createSchema(collection_name, *tablecolumn_schema).get();
         if (!createStatus.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to create schema for {} in {}, due to {}",
-                tablecolumn_schema->name, collection_name, status);
+                // tablecolumn_schema->name, collection_name, status);
             return createStatus;
         }
 
@@ -413,7 +413,7 @@ sh::Status TableInfoHandler::CreateTableSKVSchema(const std::string& collection_
             for (std::shared_ptr<sh::dto::Schema> index_schema : index_schemas) {
                 if (!index_schema) {
                     // K2LOG_WCT(log::catalog, "Failed to create index schema in {} due to unsupported feature",
-                        collection_name);
+                        // collection_name);
                     return sh::Statuses::S400_Bad_Request("Unsupported feature in secondary index");
                 }
 
@@ -421,7 +421,7 @@ sh::Status TableInfoHandler::CreateTableSKVSchema(const std::string& collection_
                 std::tie(createStatus) = TXMgr.createSchema(collection_name, *index_schema).get();
                 if (!createStatus.is2xxOK()) {
                     // K2LOG_ECT(log::catalog, "Failed to create index schema for {} in {}, due to {}",
-                        index_schema->name, collection_name, status);
+                        // index_schema->name, collection_name, status);
                     return createStatus;
                 }
             }
@@ -441,7 +441,7 @@ sh::Status TableInfoHandler::CreateIndexSKVSchema(const std::string& collection_
         auto [createStatus] = TXMgr.createSchema(collection_name, *index_schema).get();
         if (!createStatus.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to create index schema for {} in {}, due to {}",
-                index_schema->name, collection_name, createStatus);
+                // index_schema->name, collection_name, createStatus);
             return createStatus;
         }
         return createStatus;
@@ -553,7 +553,7 @@ sh::Status TableInfoHandler::DeleteTableMetadata(const std::string& collection_n
         // then delete table meta record
         if (auto [status] = TXMgr.write(table_meta, true).get(); !status.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to delete tablemeta {} in Collection {}, due to {}",
-                table->table_id(), collection_name, status);
+                // table->table_id(), collection_name, status);
             return status;
         }
 
@@ -595,7 +595,7 @@ sh::Status TableInfoHandler::DeleteIndexMetadata(const std::string& collection_n
 
         if (auto [status] = TXMgr.write(index_table_meta).get(); !status.is2xxOK()) {
             // K2LOG_ECT(log::catalog, "Failed to delete indexhead {} in Collection {}, due to {}",
-                index_id, collection_name, status);
+                // index_id, collection_name, status);
             return status;
         }
     }
@@ -719,7 +719,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
         auto status = PersistIndexMeta(database_info->database_id, base_table_info, new_index_info);
         if (!status.is2xxOK()) {
                 // K2LOG_ECT(log::catalog, "Failed to persist index meta {}, name: {}, in {} due to {}", new_index_info.table_id(), new_index_info.table_name(),
-                database_info->database_id, status);
+                // database_info->database_id, status);
                 return std::make_pair(std::move(status), std::shared_ptr<IndexInfo>());
         }
 
@@ -729,7 +729,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
             auto status = CreateIndexSKVSchema(database_info->database_id, base_table_info, new_index_info);
             if (!status.is2xxOK()) {
                 // K2LOG_ECT(log::catalog, "Failed to persist index SKV schema id: {}, name: {}, in {} due to {}", new_index_info.table_id(), new_index_info.table_name(),
-                    database_info->database_id, status);
+                    // database_info->database_id, status);
                 return std::make_pair(std::move(status), std::shared_ptr<IndexInfo>());
             }
         } else {
@@ -748,7 +748,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
 
     } catch (const std::exception& e) {
         // K2LOG_ECT(log::catalog, "Failed to create index {} in {}",
-            index_params.index_name, database_info->database_id);
+            // index_params.index_name, database_info->database_id);
         return std::make_pair(sh::Statuses::S500_Internal_Server_Error(e.what()), std::shared_ptr<IndexInfo>());
     }
 }
@@ -762,7 +762,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     if (!status.is2xxOK()) {
         // TXMgr.endTxn(sh::dto::EndAction::Abort);
         // K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
-                table_id, local_database_info->database_id, status);
+                // table_id, local_database_info->database_id, status);
         return std::make_tuple(status, std::shared_ptr<TableInfo>());
     }
 
@@ -791,7 +791,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         if (!status.is2xxOK()) {
             // TXMgr.endTxn(sh::dto::EndAction::Abort);
             // K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
-                table_id, physical_coll, status);
+                // table_id, physical_coll, status);
             return std::make_tuple(status, std::shared_ptr<TableInfo>());
         }
         if (idxInfo == nullptr) {
@@ -810,7 +810,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         if (!status.is2xxOK()) {
             // TXMgr.endTxn(sh::dto::EndAction::Abort);
             // K2LOG_ECT(log::catalog, "Failed to check base table id for index {} in {}, due to {}",
-                table_id, physical_coll, status);
+                // table_id, physical_coll, status);
             return std::make_tuple(std::move(status), std::shared_ptr<TableInfo>());
         }
         base_table_id = baseTableId;
