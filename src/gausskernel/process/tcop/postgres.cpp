@@ -11738,17 +11738,18 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 		}
 		else
 		{
-			if (need_global_cache_refresh)
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Catalog Version Mismatch: A DDL occurred "
-								"while processing this query. Try Again.")));
-			else
-			{
+			if (need_global_cache_refresh) {
+                elog(WARNING, "Catalog Version Mismatch: A DDL occurred");
+				// ereport(ERROR,
+				// 		(errcode(ERRCODE_INTERNAL_ERROR),
+				// 		 errmsg("Catalog Version Mismatch: A DDL occurred "
+				// 				"while processing this query. Try Again.")));
+            } else {
+                elog(WARNING, "Internal error: %s", edata->message);
 				/* need_table_cache_refresh */
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("%s", edata->message)));
+				// ereport(ERROR,
+				// 		(errcode(ERRCODE_INTERNAL_ERROR),
+				// 		 errmsg("%s", edata->message)));
 			}
 		}
 	}
