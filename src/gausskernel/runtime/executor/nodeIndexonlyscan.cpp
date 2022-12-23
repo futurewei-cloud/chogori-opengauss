@@ -41,7 +41,7 @@
 #include "utils/rel_gs.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/pruning.h"
-
+#include "access/k2/k2pg_aux.h"
 
 static TupleTableSlot* IndexOnlyNext(IndexOnlyScanState* node);
 static void ExecInitNextIndexPartitionForIndexScanOnly(IndexOnlyScanState* node);
@@ -180,8 +180,8 @@ static TupleTableSlot* IndexOnlyNext(IndexOnlyScanState* node)
                     continue; /* the visible version not match the IndexTuple */
                 }
             }
-        } else if (isVersionScan ||
-            !visibilitymap_test(indexScan->heapRelation, ItemPointerGetBlockNumber(tid), &node->ioss_VMBuffer)) {
+        } else if (!IsK2PgEnabled() && (isVersionScan ||  	// K2PG index tuple is always visible.
+            !visibilitymap_test(indexScan->heapRelation, ItemPointerGetBlockNumber(tid), &node->ioss_VMBuffer))) {
             /* IMPORTANT: We ALWAYS visit the heap to check visibility in VERSION SCAN. */
 
             /*
@@ -272,7 +272,7 @@ static TupleTableSlot* IndexOnlyNext(IndexOnlyScanState* node)
          * anyway, then we already have the tuple-level lock and can skip the
          * page lock.
          */
-        if (tuple == NULL)
+        if (tuple == NULL && !IsK2PgEnabled())    // K2PG index tuple does not require locking
             PredicateLockPage(indexScan->heapRelation, ItemPointerGetBlockNumber(tid), estate->es_snapshot);
 
         return slot;
