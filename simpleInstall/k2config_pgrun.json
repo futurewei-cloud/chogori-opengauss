@@ -1,6 +1,6 @@
 {
     "client": {
-        "host": "172.17.0.1",
+        "host": "k2",
         "port": 30000
     },
     "txn_opts": {
@@ -10,10 +10,11 @@
     },
     "logging": {
         "level": "Info",
-        "tracing": "rwc",
-        "op_latency_warn_threshold_ms": 2000,
+        "tracing": "",
+        "op_latency_warn_threshold_ms": 200,
         "moduleOverrides": {
             "k2::pg": "Info",
+            "k2::fdw": "Info",
             "skv::http::client": "Info"
         }
     },

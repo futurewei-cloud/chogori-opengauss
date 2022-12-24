@@ -934,7 +934,7 @@ Oid index_create(Relation heapRelation, const char *indexRelationName, Oid index
 	 * Create index in K2PG only if it is a secondary index. Primary key is
 	 * an implicit part of the base table in K2PG and doesn't need to be created.
 	 */
-	if (IsK2PgRelation(indexRelation) && !isprimary)
+	if (IsK2PgRelation(indexRelation))
 	{
 		K2PgCreateIndex(indexRelationName,
 					   indexInfo,

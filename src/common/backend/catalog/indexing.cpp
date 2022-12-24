@@ -107,12 +107,6 @@ void CatalogIndexInsert(CatalogIndexState indstate, HeapTuple heapTuple)
      * for each index, form and insert the index tuple
      */
     for (i = 0; i < numIndexes; i++) {
-		/*
-		 * No need to update K2PG primary key which is intrinsic part of
-		 * the base table.
-		 */
-		if (IsK2PgEnabled() && relationDescs[i]->rd_index->indisprimary)
-			continue;
 
         IndexInfo* indexInfo = NULL;
 
@@ -195,13 +189,6 @@ CatalogIndexDelete(CatalogIndexState indstate, HeapTuple heapTuple)
 	 */
 	for (i = 0; i < numIndexes; i++)
 	{
-		/*
-		 * No need to update K2PG primary key which is intrinsic part of
-		 * the base table.
-		 */
-		if (IsK2PgEnabled() && relationDescs[i]->rd_index->indisprimary)
-			continue;
-
 		IndexInfo  *indexInfo;
 
 		indexInfo = indexInfoArray[i];

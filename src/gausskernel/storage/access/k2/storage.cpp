@@ -833,6 +833,7 @@ K2PgStatus serializeKeysFromSKVRecord(skv::http::dto::SKVRecord& source, skv::ht
     }
 
     catch (const std::exception& err) {
+        K2LOG_EWT(k2log::k2pg, "Failed to serialize record due to {} with src_schema={}, dst_schema={}", err.what(), (*source.schema), (*builder.getSchema()));
         K2PgStatus status {
             .pg_code = ERRCODE_INTERNAL_ERROR,
             .k2_code = 0,

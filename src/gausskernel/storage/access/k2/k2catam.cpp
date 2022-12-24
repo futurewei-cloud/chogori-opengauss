@@ -175,6 +175,7 @@ static void camBindColumn(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber a
     };
 
     camScan->constraints.push_back(std::move(constraint));
+    elog(DEBUG5, "Creating EQ constraint for attr: %d", attnum);
 }
 
 static void camBindColumnCondBetween(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum,
@@ -205,6 +206,7 @@ static void camBindColumnCondBetween(CamScanDesc camScan, TupleDesc bind_desc, A
         .constraint = K2PG_CONSTRAINT_BETWEEN,
         .constants = {start, end}
     };
+    elog(DEBUG5, "Creating BETWEEN constraint for attr: %d", attnum);
 
     camScan->constraints.push_back(std::move(constraint));
 }
@@ -242,6 +244,7 @@ static void camBindColumnCondIn(CamScanDesc camScan, TupleDesc bind_desc, AttrNu
         .constraint = K2PG_CONSTRAINT_IN,
         .constants = std::move(constants)
     };
+    elog(DEBUG5, "Creating IN constraint for attr: %d", attnum);
 
     camScan->constraints.push_back(std::move(constraint));
 }
@@ -1279,11 +1282,6 @@ SysScanDesc cam_systable_beginscan(Relation relation,
 	if (indexOK && !u_sess->attr.attr_common.IgnoreSystemIndexes && !ReindexIsProcessingIndex(indexId))
 	{
 		index = RelationIdGetRelation(indexId);
-		if (index->rd_index->indisprimary)
-		{
-			RelationClose(index);
-			index = NULL;
-		}
 
 		if (index) {
 			/*
@@ -1606,6 +1604,7 @@ HeapTuple CamFetchTuple(Relation relation, Datum k2pgctid)
         .constraint = K2PG_CONSTRAINT_EQ,
         .constants = {ctid_const}
     };
+	elog(DEBUG5, "Creating EQ constraint for k2pgctid: %lu on: %d", k2pgctid, index_params.index_oid);
     constraints.push_back(std::move(ctid_constraint));
 
 	/*

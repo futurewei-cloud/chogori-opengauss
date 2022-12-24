@@ -38,7 +38,7 @@ tso ${COMMON_ARGS} -c1 --tcp_endpoints ${TSO} --prometheus_port $(($PROMETHEUS_P
 tso_child_pid=$!
 
 # start http proxy
-http_proxy ${COMMON_ARGS} -c1 --tcp_endpoints ${HTTP} --memory=${HTTPMEM} --cpo ${CPO} --httpproxy_txn_timeout=100h --httpproxy_expiry_timer_interval=50ms --log_level=Info k2::httpproxy=Info k2::cpo_client=Info --prometheus_port $(($PROMETHEUS_PORT_START+4)) --partition_request_timeout=100s &
+http_proxy ${COMMON_ARGS} -c1 --tcp_endpoints ${HTTP} --memory=${HTTPMEM} --cpo ${CPO} --httpproxy_txn_timeout=1h --httpproxy_expiry_timer_interval=50ms --log_level=Info k2::httpproxy=Info k2::cpo_client=Info --prometheus_port $(($PROMETHEUS_PORT_START+4)) --partition_request_timeout=100s &
 http_child_pid=$!
 
 function finish {
