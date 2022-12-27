@@ -111,47 +111,49 @@ void SqlCatalogManager::Shutdown() {
 // Called only once during PG initDB
 // TODO: handle partial failure(maybe simply fully cleanup) to allow retry later
 sh::Status SqlCatalogManager::InitPrimaryCluster() {
+    std::lock_guard<std::mutex> l(lock_);
     K2LOG_D(log::catalog, "SQL CatalogManager initialize primary Cluster!");
+    if (!init_db_done_) {
+        // step 1/4 create the SKV collection for the primary
+        auto&& [ccResult] = TXMgr.createCollection(skv_collection_name_primary_cluster, primary_cluster_id).get();
+        if (!ccResult.is2xxOK()) {
+            K2LOG_ECT(log::catalog, "Failed to create SKV collection during initialization primary PG cluster due to {}", ccResult);
+            return ccResult;
+        }
 
-    K2ASSERT(log::catalog, !initted_.load(std::memory_order_acquire), "Already started");
+        // step 2/4 Init Cluster info, including create the SKVSchema in the primary cluster's SKVCollection for cluster_info and insert current cluster info into
+        //      Note: Initialize cluster info's init_db column with TRUE
+        ClusterInfo cluster_info{cluster_id_, catalog_version_, false /*init_db_done*/};
 
-    // step 1/4 create the SKV collection for the primary
-    auto&& [ccResult] = TXMgr.createCollection(skv_collection_name_primary_cluster, primary_cluster_id).get();
-    if (!ccResult.is2xxOK()) {
-        K2LOG_ECT(log::catalog, "Failed to create SKV collection during initialization primary PG cluster due to {}", ccResult);
-        return ccResult;
-    }
+        auto status = cluster_info_handler_.InitClusterInfo(cluster_info);
+        if (!status.is2xxOK()) {
+            AbortTransaction();
+            K2LOG_ECT(log::catalog, "Failed to initialize cluster info due to {}", status);
+            return status;
+        }
 
-    // step 2/4 Init Cluster info, including create the SKVSchema in the primary cluster's SKVCollection for cluster_info and insert current cluster info into
-    //      Note: Initialize cluster info's init_db column with TRUE
-    ClusterInfo cluster_info{cluster_id_, catalog_version_, false /*init_db_done*/};
+        // step 3/4 Init database_info - create the SKVSchema in the primary cluster's SKVcollection for database_info
+        status = database_info_handler_.InitDatabaseTable();
+        if (!status.is2xxOK()) {
+            K2LOG_ECT(log::catalog, "Failed to initialize creating database table due to {}", status);
+            return status;
+        }
+        CommitTransaction();
+        // step 4/4 re-start this catalog manager so it can execute other APIs
+        status = Start();
+        if (status.is2xxOK()) {
+            // check things are ready
+            K2ASSERT(log::catalog, initted_.load(std::memory_order_acquire), "Not initialized");
+            K2LOG_D(log::catalog, "SQL CatalogManager successfully initialized primary Cluster!");
+        }
+        else {
+            K2LOG_ECT(log::catalog, "Failed to create SKV collection during initialization primary PG cluster due to {}", status);
+        }
 
-    auto status = cluster_info_handler_.InitClusterInfo(cluster_info);
-    if (!status.is2xxOK()) {
-        AbortTransaction();
-        K2LOG_ECT(log::catalog, "Failed to initialize cluster info due to {}", status);
         return status;
     }
-
-    // step 3/4 Init database_info - create the SKVSchema in the primary cluster's SKVcollection for database_info
-    status = database_info_handler_.InitDatabaseTable();
-    if (!status.is2xxOK()) {
-        K2LOG_ECT(log::catalog, "Failed to initialize creating database table due to {}", status);
-        return status;
-    }
-   CommitTransaction();
-    // step 4/4 re-start this catalog manager so it can execute other APIs
-    status = Start();
-    if (status.is2xxOK()) {
-        // check things are ready
-        K2ASSERT(log::catalog, initted_.load(std::memory_order_acquire), "Not initialized");
-        K2LOG_D(log::catalog, "SQL CatalogManager successfully initialized primary Cluster!");
-    }
-    else {
-        K2LOG_ECT(log::catalog, "Failed to create SKV collection during initialization primary PG cluster due to {}", status);
-    }
-
-    return status;
+    K2LOG_I(log::catalog, "Innitdb has already finished, skip initializing primary Cluster!");
+    return sh::Statuses::S200_OK;
 }
 
 sh::Status SqlCatalogManager::FinishInitDB() {

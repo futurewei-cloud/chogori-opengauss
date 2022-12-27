@@ -27,22 +27,19 @@ int k2pg_pg_double_write = -1;
 int k2pg_disable_pg_locking = -1;
 
 
-bool
-IsK2PgEnabled()
+bool IsK2PgEnabled()
 {
 	/* We do not support Init/Bootstrap processing modes yet. */
 	return PgGate_IsK2PgEnabled();
 }
 
-void
-CheckIsK2PgSupportedRelation(Relation relation)
+void CheckIsK2PgSupportedRelation(Relation relation)
 {
 	const char relkind = relation->rd_rel->relkind;
 	CheckIsK2PgSupportedRelationByKind(relkind);
 }
 
-void
-CheckIsK2PgSupportedRelationByKind(char relkind)
+void CheckIsK2PgSupportedRelationByKind(char relkind)
 {
 	if (!(relkind == RELKIND_RELATION || relkind == RELKIND_INDEX ||
 		  relkind == RELKIND_VIEW || relkind == RELKIND_SEQUENCE ||
@@ -52,8 +49,7 @@ CheckIsK2PgSupportedRelationByKind(char relkind)
 								errmsg("This feature is not supported in K2PG.")));
 }
 
-bool
-IsK2PgRelation(Relation relation)
+bool IsK2PgRelation(Relation relation)
 {
 	if (!IsK2PgEnabled()) return false;
 
@@ -67,8 +63,7 @@ IsK2PgRelation(Relation relation)
 				 && relation->rd_rel->relpersistence != RELPERSISTENCE_TEMP;
 }
 
-bool
-IsK2PgRelationById(Oid relid)
+bool IsK2PgRelationById(Oid relid)
 {
 	Relation relation     = RelationIdGetRelation(relid);
 	bool     is_supported = IsK2PgRelation(relation);
@@ -76,8 +71,7 @@ IsK2PgRelationById(Oid relid)
 	return is_supported;
 }
 
-bool
-IsK2PgBackedRelation(Relation relation)
+bool IsK2PgBackedRelation(Relation relation)
 {
 	return IsK2PgRelation(relation) ||
 		(relation->rd_rel->relkind == RELKIND_VIEW &&
@@ -129,8 +123,7 @@ extern bool K2PgRelHasOldRowTriggers(Relation rel, CmdType operation)
 			trigdesc->trig_delete_before_row))));
 }
 
-bool
-K2PgRelHasSecondaryIndices(Relation relation)
+bool K2PgRelHasSecondaryIndices(Relation relation)
 {
 	if (!relation->rd_rel->relhasindex)
 		return false;
@@ -152,8 +145,7 @@ K2PgRelHasSecondaryIndices(Relation relation)
 	return has_indices;
 }
 
-bool
-K2PgTransactionsEnabled()
+bool K2PgTransactionsEnabled()
 {
 	static int cached_value = -1;
 	if (cached_value == -1)
@@ -163,8 +155,7 @@ K2PgTransactionsEnabled()
 	return IsK2PgEnabled() && cached_value;
 }
 
-void
-K2PgReportFeatureUnsupported(const char *msg)
+void K2PgReportFeatureUnsupported(const char *msg)
 {
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -172,8 +163,7 @@ K2PgReportFeatureUnsupported(const char *msg)
 }
 
 
-static bool
-K2PgShouldReportErrorStatus()
+static bool K2PgShouldReportErrorStatus()
 {
 	static int cached_value = -1;
 	if (cached_value == -1)
@@ -184,8 +174,7 @@ K2PgShouldReportErrorStatus()
 	return cached_value;
 }
 
-void
-HandleK2PgStatus(const K2PgStatus& status)
+void HandleK2PgStatus(const K2PgStatus& status)
 {
     if (status.pg_code == ERRCODE_SUCCESSFUL_COMPLETION) {
         return;
@@ -196,8 +185,7 @@ HandleK2PgStatus(const K2PgStatus& status)
     ereport(ERROR, (errcode(status.pg_code), errmsg("Status: %s: %s", status.msg.c_str(), status.detail.c_str())));
 }
 
-void
-HandleK2PgStatusIgnoreNotFound(const K2PgStatus& status, bool *not_found)
+void HandleK2PgStatusIgnoreNotFound(const K2PgStatus& status, bool *not_found)
 {
 	if (status.k2_code == 404) {
 		*not_found = true;
@@ -207,8 +195,7 @@ HandleK2PgStatusIgnoreNotFound(const K2PgStatus& status, bool *not_found)
 	HandleK2PgStatus(status);
 }
 
-void
-HandleK2PgTableDescStatus(const K2PgStatus& status, K2PgTableDesc table)
+void HandleK2PgTableDescStatus(const K2PgStatus& status, K2PgTableDesc table)
 {
 	HandleK2PgStatus(status);
 }
@@ -218,8 +205,7 @@ HandleK2PgTableDescStatus(const K2PgStatus& status, K2PgTableDesc table)
  * If relation is not an index and it has primary key the name of primary key index is returned.
  * In other cases, relation name is used.
  */
-static void
-FetchUniqueConstraintName(Oid relation_id, char* dest, size_t max_size)
+static void FetchUniqueConstraintName(Oid relation_id, char* dest, size_t max_size)
 {
 	// strncat appends source to destination, so destination must be empty.
 	dest[0] = 0;
@@ -274,20 +260,17 @@ void K2PgInitSession(const char *db_name) {
 	}
 }
 
-void
-K2PgOnPostgresBackendShutdown()
+void K2PgOnPostgresBackendShutdown()
 {
 	PgGate_DestroyPgGate();
 }
 
 static bool k2pg_preparing_templates = false;
-void
-K2PgSetPreparingTemplates() {
+void K2PgSetPreparingTemplates() {
 	k2pg_preparing_templates = true;
 }
 
-bool
-K2PgIsPreparingTemplates() {
+bool K2PgIsPreparingTemplates() {
 	return k2pg_preparing_templates;
 }
 
@@ -458,8 +441,7 @@ K2PgHeapTupleToString(HeapTuple tuple, TupleDesc tupleDesc)
 	return buf.data;
 }
 
-bool
-K2PgIsInitDbAlreadyDone()
+bool K2PgIsInitDbAlreadyDone()
 {
 	bool done = false;
 	HandleK2PgStatus(PgGate_IsInitDbDone(&done));
@@ -586,14 +568,17 @@ static bool IsTransactionalDdlStatement(NodeTag node_tag) {
 	}
 }
 
-bool
-K2PgIsEnvVarTrue(const char* env_var_name)
+bool IsK2PgLocalNodeInitdbMode()
+{
+	return K2PgIsEnvVarTrue("K2PG_LOCAL_NODE_INITDB");
+}
+
+bool K2PgIsEnvVarTrue(const char* env_var_name)
 {
 	return K2PgIsEnvVarTrueWithDefault(env_var_name, /* default_value */ false);
 }
 
-bool
-K2PgIsEnvVarTrueWithDefault(const char* env_var_name, bool default_value)
+bool K2PgIsEnvVarTrueWithDefault(const char* env_var_name, bool default_value)
 {
 	const char* env_var_value = getenv(env_var_name);
 	if (!env_var_value ||
@@ -605,8 +590,7 @@ K2PgIsEnvVarTrueWithDefault(const char* env_var_name, bool default_value)
 	return strcmp(env_var_value, "1") == 0 || strcmp(env_var_value, "true") == 0;
 }
 
-bool
-K2PgIsEnabledInPostgresEnvVar()
+bool K2PgIsEnabledInPostgresEnvVar()
 {
 	static int cached_value = -1;
 	if (cached_value == -1)
