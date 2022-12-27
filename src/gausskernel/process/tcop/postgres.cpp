@@ -11597,6 +11597,8 @@ static void K2PgRefreshCache()
 				        errmsg("Cannot refresh cache within a transaction")));
 	}
 
+    elog(INFO, "K2Pg refreshing cache ...");
+
 	/* Get the latest syscatalog version from the master */
 	uint64_t catalog_master_version = 0;
 	PgGate_GetCatalogMasterVersion(&catalog_master_version);
@@ -11636,15 +11638,12 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 	if (!IsK2PgEnabled() || t_thrd.log_cxt.errordata_stack_depth < 0)
 		return;
 
+    elog(DEBUG5, "K2PgPrepareCacheRefreshIfNeeded is called");
+
 	/* Get error data */
 	ErrorData *edata = NULL;
 	MemoryContextSwitchTo(oldcontext);
 	edata = CopyErrorData();
-
-        if(edata != NULL) {
-            elog(INFO, "ErrorData: file: %s, func: %s, line: %d, message: %s, detail: %s\n", edata->filename, edata->funcname,
-                        edata->lineno, edata->message ? edata->message : "", edata->detail ? edata->detail : "");
-        }
 
 	bool is_retryable_err = K2PgNeedRetryAfterCacheRefresh(edata);
 	if ((table_to_refresh = strstr(edata->message,
@@ -11739,17 +11738,18 @@ static void K2PgPrepareCacheRefreshIfNeeded(MemoryContext oldcontext,
 		}
 		else
 		{
-			if (need_global_cache_refresh)
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Catalog Version Mismatch: A DDL occurred "
-								"while processing this query. Try Again.")));
-			else
-			{
+			if (need_global_cache_refresh) {
+                elog(WARNING, "Catalog Version Mismatch: A DDL occurred");
+				// ereport(ERROR,
+				// 		(errcode(ERRCODE_INTERNAL_ERROR),
+				// 		 errmsg("Catalog Version Mismatch: A DDL occurred "
+				// 				"while processing this query. Try Again.")));
+            } else {
+                elog(WARNING, "Internal error: %s", edata->message);
 				/* need_table_cache_refresh */
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("%s", edata->message)));
+				// ereport(ERROR,
+				// 		(errcode(ERRCODE_INTERNAL_ERROR),
+				// 		 errmsg("%s", edata->message)));
 			}
 		}
 	}

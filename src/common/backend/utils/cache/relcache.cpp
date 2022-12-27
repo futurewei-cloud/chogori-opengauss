@@ -7967,6 +7967,12 @@ K2PgRelationBuildRuleLock(Relation relation)
 	relation->rd_rules = rulelock;
 }
 
+struct PgAttrData {
+    Form_pg_attribute attp{NULL};
+    Datum dval{0};
+    bool isNull{false};
+};
+
 /*
  * K2PG-mode only utility used to load up the relcache on initialization
  * to minimize the number on K2 queries needed.
@@ -8006,6 +8012,8 @@ void K2PgPreloadRelCache()
 						 errmsg("Could not reconnect to database"),
 						 errhint("Database might have been dropped by another user")));
 	}
+
+    elog(INFO, "K2Pg preloading RelCache for database %d, name %s", dboid, dbname == NULL ? "NULL" : dbname);
 
 	/*
 	 * Loading the relation cache requires per-relation lookups to a number of related system tables
@@ -8183,7 +8191,7 @@ void K2PgPreloadRelCache()
 	 * info into the Relation entry, which among other things, sets up then constraint and default
 	 * info.
 	 */
-    std::map<Oid, std::vector<Form_pg_attribute>> rel_to_attrs;
+    std::map<Oid, std::vector<PgAttrData>> rel_to_attrs;
 	while (true)
 	{
 	    pg_attribute_tuple = systable_getnext(scandesc);
@@ -8192,8 +8200,10 @@ void K2PgPreloadRelCache()
             break;
 		}
 
-	    Form_pg_attribute attp = (Form_pg_attribute) GETSTRUCT(pg_attribute_tuple);
-        rel_to_attrs[attp->attrelid].push_back(attp);
+        PgAttrData pg_attr_data;
+	    pg_attr_data.attp = (Form_pg_attribute) GETSTRUCT(pg_attribute_tuple);
+        pg_attr_data.dval = fastgetattr(pg_attribute_tuple, Anum_pg_attribute_attinitdefval, pg_attribute_desc->rd_att, &pg_attr_data.isNull);
+        rel_to_attrs[pg_attr_data.attp->attrelid].push_back(pg_attr_data);
     }
 
     auto it = rel_to_attrs.begin();
@@ -8202,13 +8212,27 @@ void K2PgPreloadRelCache()
         if (!relation) {
             continue;
         }
+
+        /* alter table instantly */
+        bool hasInitDefval = false;
+        TupInitDefVal* initdvals = NULL;
+
         need = relation->rd_rel->relnatts;
         ndef = 0;
         attrdef = NULL;
         constr = (TupleConstr*) MemoryContextAlloc(u_sess->cache_mem_cxt, sizeof(TupleConstr));
+        constr->generatedCols = NULL;
         constr->has_not_null = false;
+        constr->has_generated_stored = false;
 
-        for (auto attp : it->second) {
+        /* set all the *TupInitDefVal* objects later. */
+        initdvals = (TupInitDefVal*)MemoryContextAllocZero(u_sess->cache_mem_cxt, need * sizeof(TupInitDefVal));
+
+        for (PgAttrData pg_attr_data : it->second) {
+            Form_pg_attribute attp = pg_attr_data.attp;
+            Datum dval = pg_attr_data.dval;
+            bool isNull = pg_attr_data.isNull;
+
             /* Skip system attributes */
             if (attp->attnum <= 0)
                 continue;
@@ -8219,9 +8243,26 @@ void K2PgPreloadRelCache()
                      attp->attnum,
                      RelationGetRelationName(relation));
 
-            memcpy(TupleDescAttr(relation->rd_att, attp->attnum - 1),
-                   attp,
-                   ATTRIBUTE_FIXED_PART_SIZE);
+            memcpy(TupleDescAttr(relation->rd_att, attp->attnum - 1), attp, ATTRIBUTE_FIXED_PART_SIZE);
+
+            if (initdvals != NULL) {
+                if (isNull) {
+                    initdvals[attp->attnum - 1].isNull = true;
+                    initdvals[attp->attnum - 1].datum = NULL;
+                    initdvals[attp->attnum - 1].dataLen = 0;
+                } else {
+                    /* fetch and copy the default value. */
+                    bytea* val = DatumGetByteaP(dval);
+                    int len = VARSIZE(val) - VARHDRSZ;
+                    char* buf = (char*)MemoryContextAlloc(u_sess->cache_mem_cxt, len);
+                    MemCpy(buf, VARDATA(val), len);
+
+                    initdvals[attp->attnum - 1].isNull = false;
+                    initdvals[attp->attnum - 1].datum = (Datum*)buf;
+                    initdvals[attp->attnum - 1].dataLen = len;
+                    hasInitDefval = true;
+                }
+            }
 
             /* Update constraint/default info */
             if (attp->attnotnull)
@@ -8230,16 +8271,16 @@ void K2PgPreloadRelCache()
             if (attp->atthasdef)
             {
                 if (attrdef == NULL)
-                    attrdef = (AttrDefault*) MemoryContextAllocZero(
-                            u_sess->cache_mem_cxt,
-                            relation->rd_rel->relnatts * sizeof(AttrDefault));
+                    attrdef = (AttrDefault*) MemoryContextAllocZero(u_sess->cache_mem_cxt, relation->rd_rel->relnatts * sizeof(AttrDefault));
                 attrdef[ndef].adnum = attp->attnum;
                 attrdef[ndef].adbin = NULL;
                 ndef++;
             }
 
             need--;
-		}
+            if (need == 0)
+                break;
+        }
 
         if (need != 0) {
             elog(ERROR, "catalog is missing %d attribute(s) for relid %u",
@@ -8255,50 +8296,86 @@ void K2PgPreloadRelCache()
         relation->rd_att->tdhasoid = relation->rd_rel->relhasoids;
 
         /*
+        * if this relation doesn't have any alter-table-instantly data,
+        * free and reset *initdefvals* to be null.
+        */
+        if (initdvals != NULL && !hasInitDefval)
+            pfree_ext(initdvals);
+        else if (initdvals != NULL && relation->rd_att->initdefvals != NULL) {
+            for (int i = 0; i < RelationGetNumberOfAttributes(relation); ++i) {
+                if (initdvals[i].datum != NULL)
+                    pfree_ext(initdvals[i].datum);
+            }
+            pfree_ext(initdvals);
+        } else
+            relation->rd_att->initdefvals = initdvals;
+
+        /*
+         * The attcacheoff values we read from pg_attribute should all be -1
+         * ("unknown").  Verify this if assert checking is on.	They will be
+         * computed when and if needed during tuple access.
+         *
+         * If we are separately loading catalog relcache initial default, their
+         * attcacheoff may have been updated. In such case, skip assertation.
+         */
+#ifdef USE_ASSERT_CHECKING
+        {
+            int i;
+
+            for (i = 0; i < RelationGetNumberOfAttributes(relation); i++)
+                Assert(relation->rd_att->attrs[i]->attcacheoff == -1);
+        }
+#endif
+        /*
          * However, we can easily set the attcacheoff value for the first
          * attribute: it must be zero.  This eliminates the need for special cases
          * for attnum=1 that used to exist in fastgetattr() and index_getattr().
          */
         if (RelationGetNumberOfAttributes(relation) > 0)
-            TupleDescAttr(RelationGetDescr(relation), 0)->attcacheoff = 0;
+            relation->rd_att->attrs[0]->attcacheoff = 0;
 
         /*
          * Set up constraint/default info
          */
-        if (constr->has_not_null || ndef > 0 || relation->rd_rel->relchecks)
+        if (constr->has_not_null || ndef > 0 || relation->rd_rel->relchecks || relation->rd_rel->relhasclusterkey)
         {
             relation->rd_att->constr = constr;
 
-            if (ndef > 0)            /* DEFAULTs */
+            if (ndef > 0) /* DEFAULTs */
             {
                 if (ndef < RelationGetNumberOfAttributes(relation))
-                    constr->defval = (AttrDefault *) repalloc(attrdef,
-                                                              ndef *
-                                                              sizeof(AttrDefault));
+                    constr->defval = (AttrDefault *) repalloc(attrdef, ndef * sizeof(AttrDefault));
                 else
                     constr->defval = attrdef;
 
-                if (!constr->generatedCols) {
-                    constr->generatedCols = (char *)MemoryContextAllocZero(u_sess->cache_mem_cxt,
-                        RelationGetNumberOfAttributes(relation) * sizeof(char));
-                }
-
                 constr->num_defval = ndef;
+                if (!constr->generatedCols) {
+                    constr->generatedCols = (char *)MemoryContextAllocZero(u_sess->cache_mem_cxt, RelationGetNumberOfAttributes(relation) * sizeof(char));
+                }
                 AttrDefaultFetch(relation);
-            }
-            else
+            } else {
                 constr->num_defval = 0;
+                constr->defval = NULL;
+                constr->generatedCols = NULL;
+            }
 
             if (relation->rd_rel->relchecks > 0)    /* CHECKs */
             {
                 constr->num_check = relation->rd_rel->relchecks;
-                constr->check     = (ConstrCheck *) MemoryContextAllocZero(
-                        u_sess->cache_mem_cxt,
-                        constr->num_check * sizeof(ConstrCheck));
+                constr->check = (ConstrCheck *) MemoryContextAllocZero(u_sess->cache_mem_cxt, constr->num_check * sizeof(ConstrCheck));
                 CheckConstraintFetch(relation);
-            }
-            else
+            } else {
                 constr->num_check = 0;
+                constr->check = NULL;
+            }
+
+            /* Relation has cluster keys */
+            if (relation->rd_rel->relhasclusterkey) {
+                ClusterConstraintFetch(relation);
+            } else {
+                constr->clusterKeyNum = 0;
+                constr->clusterKeys = NULL;
+            }
         }
         else
         {
