@@ -1,6 +1,6 @@
 # Build and run chogori-opengauss using docker containers
 
-Here, we demonstrate how to buidl and run chogori-opengauss. The instructions are organized into three sections. The first section shows how to build the docker container images for the opengauss server and the chogori-platform (i.e., k2) runner. The second section shows how to build and run chogori-opengauss using the images. The third section shows how to build and run a vanilla openGauss server.
+Here, we demonstrate how to build and run chogori-opengauss. The instructions are organized into three sections. The first section shows how to build the docker container images for the opengauss server and the [chogori-platform](https://github.com/futurewei-cloud/chogori-platform) (i.e., k2) runner. The second section shows how to build and run chogori-opengauss using the images. The third section shows how to build and run a vanilla openGauss server.
 ## 1. Build docker container images for chogori-opengauss
 
 The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). Unfortunately, openGauss did not provide a docker file for v2.1.0. We created a dockerfile for v2.1.0 at docker/dockerfiles/dockerfile to help build the opengauss source code.
@@ -12,11 +12,11 @@ We assume that the chogori-opengauss project has been downloaded (cloned), and C
 ```
 $ cd docker/dockerfiles/
 ```
-2. Build docker image opengauss-server:
+2. Build docker image named "opengauss-server":
 ```
 $ docker build -t opengauss-server - < dockerfile
 ```
-3. In the same folder, build chogori-platform (i.e., k2) runner image:
+3. In the same folder, build chogori-platform (i.e., k2) runner image, named "k2runner":
 ```
 $ docker build -t k2runner - < dockerfile_k2runner
 ```
@@ -27,14 +27,14 @@ The dockerfile for the opengauss-server image will take care of the following im
 
 - To build openGauss from source, we need both the source code and its dependencies in project [openGauss-third_party](https://github.com/opengauss-mirror/openGauss-third_party). To avoid building the third party dependencies from source, we download the [binary](https://opengauss.obs.cn-south-1.myhuaweicloud.com/2.1.0/openGauss-third_party_binarylibs.tar.gz) and use it directly.
 
-- openGauss needs to use a dependent library (libsecurec.so) that we could put into system lib directory /usr/lib64. The full path for the library will be /usr/lib64/huawei/libsecurec.so in the container image.
+- openGauss needs to use a dependent library (``` libsecurec.so```) that we could put into system lib directory /usr/lib64. The full path for the library will be /usr/lib64/huawei/libsecurec.so in the container image.
 
 - openGauss cannot be run with the root user, as a result, we need to create a user, omm. We also set up a password, for example, "Test3456" for this account and change the artifact directory owner to this user.
 
 - Finally, we need to set up environment variables for user omm in the user's .bashrc file.
 ## 2. Build and run opengauss server
 We need to open two terminals on the host machine, one for the opengauss server and one for the k2 runner.
-**Run the k2 cluster**
+**Run the chogori-platform (i.e., k2) cluster**
 In the terminal for k2 runner, go to the CHOGORI_OPENGAUSS directory. Use the following command to launch the container for k2 runner:
 ```
 $ docker run -it --privileged -p 30000:30000 -v $PWD:/build:delegated --rm k2runner /build/simpleInstall/k2test/run_k2_cluster.sh
@@ -54,9 +54,10 @@ Build opengauss:
 ```
 # make -j 8
 ```
-Install opengauss:
+The -j option allows specifying the degree of parallelism for make. Use a proper number according to your system's configuration (number of cores, amount of memory, etc.). Install opengauss:
+
 ```
-# make install
+# make -j 8 install
 ```
 The above command will copy the opengauss artifacts to the location that the environment variable GAUSSHOME is set to. In our case, it is /opt/opengauss within the container.
 
@@ -101,14 +102,32 @@ Type in "no" when asked for a demo database.
 ```
 Would you like to create a demo database (yes/no)? no
 ```
-The demo databases (created by school.sql and finance.sql from the opengGauss-server project) are too large to fit in our k2 cluster running within a single container. After the pg_run.sh script finishes, we will have the database server (gaussdb) running, and we can use gsql to connect to the database server. 
+The demo databases (created by school.sql and finance.sql from the opengGauss-server project) are too large to fit in our k2 cluster running within a single container. After the pg_run.sh script finishes, we will have the database server (gaussdb) running, and we can use gsql to connect to the database server to create simpler databases.
+
+Within the /opt/opengauss/simpleInstall directory, using the omm user, execute the following command to connect to the "postgres" database:
 ```
 $ gsql -d postgres
 ```
 
+In the finance_min.sql file, we have SQL statements that create tables for a finance/bank system. In the school_min.sql file, we have SQL statements that create tables for a school system. We will just create all the tables i the postgres database, instead of creating new databases. In the gsql client terminal, create tables from the finance_min.sql and school_min.sql files.
+
+```
+openGauss=# \i finance_min.sql;
+openGauss=# \i school_min.sql;
+```
+
+We can then read content from the tables:
+
+```
+openGauss=# select * from client;
+```
+Exit the gsql client terminal:
+```
+openGauss=# \q
+```
 The next section has more information about the gsql tool.
 
-## Build and run vanilla openGauss server 
+## 3. Build and run vanilla openGauss server 
 The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). We can build vanilla openGauss server v2.1.0 by folowing the instructions in this section. This can help us compare chogori-opengauss features against that of the vanilla openGauss-server. 
 
 In a host terminal, go to the CHOGORI_OPENGAUSS folder.
