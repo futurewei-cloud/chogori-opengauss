@@ -924,6 +924,8 @@ MemoryContext MemoryContextCreate(
     node->name = ((char*)node) + size + sizeof(MemoryContextMethods);
     node->cell.data.ptr_value = (void*)node;
     node->cell.next = NULL;
+	// K2PG memory context handler
+	node->k2pg_memctx = NULL;
     rc = strcpy_s(node->name, strlen(name) + 1, name);
     securec_check_c(rc, "\0", "\0");
     node->thread_id = gs_thread_self();

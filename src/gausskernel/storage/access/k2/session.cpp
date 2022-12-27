@@ -201,7 +201,6 @@ TxnManager::createCollection(const std::string& collection_name, const std::stri
 
 boost::future<sh::Response<sh::dto::SKVRecord>>
 TxnManager::read(sh::dto::SKVRecord record) {
-    record.constructKeyStrings();
     K2LOG_DRT(k2log::k2pg, "read: {}", record);
     return beginTxn()
         .then([this, record=std::move(record)](auto&& beginFut) mutable {
@@ -217,7 +216,6 @@ TxnManager::read(sh::dto::SKVRecord record) {
 boost::future<sh::Response<>>
 TxnManager::write(sh::dto::SKVRecord record, bool erase,
                   sh::dto::ExistencePrecondition precondition) {
-    record.constructKeyStrings();
     K2LOG_DWT(k2log::k2pg, "write: {}, erase: {}, precond: {}", record, erase, precondition);
     return beginTxn()
         .then([this, record=std::move(record), erase = erase, precondition = precondition](auto&& beginFut) mutable {
@@ -232,7 +230,6 @@ TxnManager::write(sh::dto::SKVRecord record, bool erase,
 
 boost::future<sh::Response<>>
 TxnManager::partialUpdate(sh::dto::SKVRecord record, std::vector<uint32_t> fieldsForPartialUpdate) {
-    record.constructKeyStrings();
     K2LOG_DWT(k2log::k2pg, "partialUpdate: {}, fields: {}", record, fieldsForPartialUpdate);
     return beginTxn()
         .then([this, record=std::move(record), fields = std::move(fieldsForPartialUpdate)](auto&& beginFut) mutable {

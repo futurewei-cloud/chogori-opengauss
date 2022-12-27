@@ -50,6 +50,7 @@ extern void K2PgReservePgOids(Oid dboid, Oid next_oid, uint32 count, Oid *begin_
 
 extern void K2PgCreateTable(CreateStmt *stmt,
 						   char relkind,
+                           bool is_shared,
 						   TupleDesc desc,
 						   Oid relationId,
 						   Oid namespaceId);

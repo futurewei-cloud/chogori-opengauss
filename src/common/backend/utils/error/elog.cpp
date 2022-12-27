@@ -394,7 +394,7 @@ bool errstart(int elevel, const char* filename, int lineno, const char* funcname
             t_thrd.postgres_cxt.debug_query_string = NULL;
         }
     }
-    if (++t_thrd.log_cxt.errordata_stack_depth >= ERRORDATA_STACK_SIZE) {
+    if (++t_thrd.log_cxt.errordata_stack_depth >= ERRORDATA_STACK_SIZE && elevel >= ERROR) {
         /*
          * Wups, stack not big enough.	We treat this as a PANIC condition
          * because it suggests an infinite loop of errors during error

@@ -218,7 +218,7 @@ static void CreateTableAddColumns(TupleDesc desc,
 }
 
 void
-K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, Oid pgNamespaceId)
+K2PgCreateTable(CreateStmt *stmt, char relkind, bool is_shared, TupleDesc desc, Oid relationId, Oid pgNamespaceId)
 {
 	if (relkind != RELKIND_RELATION)
 	{
@@ -263,7 +263,7 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, 
 									   stmt->relation->relname,
 									   u_sess->proc_cxt.MyDatabaseId,
 									   relationId,
-									   false, /* is_shared_table */
+									   is_shared, /* is_shared_table */
 									   false, /* if_not_exists */
 									   primary_key == NULL /* add_primary_key */,
 									   columns));
