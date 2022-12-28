@@ -35,6 +35,12 @@
         },
         "school": {
             "range_ends": [""]
+        },
+        "finance_min": {
+            "range_ends": [""]
+        },
+        "school_min": {
+            "range_ends": [""]
         }
     }
 }

@@ -1,11 +1,11 @@
 # Build and run chogori-opengauss using docker containers
 
-Here, we demonstrate how to build and run chogori-opengauss. The instructions are organized into three sections. The first section shows how to build the docker container images for the opengauss server and the [chogori-platform](https://github.com/futurewei-cloud/chogori-platform) (i.e., k2) runner. The second section shows how to build and run chogori-opengauss using the images. The third section shows how to build and run a vanilla openGauss server.
+Here, we demonstrate how to build and run chogori-opengauss. The instructions are organized into three sections. The first section demonstrates how to build the docker container images for the opengauss server and the [chogori-platform](https://github.com/futurewei-cloud/chogori-platform) (i.e., k2) runner. The second section demonstrates how to build and run chogori-opengauss using the images. The third section demonstrates how to build and run a vanilla openGauss server.
 ## 1. Build docker container images for chogori-opengauss
 
 The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). Unfortunately, openGauss did not provide a docker file for v2.1.0. We created a dockerfile for v2.1.0 at docker/dockerfiles/dockerfile to help build the opengauss source code.
 
-We assume that the chogori-opengauss project has been downloaded (cloned), and CHOGORI_OPENGAUSS refers to the root directory of the project. For example, if the project is cloned into /home/myusername/workspace/, then CHOGORI_OPENGAUSS is /home/myusername/workspace/chogori-opengauss. If a relative path is used, we assume that the path prefix is CHOGORI_OPENGAUSS.
+We assume that the chogori-opengauss project has been downloaded (i.e., cloned), and CHOGORI_OPENGAUSS refers to the root directory of the project. For example, if the project is cloned into /home/demouser/workspace/, then CHOGORI_OPENGAUSS is /home/demouser/workspace/chogori-opengauss. If a relative path is used, we assume that the path prefix is CHOGORI_OPENGAUSS.
 
 **Build the docker images:**
 1. Go to the dockerfile folder (that is, go to the CHOGORI_OPENGAUSS/docker/dockerfiles folder):
@@ -29,7 +29,7 @@ The dockerfile for the opengauss-server image will take care of the following im
 
 - openGauss needs to use a dependent library (``` libsecurec.so```) that we could put into system lib directory /usr/lib64. The full path for the library will be /usr/lib64/huawei/libsecurec.so in the container image.
 
-- openGauss cannot be run with the root user, as a result, we need to create a user, omm. We also set up a password, for example, "Test3456" for this account and change the artifact directory owner to this user.
+- openGauss cannot be run with the root user. As a result, we need to create a user, omm. We also set up a password, for example, "Test3456" for this user and change the artifact directory owner to this user.
 
 - Finally, we need to set up environment variables for user omm in the user's .bashrc file.
 ## 2. Build and run opengauss server
@@ -90,42 +90,68 @@ Change the ownership of /opt/opengauss to the omm user.
 # chown omm.dbgrp -R ${GAUSSHOME}
 ```
 
-Then switch to the omm user, run the opengauss database server.
+Then switch to the omm user, and run the opengauss database server using the ```pg_run.sh``` script:
 
 ```
 # su - omm
 $ cd /opt/opengauss/simpleInstall/
 $ sh pg_run.sh -w Test3456
 ```
-Type in "no" when asked for a demo database.
+Type "no" when asked for a demo database.
 
 ```
 Would you like to create a demo database (yes/no)? no
 ```
-The demo databases (created by school.sql and finance.sql from the opengGauss-server project) are too large to fit in our k2 cluster running within a single container. After the pg_run.sh script finishes, we will have the database server (gaussdb) running, and we can use gsql to connect to the database server to create simpler databases.
+The original demo databases, ```finance``` and ```school``` (created by school.sql and finance.sql from the opengGauss-server project) are too large to fit in our k2 cluster running within a single container. After the pg_run.sh script finishes, we will have the database server (gaussdb) running, and we can use gsql to connect to the database server to create simpler databases.
 
-Within the /opt/opengauss/simpleInstall directory, using the omm user, execute the following command to connect to the "postgres" database:
+Within the /opt/opengauss/simpleInstall directory, we have the finance_min.sql and school_min.sql files that create two databases, ```finance_min``` and ```school_min```, which are the simplified verions of the original ```finance``` and ```school``` databases, respectively. Within the /opt/opengauss/simpleInstall directory, using the omm user, execute the following command to connect to the "postgres" database:
 ```
 $ gsql -d postgres
 ```
-
-In the finance_min.sql file, we have SQL statements that create tables for a finance/bank system. In the school_min.sql file, we have SQL statements that create tables for a school system. We will just create all the tables i the postgres database, instead of creating new databases. In the gsql client terminal, create tables from the finance_min.sql and school_min.sql files.
+Then, within the gsql client terminal, we can create the simplified demo databases as follows:
 
 ```
 openGauss=# \i finance_min.sql;
-openGauss=# \i school_min.sql;
+finance_min=# \i school_min.sql;
 ```
 
-We can then read content from the tables:
+The first command will create the ```finance_min``` database, and connect to it. The second command will create the ```school_min``` database and connect to it. We can then read content from the tables.
 
 ```
-openGauss=# select * from client;
+school_min=# select * from course;
+ cor_id |    cor_name    | cor_type | credit 
+--------+----------------+----------+--------
+      1 | 数据库系统概论 | 必修     |      3
+      2 | 艺术设计概论   | 选修     |      1
+      3 | 力学制图       | 必修     |      4
+      4 | 飞行器设计历史 | 选修     |      1
+(4 rows)
+```
+
+To connect to the ```finance_min``` database:
+```
+school_min=# \c finance_min;
+```
+Display the rows in the insurance table:
+```
+finance_min=# select * from insurance;
+  i_name  | i_id | i_amount |      i_person      | i_year | i_project 
+----------+------+----------+--------------------+--------+-----------
+ 健康保险 |    1 |     2000 | 老人               |     30 | 平安保险
+ 人寿保险 |    2 |     3000 | 老人               |     30 | 平安保险
+ 意外保险 |    3 |     5000 | 所有人             |     30 | 平安保险
+ 医疗保险 |    4 |     2000 | 所有人             |     30 | 平安保险
+(4 rows)
 ```
 Exit the gsql client terminal:
 ```
-openGauss=# \q
+finance_min=# \q
 ```
-The next section has more information about the gsql tool.
+Section 3 has more information on the gsql tool.
+
+**TODO: run another gaussdb instance**
+
+**TODO: run TPCC test against chogori-opengauss**
 
 ## 3. Build and run vanilla openGauss server 
 The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). We can build vanilla openGauss server v2.1.0 by folowing the instructions in this section. This can help us compare chogori-opengauss features against that of the vanilla openGauss-server. 
@@ -135,14 +161,18 @@ Checkout openGauss server v2.1.0.
 ```
 $ git checkout v2.1.0
 ```
-Use the following command to launch the container to build and run the opengauss server:
+Use the following command to launch the container to build and run the openGauss server:
 ```
 $ docker run -it --privileged -v $PWD:/build:delegated --rm -w /build opengauss-server bash
 ```
-Within the opengauss-server container, build and install openGauss:
+Within the opengauss-server container, configure openGauss server:
+```
+# ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/openGauss-third_party_binarylibs --enable-mot --enable-thread-safety --without-readline --without-zlib
+```
+Build and install openGauss:
 ```
 # make -j 8
-# make install
+# make -j 8 install
 ```
 To complete the opengauss installation, we need to copy the simpleInstall scripts in the source code to the installation directory and create a data directory and a logs directory to store data and log files, respectively. 
 ```
@@ -151,28 +181,12 @@ To complete the opengauss installation, we need to copy the simpleInstall script
 # mkdir data
 # mkdir logs
 ```
-The directory layout is as follows.
-
-```
-# tree -L 1 /opt/opengauss/
-/opt/opengauss/
-├── bin
-├── data
-├── etc
-├── include
-├── jre
-├── lib
-├── logs
-├── share
-└── simpleInstall
-```
-
 Change the ownership of /opt/opengauss to the omm user.
 ```
 # chown omm.dbgrp -R ${GAUSSHOME}
 ```
 
-Then switch to the omm user, run the opengauss database server.
+Then, switch to the omm user and run the openGauss database server.
 
 ```
 # su - omm
@@ -238,7 +252,7 @@ Load demoDB [school,finance] success.
 
 ```
 
-openGauss is running after the above script, then we could test with the demo database.
+openGauss is running after the above script. Then, we could test with the demo database.
 
 **Test gsql for openGauss**
 
