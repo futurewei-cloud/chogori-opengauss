@@ -29,6 +29,7 @@
 #include "commands/matview.h"
 #include "executor/node/nodeModifyTable.h"
 #include "parser/parse_coerce.h"
+#include "access/k2/k2pg_aux.h"
 
 void InsertFusion::InitGlobals()
 {
