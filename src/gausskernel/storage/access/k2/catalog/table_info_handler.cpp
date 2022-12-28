@@ -106,7 +106,7 @@ sh::Status TableInfoHandler::CreateOrUpdateTable(const std::string& collection_n
         // we only create(a new version of) the table(and its indexes) SKV schemas only when the table is not a "shared" table.
         // For now, we do not have scenario that a shared table need to upgrade schema.
         if (is_on_physical_collection(table->database_id(), table->is_shared())) {
-            K2LOG_D(log::catalog, "Persisting table SKV schema id: {}, name: {} in {}", table->table_id(), table->table_name(), table->database_id());
+            K2LOG_I(log::catalog, "Persisting table SKV schema id: {}, name: {} in {}", table->table_oid(), table->table_name(), table->database_id());
             // persist SKV table and index schemas
             auto status = CreateTableSKVSchema(collection_name, table);
             if (!status.is2xxOK()) {
@@ -115,7 +115,7 @@ sh::Status TableInfoHandler::CreateOrUpdateTable(const std::string& collection_n
                 return status;
             }
         } else {
-            K2LOG_D(log::catalog, "Skip persisting table SKV schema id: {}, name: {} in {}, shared: {}", table->table_id(), table->table_name(),
+            K2LOG_I(log::catalog, "Skip persisting table SKV schema id: {}, name: {} in {}, shared: {}", table->table_oid(), table->table_name(),
                 table->database_id(), table->is_shared());
         }
         return sh::Statuses::S200_OK;
@@ -130,7 +130,8 @@ sh::Status TableInfoHandler::CreateOrUpdateTable(const std::string& collection_n
 sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTable(const std::string& collection_name, const std::string& database_name,
         const std::string& table_id) {
     try {
-        K2LOG_D(log::catalog, "Fetch table schema in skv collection: {}, db name: {}, table id: {}", collection_name, database_name, table_id);
+        K2LOG_I(log::catalog, "Fetch table schema in skv collection: {}, db name: {}, table id: {}", collection_name,
+            database_name, k2pg::PgObjectId::GetTableOidByTableUuid(table_id));
         // table meta data on super tables that we owned are always on individual collection even for shared tables/indexes
         // (but their actual skv schema and table content are not)
         sh::dto::SKVRecord table_meta_record;
@@ -272,12 +273,12 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(
 
         // step 2/2 copy all data rows (when the table is not a shared table across databases)
         if(source_table->is_shared()) {  // skip data copy if it is shared
-            K2LOG_D(log::catalog, "Skip copying shared table {} in {}", source_table_id, source_coll_name);
+            K2LOG_I(log::catalog, "Skip copying shared table {} in {}", source_table_id, source_coll_name);
             if(source_table->has_secondary_indexes()) {
                 // the indexes for a shared table should be shared as well
                 for (std::pair<TableId, IndexInfo> secondary_index : source_table->secondary_indexes()) {
                     K2ASSERT(log::catalog, secondary_index.second.is_shared(), "Index for a shared table must be shared");
-                    K2LOG_D(log::catalog, "Skip copying shared index {} in {}", secondary_index.first, source_coll_name);
+                    K2LOG_I(log::catalog, "Skip copying shared index {} in {}", secondary_index.first, source_coll_name);
                 }
             }
         } else {  // copy all base table and index rows(SKV record in K2)
@@ -293,6 +294,8 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(
                     target_index_name_map[secondary_index.second.table_name()] = &secondary_index.second;
                 }
                 for (std::pair<TableId, IndexInfo> secondary_index : source_table->secondary_indexes()) {
+                    K2LOG_I(log::catalog, "Checking non-shared table {} with secondary index {} : {}", source_table_oid,
+                        secondary_index.second.table_oid(), secondary_index.second.is_shared());
                     K2ASSERT(log::catalog, !secondary_index.second.is_shared(), "Index for a non-shared table must not be shared");
                     // search for target index by name
                     auto found = target_index_name_map.find(secondary_index.second.table_name());
@@ -310,7 +313,7 @@ sh::Response<CopyTableResult> TableInfoHandler::CopyTable(
             }
         }
 
-        K2LOG_D(log::catalog, "Copied table from {} in {} to {} in {}", source_table_id, source_coll_name, target_table->table_id(), target_coll_name);
+        K2LOG_I(log::catalog, "Copied table from {} in {} to {} in {}", source_table_id, source_coll_name, target_table->table_id(), target_coll_name);
         response.tableInfo = target_table;
     } catch (const std::exception& e) {
         return std::make_tuple(sh::Statuses::S500_Internal_Server_Error(e.what()), response);
@@ -757,7 +760,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     K2LOG_D(log::catalog, "Checking if table {} is an index or not", table_id);
     auto [status, table_type_info_result] = GetTableTypeInfo(local_database_info->database_id, table_id);
     if (!status.is2xxOK()) {
-        TXMgr.endTxn(sh::dto::EndAction::Abort);
+        // TXMgr.endTxn(sh::dto::EndAction::Abort);
         K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, local_database_info->database_id, status);
         return std::make_tuple(status, std::shared_ptr<TableInfo>());
@@ -769,7 +772,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         // check if the shared table is stored on a different collection
         if (physical_coll.compare(database_info->database_id) != 0) {
             // shared table is on a different collection, first finish the existing collection
-            TXMgr.endTxn(sh::dto::EndAction::Commit);
+            // TXMgr.endTxn(sh::dto::EndAction::Commit);
             K2LOG_I(log::catalog, "Shared table {} is not in {} but in {} instead", table_id, database_info->database_id, physical_coll);
             // load the shared database info
             local_database_info = fnc_db(physical_coll);
@@ -786,13 +789,13 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         auto [status, idxInfo] = GetTable(physical_coll, local_database_info->database_name,
             table_id);
         if (!status.is2xxOK()) {
-            TXMgr.endTxn(sh::dto::EndAction::Abort);
+            // TXMgr.endTxn(sh::dto::EndAction::Abort);
             K2LOG_ECT(log::catalog, "Failed to check table {} in ns {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(status, std::shared_ptr<TableInfo>());
         }
         if (idxInfo == nullptr) {
-            TXMgr.endTxn(sh::dto::EndAction::Commit);
+            // TXMgr.endTxn(sh::dto::EndAction::Commit);
             K2LOG_ECT(log::catalog, "Failed to find table {} in ns {}", table_id, physical_coll);
             return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
         }
@@ -805,7 +808,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
         // not founnd in cache, try to check the base table id from SKV
         auto [status, baseTableId]  = GetBaseTableId(physical_coll, table_id);
         if (!status.is2xxOK()) {
-            TXMgr.endTxn(sh::dto::EndAction::Abort);
+            // TXMgr.endTxn(sh::dto::EndAction::Abort);
             K2LOG_ECT(log::catalog, "Failed to check base table id for index {} in {}, due to {}",
                 table_id, physical_coll, status);
             return std::make_tuple(std::move(status), std::shared_ptr<TableInfo>());
@@ -817,7 +820,7 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
 
     if (base_table_id.empty()) {
         // cannot find the id as either a table id or an index id
-        TXMgr.endTxn(sh::dto::EndAction::Abort);
+        // TXMgr.endTxn(sh::dto::EndAction::Abort);
         K2LOG_ECT(log::catalog, "Failed to find base table id for index {} in {}", table_id, physical_coll);
         return std::make_tuple(sh::Statuses::S404_Not_Found, std::shared_ptr<TableInfo>());
     }
@@ -825,13 +828,13 @@ sh::Response<std::shared_ptr<TableInfo>> TableInfoHandler::GetTableSchema(std::s
     K2LOG_D(log::catalog, "Fetching base table schema {} for index {} in {}", base_table_id, table_id, physical_coll);
     auto [table_status, base_table_result] = GetTable(physical_coll, local_database_info->database_name, base_table_id);
     if (!table_status.is2xxOK()) {
-        TXMgr.endTxn(sh::dto::EndAction::Abort);
+        // TXMgr.endTxn(sh::dto::EndAction::Abort);
         return std::make_tuple(std::move(table_status), std::shared_ptr<TableInfo>());
     }
     // update table cache
     K2LOG_D(log::catalog, "Returned base table schema id: {}, name {}, for index: {}",
         base_table_id, base_table_result->table_name(), table_id);
-    TXMgr.endTxn(sh::dto::EndAction::Commit);
+    // TXMgr.endTxn(sh::dto::EndAction::Commit);
     return std::make_tuple(sh::Statuses::S200_OK, base_table_result);
 }
 
