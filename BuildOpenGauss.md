@@ -8,6 +8,7 @@ The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://
 We assume that the chogori-opengauss project has been downloaded (i.e., cloned), and CHOGORI_OPENGAUSS refers to the root directory of the project. For example, if the project is cloned into /home/demouser/workspace/, then CHOGORI_OPENGAUSS is /home/demouser/workspace/chogori-opengauss. If a relative path is used, we assume that the path prefix is CHOGORI_OPENGAUSS.
 
 **Build the docker images:**
+
 1. Go to the dockerfile folder (that is, go to the CHOGORI_OPENGAUSS/docker/dockerfiles folder):
 ```
 $ cd docker/dockerfiles/
@@ -34,7 +35,9 @@ The dockerfile for the opengauss-server image will take care of the following im
 - Finally, we need to set up environment variables for user omm in the user's .bashrc file.
 ## 2. Build and run opengauss server
 We need to open two terminals on the host machine, one for the opengauss server and one for the k2 runner.
+
 **Run the chogori-platform (i.e., k2) cluster**
+
 In the terminal for k2 runner, go to the CHOGORI_OPENGAUSS directory. Use the following command to launch the container for k2 runner:
 ```
 $ docker run -it --privileged -p 30000:30000 -v $PWD:/build:delegated --rm k2runner /build/simpleInstall/k2test/run_k2_cluster.sh
@@ -42,6 +45,7 @@ $ docker run -it --privileged -p 30000:30000 -v $PWD:/build:delegated --rm k2run
 After this, the k2 cluster (within a container) will be live and running, waiting for the opengauss server to contact it. The k2 cluster will serve as the storage layer for opengauss server.
 
 **Build and run chogori-opengauss**
+
 In the terminal for opengauss server, go to the CHOGORI_OPENGAUSS directory. Use the following command to launch the container to build and run the opengauss server:
 ```
 $ docker run -it --privileged -v $PWD:/build:delegated --rm -w /build opengauss-server bash
