@@ -29,6 +29,7 @@
 #include "commands/matview.h"
 #include "executor/node/nodeModifyTable.h"
 #include "parser/parse_coerce.h"
+#include "access/k2/k2pg_aux.h"
 
 void InsertFusion::InitGlobals()
 {
@@ -259,8 +260,14 @@ unsigned long InsertFusion::ExecInsert(Relation rel, ResultRelInfo* result_rel_i
     /* insert index entries for tuple */
     List* recheck_indexes = NIL;
     if (result_rel_info->ri_NumIndices > 0) {
+        ItemPointer item;
+        if (IsK2PgRelation(rel)) {
+            item = (ItemPointer)DatumGetPointer(((HeapTuple)tuple)->t_k2pgctid);
+        } else {
+            item = &(((HeapTuple)tuple)->t_self);
+        }
         recheck_indexes = ExecInsertIndexTuples(m_local.m_reslot,
-                                                &(((HeapTuple)tuple)->t_self),
+                                                item,
                                                 m_c_local.m_estate,
                                                 RELATION_IS_PARTITIONED(rel) ? partRel : NULL,
                                                 RELATION_IS_PARTITIONED(rel) ? part : NULL,
