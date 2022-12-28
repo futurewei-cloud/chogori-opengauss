@@ -5194,6 +5194,12 @@ static void load_critical_index(Oid indexoid, Oid heapoid)
     int curRetryCnt = 0;
     int const maxRetryCnt = 10;
 
+	if (IsK2PgEnabled())
+	{
+		// We do not support/use critical indexes in K2PG mode yet
+		return;
+	}
+
 retry_if_standby_mode:
     /*
      * We must lock the underlying catalog before locking the index to avoid
@@ -6200,6 +6206,7 @@ Bitmapset* RelationGetIndexAttrBitmap(Relation relation, IndexAttrBitmapKind att
     Bitmapset* idindexattrs = NULL; /* columns in the the replica identity */
     Oid relreplindex;
     MemoryContext oldcxt;
+	AttrNumber attr_offset;
 
     Assert(!RelationIsBucket(relation) && !RelationIsPartition(relation));
     /* Quick exit if we already computed the result. */
@@ -6250,6 +6257,7 @@ Bitmapset* RelationGetIndexAttrBitmap(Relation relation, IndexAttrBitmapKind att
      */
     indexattrs = NULL;
     idindexattrs = NULL;
+    attr_offset = K2PgGetFirstLowInvalidAttributeNumber(relation);
     foreach (l, indexoidlist) {
         Oid indexOid = lfirst_oid(l);
         Relation indexDesc;
@@ -6278,9 +6286,9 @@ Bitmapset* RelationGetIndexAttrBitmap(Relation relation, IndexAttrBitmapKind att
              * uindexattrs, pkindexattrs and idindexattrs bitmaps.
              */
             if (attrnum != 0) {
-                indexattrs = bms_add_member(indexattrs, attrnum - FirstLowInvalidHeapAttributeNumber);
+                indexattrs = bms_add_member(indexattrs, attrnum - attr_offset);
                 if (isIDKey && i < indexInfo->ii_NumIndexKeyAttrs)
-                    idindexattrs = bms_add_member(idindexattrs, attrnum - FirstLowInvalidHeapAttributeNumber);
+                    idindexattrs = bms_add_member(idindexattrs, attrnum - attr_offset);
             }
         }
 
@@ -6559,22 +6567,33 @@ static bool load_relcache_init_file(bool shared)
     int relno, num_rels, max_rels, nailed_rels, nailed_indexes, magic;
     int i;
     errno_t rc;
+	uint64      k2pg_stored_cache_version = 0;
 
-    if (shared)
+    if (shared) {
         rc = snprintf_s(initfilename,
             sizeof(initfilename),
             sizeof(initfilename) - 1,
             "global/%s.%u",
             RELCACHE_INIT_FILENAME,
             GRAND_VERSION_NUM);
-    else
-        rc = snprintf_s(initfilename,
-            sizeof(initfilename),
-            sizeof(initfilename) - 1,
-            "%s/%s.%u",
-            u_sess->proc_cxt.DatabasePath,
-            RELCACHE_INIT_FILENAME,
-            GRAND_VERSION_NUM);
+    } else {
+        if (IsK2PgEnabled()) {
+			rc = snprintf_s(initfilename,
+                sizeof(initfilename),
+                sizeof(initfilename) - 1,
+                "%d_%s",
+                u_sess->proc_cxt.MyDatabaseId,
+			    RELCACHE_INIT_FILENAME);
+		} else {
+            rc = snprintf_s(initfilename,
+                sizeof(initfilename),
+                sizeof(initfilename) - 1,
+                "%s/%s.%u",
+                u_sess->proc_cxt.DatabasePath,
+                RELCACHE_INIT_FILENAME,
+                GRAND_VERSION_NUM);
+        }
+    }
 
     securec_check_ss(rc, "\0", "\0");
 
@@ -6593,10 +6612,44 @@ static bool load_relcache_init_file(bool shared)
     nailed_rels = nailed_indexes = 0;
 
     /* check for correct magic number (compatible version) */
-    if (fread(&magic, 1, sizeof(magic), fp) != sizeof(magic))
+    if (fread(&magic, 1, sizeof(magic), fp) != sizeof(magic)) {
         goto read_failed;
-    if (magic != RELCACHE_INIT_FILEMAGIC)
+    }
+    if (magic != RELCACHE_INIT_FILEMAGIC) {
         goto read_failed;
+    }
+
+	if (IsK2PgEnabled()) {
+		/* Read the stored catalog version number */
+		if (fread(&k2pg_stored_cache_version,
+		          1,
+		          sizeof(k2pg_stored_cache_version),
+		          fp) != sizeof(k2pg_stored_cache_version))
+		{
+			goto read_failed;
+		}
+
+		/*
+		 * If we already have a newer cache version (e.g. from reading the
+		 * shared init file) then this file is too old.
+		 */
+		if (k2pg_catalog_cache_version > k2pg_stored_cache_version)
+		{
+			unlink_initfile(initfilename);
+			goto read_failed;
+		}
+
+		/* Else, still need to check with the master version to be sure. */
+		uint64_t catalog_master_version = 0;
+		PgGate_GetCatalogMasterVersion(&catalog_master_version);
+
+		/* File version does not match actual master version (i.e. too old) */
+		if (k2pg_stored_cache_version != catalog_master_version)
+		{
+			unlink_initfile(initfilename);
+			goto read_failed;
+		}
+	}
 
     for (relno = 0;; relno++) {
         Size len;
@@ -6895,13 +6948,16 @@ static bool load_relcache_init_file(bool shared)
      * get the right number of nailed items?  (This is a useful crosscheck in
      * case the set of critical rels or indexes changes.)
      */
-    if (shared) {
-        if (nailed_rels != NUM_CRITICAL_SHARED_RELS || nailed_indexes != NUM_CRITICAL_SHARED_INDEXES)
-            goto read_failed;
-    } else {
-        if (nailed_rels != NUM_CRITICAL_LOCAL_RELS || nailed_indexes != NUM_CRITICAL_LOCAL_INDEXES)
-            goto read_failed;
-    }
+	if (!IsK2PgEnabled())
+	{
+        if (shared) {
+            if (nailed_rels != NUM_CRITICAL_SHARED_RELS || nailed_indexes != NUM_CRITICAL_SHARED_INDEXES)
+                goto read_failed;
+        } else {
+            if (nailed_rels != NUM_CRITICAL_LOCAL_RELS || nailed_indexes != NUM_CRITICAL_LOCAL_INDEXES)
+                goto read_failed;
+        }
+	}
 
     /*
      * OK, all appears well.
@@ -6918,6 +6974,19 @@ static bool load_relcache_init_file(bool shared)
 
     pfree_ext(rels);
     FreeFile(fp);
+
+	if (IsK2PgEnabled())
+	{
+		/*
+		 * Set the catalog version if needed.
+		 * The checks above will ensure that if it is already initialized then
+		 * we should leave it unchanged (see also comment in pg_k2pg_utils.h).
+		 */
+		if (k2pg_catalog_cache_version == K2PG_CATCACHE_VERSION_UNINITIALIZED)
+		{
+			k2pg_catalog_cache_version = k2pg_stored_cache_version;
+		}
+	}
 
     if (shared)
         u_sess->relcache_cxt.criticalSharedRelcachesBuilt = true;
@@ -6984,23 +7053,41 @@ static void write_relcache_init_file(bool shared)
             GRAND_VERSION_NUM);
         securec_check_ss(rc, "\0", "\0");
     } else {
-        rc = snprintf_s(tempfilename,
-            sizeof(tempfilename),
-            sizeof(tempfilename) - 1,
-            "%s/%s.%u.%lu",
-            u_sess->proc_cxt.DatabasePath,
-            RELCACHE_INIT_FILENAME,
-            GRAND_VERSION_NUM,
-            t_thrd.proc_cxt.MyProcPid);
-        securec_check_ss(rc, "\0", "\0");
-        rc = snprintf_s(finalfilename,
-            sizeof(finalfilename),
-            sizeof(finalfilename) - 1,
-            "%s/%s.%u",
-            u_sess->proc_cxt.DatabasePath,
-            RELCACHE_INIT_FILENAME,
-            GRAND_VERSION_NUM);
-        securec_check_ss(rc, "\0", "\0");
+        if (IsK2PgEnabled()) {
+			rc = snprintf_s(tempfilename,
+                sizeof(tempfilename),
+                sizeof(tempfilename) - 1,
+                "%d_%s.%d",
+                u_sess->proc_cxt.MyDatabaseId,
+                RELCACHE_INIT_FILENAME,
+                t_thrd.proc_cxt.MyProcPid);
+            securec_check_ss(rc, "\0", "\0");
+            rc = snprintf_s(finalfilename,
+                sizeof(finalfilename),
+                sizeof(finalfilename) - 1,
+                "%d_%s",
+			    u_sess->proc_cxt.MyDatabaseId,
+                RELCACHE_INIT_FILENAME);
+            securec_check_ss(rc, "\0", "\0");
+        } else {
+            rc = snprintf_s(tempfilename,
+                sizeof(tempfilename),
+                sizeof(tempfilename) - 1,
+                "%s/%s.%u.%lu",
+                u_sess->proc_cxt.DatabasePath,
+                RELCACHE_INIT_FILENAME,
+                GRAND_VERSION_NUM,
+                t_thrd.proc_cxt.MyProcPid);
+            securec_check_ss(rc, "\0", "\0");
+            rc = snprintf_s(finalfilename,
+                sizeof(finalfilename),
+                sizeof(finalfilename) - 1,
+                "%s/%s.%u",
+                u_sess->proc_cxt.DatabasePath,
+                RELCACHE_INIT_FILENAME,
+                GRAND_VERSION_NUM);
+            securec_check_ss(rc, "\0", "\0");
+        }
     }
 
     unlink(tempfilename); /* in case it exists w/wrong permissions */
@@ -7023,8 +7110,16 @@ static void write_relcache_init_file(bool shared)
      * change the magic number whenever the relcache layout changes.
      */
     magic = RELCACHE_INIT_FILEMAGIC;
-    if (fwrite(&magic, 1, sizeof(magic), fp) != sizeof(magic))
+    if (fwrite(&magic, 1, sizeof(magic), fp) != sizeof(magic)) {
         ereport(FATAL, (errmsg("could not write init file")));
+    }
+
+	if (IsK2PgEnabled()) {
+		// Write the psql_catalog_version
+		if (fwrite(&k2pg_catalog_cache_version, 1, sizeof(k2pg_catalog_cache_version), fp) != sizeof(k2pg_catalog_cache_version)) {
+			elog(FATAL, "could not write init file");
+		}
+	}
 
     /*
      * Write all the appropriate reldescs (in no particular order).
@@ -7233,6 +7328,14 @@ void RelationCacheInitFileRemove(void)
     struct dirent* de = NULL;
     char path[MAXPGPATH];
     errno_t rc;
+
+	/*
+	 * In K2PG mode we anyway do a cache version check on each backend init
+	 * so no need to preemptively clean up the init files here.
+	 */
+	if (IsK2PgEnabled()) {
+		return;
+	}
 
     /*
      * We zap the shared cache file too.  In theory it can't get out of sync

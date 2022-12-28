@@ -79,6 +79,7 @@ private:
 
     // this txn is managed by this manager.
     std::unique_ptr<sh::TxnHandle> _txn;
+    Metric _txnMt;
 
     std::shared_ptr<sh::Client> _client;
 

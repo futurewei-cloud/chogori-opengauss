@@ -105,6 +105,7 @@ Datum k2ininsert(PG_FUNCTION_ARGS)
     Datum k2pgctid = (Datum)PG_GETARG_POINTER(3);
 	Relation heap = (Relation)PG_GETARG_POINTER(4);
     IndexUniqueCheck checkUnique = (IndexUniqueCheck)PG_GETARG_INT32(5);
+    IndexInfo *indexInfo = (IndexInfo *)PG_GETARG_POINTER(6);
     bool result = false;
 
 	if (!index->rd_index->indisprimary)

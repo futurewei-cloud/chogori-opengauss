@@ -127,3 +127,44 @@ static inline void initialize(const std::string& mainLevel, const std::string& t
 #define K2LOG_ERT(logger, fmtstr, ...) K2TRACE_E(k2log::trace_read_ops, logger, fmtstr, ##__VA_ARGS__);
 #define K2LOG_EWT(logger, fmtstr, ...) K2TRACE_E(k2log::trace_write_ops, logger, fmtstr, ##__VA_ARGS__);
 #define K2LOG_ECT(logger, fmtstr, ...) K2TRACE_E(k2log::trace_control_ops, logger, fmtstr, ##__VA_ARGS__);
+
+
+namespace k2pg {
+class Metric {
+   public:
+    Metric(const char* name, k2::Duration warnThr) : _name(name), _warnThr(warnThr), _start(k2::Clock::now()) {}
+    Metric() {}
+    Metric(Metric&& o) {
+        _name = o._name;
+        _warnThr = o._warnThr;
+        _start = o._start;
+        o._name = "";
+        o._warnThr = k2::Duration{};
+        o._start = k2::TimePoint{};
+    }
+    Metric& operator=(Metric&& o) {
+        _name = o._name;
+        _warnThr = o._warnThr;
+        _start = o._start;
+        o._name = "";
+        o._warnThr = k2::Duration{};
+        o._start = k2::TimePoint{};
+        return *this;
+    }
+    void report() const {
+        // if (_warnThr > 0ns) {
+        //     auto elapsed = k2::Clock::now() - _start;
+        //     if (elapsed >= _warnThr) {
+        //         K2LOG_WCT(k2log::k2pg, "Metric {} exceeded threshold {}: {}", _name, _warnThr, elapsed);
+        //     } else {
+        //         K2LOG_DCT(k2log::k2pg, "Metric {} with threshold {}: {}", _name, _warnThr, elapsed);
+        //     }
+        // }
+    }
+
+   private:
+    const char* _name{""};
+    k2::Duration _warnThr;
+    k2::TimePoint _start;
+};
+}

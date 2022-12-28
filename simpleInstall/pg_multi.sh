@@ -2,7 +2,7 @@
 export GAUSSHOME=/opt/opengauss
 export GS_CLUSTER_NAME=dbCluster
 export GAUSSLOG=${GAUSSHOME}/logs
-export PGDATA=${GAUSSHOME}/data
+export PGDATA=${GAUSSHOME}/data/single_node
 export PATH=${GAUSSHOME}/bin:${PATH}
 export LD_LIBRARY_PATH=${GAUSSHOME}/lib:${LD_LIBRARY_PATH}
 export K2PG_ENABLED_IN_POSTGRES=1
@@ -14,4 +14,7 @@ cd ${GAUSSHOME}/simpleInstall/
 export SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 export K2_CONFIG_FILE=${SCRIPT_DIR}/k2config_pgrun.json
 
-./install.sh "$@"
+#gaussdb --single --localxid -F -O -c search_path=pg_catalog -c exit_on_error=true template1
+#gaussdb -D /opt/opengauss/data/single_node --single_node
+#gs_ctl start -D /opt/opengauss/data/single_node -Z single_node -l /opt/opengauss/logs/pg.log
+gs_ctl start -D /opt/opengauss/data/single_node -Z single_node
