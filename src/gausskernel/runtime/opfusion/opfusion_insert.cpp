@@ -259,7 +259,7 @@ unsigned long InsertFusion::ExecInsert(Relation rel, ResultRelInfo* result_rel_i
     /* insert index entries for tuple */
     List* recheck_indexes = NIL;
     if (result_rel_info->ri_NumIndices > 0) {
-        ItemPointer item
+        ItemPointer item;
         if (IsK2PgRelation(rel)) {
             item = (ItemPointer)DatumGetPointer(((HeapTuple)tuple)->t_k2pgctid);
         } else {
