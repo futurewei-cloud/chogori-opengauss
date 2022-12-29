@@ -97,6 +97,7 @@
 #include "client_logic/client_logic.h"
 #include "client_logic/client_logic_enums.h"
 #include "storage/checksum_impl.h"
+#include "access/k2/k2pg_aux.h"
 
 /* State shared by transformCreateSchemaStmt and its subroutines */
 typedef struct {
@@ -652,7 +653,7 @@ Oid *namespaceid, bool isFirstNode)
 	{
 		stmt->constraints = list_concat(stmt->constraints, cxt.ixconstraints);
 	}
-    
+
     result = lappend(cxt.blist, stmt);
     result = list_concat(result, cxt.alist);
     result = list_concat(result, save_alist);
