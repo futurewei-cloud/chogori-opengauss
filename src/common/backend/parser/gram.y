@@ -66,6 +66,8 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/pg_list.h"
+#include "nodes/parsenodes_common.h"
 #include "parser/gramparse.h"
 #include "parser/parse_type.h"
 #include "parser/parse_hint.h"
@@ -5589,6 +5591,19 @@ ConstraintElem:
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
 					n->inforConstraint = (InformationalConstraint *) $9; /* informational constraint info */
+					ListCell *lc;
+					foreach(lc, $3)
+					{
+						IndexElem *index_elem = makeNode(IndexElem);
+						index_elem->name = pstrdup(strVal(lfirst(lc)));
+						index_elem->expr = NULL;
+						index_elem->indexcolname = NULL;
+						index_elem->collation = NIL;
+						index_elem->opclass = NIL;
+						index_elem->ordering = SORTBY_DEFAULT;
+						index_elem->nulls_ordering = SORTBY_NULLS_DEFAULT;
+						n->k2pg_index_params = lappend(n->k2pg_index_params, index_elem);
+					}
 					$$ = (Node *)n;
 				}
 			| UNIQUE ExistingIndex ConstraintAttributeSpec InformationalConstraintElem
@@ -5622,6 +5637,19 @@ ConstraintElem:
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
 					n->inforConstraint = (InformationalConstraint *) $10; /* informational constraint info */
+					ListCell *lc;
+					foreach(lc, $4)
+					{
+						IndexElem *index_elem = makeNode(IndexElem);
+						index_elem->name = pstrdup(strVal(lfirst(lc)));
+						index_elem->expr = NULL;
+						index_elem->indexcolname = NULL;
+						index_elem->collation = NIL;
+						index_elem->opclass = NIL;
+						index_elem->ordering = SORTBY_DEFAULT;
+						index_elem->nulls_ordering = SORTBY_NULLS_DEFAULT;
+						n->k2pg_index_params = lappend(n->k2pg_index_params, index_elem);
+					}
 					$$ = (Node *)n;
 				}
 			| PRIMARY KEY ExistingIndex ConstraintAttributeSpec InformationalConstraintElem
