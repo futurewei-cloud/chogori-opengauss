@@ -66,6 +66,8 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/pg_list.h"
+#include "nodes/parsenodes_common.h"
 #include "parser/gramparse.h"
 #include "parser/parse_type.h"
 #include "parser/parse_hint.h"
@@ -109,6 +111,18 @@ IntervalStylePack g_interStyleVal = {"a"};
 		else \
 			(Current) = (Rhs)[0]; \
 	} while (0)
+
+#define K2PG_INDEXELEM_EXPR_TO_COLREF(idxelem, expr, parserloc) \
+	do { \
+		ColumnRef *col = (ColumnRef *)(expr); \
+		if (col->type != T_ColumnRef || list_length(col->fields) != 1) \
+			ereport(ERROR, \
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE), \
+					 errmsg("only column list is allowed"), \
+					 parser_errposition(parserloc))); \
+		char *colname = strVal(linitial(col->fields)); \
+		idxelem->k2pg_name_list = lappend(idxelem->k2pg_name_list, makeString(colname)); \
+	} while(0)
 
 /*
  * Bison doesn't allocate anything that needs to live across parser calls,
@@ -231,18 +245,6 @@ static char *FormatFuncArgType(core_yyscan_t yyscanner, char *argsString, List* 
 static char *ParseFunctionArgSrc(core_yyscan_t yyscanner);
 static void parameter_check_execute_direct(const char* query);
 static Node *make_node_from_scanbuf(int start_pos, int end_pos, core_yyscan_t yyscanner);
-
-#define K2PG_INDEXELEM_EXPR_TO_COLREF(idxelem, expr, parserloc) \
-	do { \
-		ColumnRef *col = (ColumnRef *)(expr); \
-		if (col->type != T_ColumnRef || list_length(col->fields) != 1) \
-			ereport(ERROR, \
-					(errcode(ERRCODE_WRONG_OBJECT_TYPE), \
-					 errmsg("only column list is allowed"), \
-					 parser_errposition(parserloc))); \
-		char *colname = strVal(linitial(col->fields)); \
-		idxelem->k2pg_name_list = lappend(idxelem->k2pg_name_list, makeString(colname)); \
-	} while(0)
 
 %}
 
