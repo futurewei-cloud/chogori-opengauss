@@ -5601,7 +5601,6 @@ ConstraintElem:
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
 					n->inforConstraint = (InformationalConstraint *) $9; /* informational constraint info */
-					/* Make column list available as index params also */
 					ListCell *lc;
 					foreach(lc, $3)
 					{
@@ -5648,6 +5647,19 @@ ConstraintElem:
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
 					n->inforConstraint = (InformationalConstraint *) $10; /* informational constraint info */
+					ListCell *lc;
+					foreach(lc, $3)
+					{
+						IndexElem *index_elem = makeNode(IndexElem);
+						index_elem->name = pstrdup(strVal(lfirst(lc)));
+						index_elem->expr = NULL;
+						index_elem->indexcolname = NULL;
+						index_elem->collation = NIL;
+						index_elem->opclass = NIL;
+						index_elem->ordering = SORTBY_DEFAULT;
+						index_elem->nulls_ordering = SORTBY_NULLS_DEFAULT;
+						n->k2pg_index_params = lappend(n->k2pg_index_params, index_elem);
+					}
 					$$ = (Node *)n;
 				}
 			| PRIMARY KEY '(' k2pg_index_params ')' opt_c_include opt_definition OptConsTableSpace
@@ -5656,7 +5668,6 @@ ConstraintElem:
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_PRIMARY;
 					n->location = @1;
-					/* For Postgres' purpose, make index params available as a column list also */
 					ListCell *lc;
 					foreach(lc, $4)
 					{
@@ -10735,13 +10746,6 @@ k2pg_index_params: k2pg_index_elem
 					}
 					else
 					{
-						if ($1->ordering != SORTBY_HASH)
-							ereport(ERROR,
-									(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-									 errmsg("only hash column group is allowed"),
-									 parser_errposition(@1)));
-
-						/* Flatten the hash column group */
 						$$ = NULL;
 						ListCell *lc;
 						foreach (lc, $1->k2pg_name_list)
@@ -10759,21 +10763,6 @@ k2pg_index_params: k2pg_index_elem
 				}
 			| k2pg_index_params ',' index_elem
 				{
-					if ($3->ordering == SORTBY_HASH)
-					{
-						IndexElem *last_elem = (IndexElem *)llast($1);
-						if (last_elem->ordering == SORTBY_HASH)
-							ereport(ERROR,
-									(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-									 errmsg("multiple hash columns must be defined as a "
-											"single hash column group"),
-									 parser_errposition(@3)));
-						else
-							ereport(ERROR,
-									(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-									 errmsg("hash column not allowed after an ASC/DESC column"),
-									 parser_errposition(@3)));
-					}
 					$$ = lappend($1, $3);
 				}
 		;
@@ -10840,8 +10829,8 @@ k2pg_index_elem: index_elem
 					$$->indexcolname = NULL;
 					$$->collation = $4;
 					$$->opclass = $5;
-					$$->ordering = $6;
-					$$->nulls_ordering = $7;
+					$$->ordering = (SortByDir)$6;
+					$$->nulls_ordering = (SortByNulls)$7;
 				}
 		;
 
