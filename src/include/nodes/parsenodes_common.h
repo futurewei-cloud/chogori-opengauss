@@ -288,6 +288,7 @@ typedef struct IndexElem {
     List *opclass;              /* name of desired opclass; NIL = default */
     SortByDir ordering;         /* ASC/DESC/default */
     SortByNulls nulls_ordering; /* FIRST/LAST/default */
+	List	   *k2pg_name_list;	/* List of attribute names in parenthesis */
 } IndexElem;
 
 /*

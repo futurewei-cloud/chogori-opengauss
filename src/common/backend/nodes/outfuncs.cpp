@@ -3770,7 +3770,9 @@ static void _outIndexElem(StringInfo str, IndexElem* node)
     WRITE_NODE_FIELD(opclass);
     WRITE_ENUM_FIELD(ordering, SortByDir);
     WRITE_ENUM_FIELD(nulls_ordering, SortByNulls);
+    WRITE_NODE_FIELD(k2pg_name_list);
 }
+
 static void _outDefElem(StringInfo str, DefElem* node)
 {
     WRITE_NODE_TYPE("DEFELEM");
