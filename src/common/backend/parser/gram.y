@@ -5648,7 +5648,7 @@ ConstraintElem:
 								   NULL, yyscanner);
 					n->inforConstraint = (InformationalConstraint *) $10; /* informational constraint info */
 					ListCell *lc;
-					foreach(lc, $3)
+					foreach(lc, $4)
 					{
 						IndexElem *index_elem = makeNode(IndexElem);
 						index_elem->name = pstrdup(strVal(lfirst(lc)));
