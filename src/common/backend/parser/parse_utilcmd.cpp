@@ -987,6 +987,22 @@ static void transformColumnDefinition(CreateStmtContext* cxt, ColumnDef* column,
             case CONSTR_UNIQUE:
                 if (constraint->keys == NIL)
                     constraint->keys = list_make1(makeString(column->colname));
+
+				if (IsK2PgEnabled())
+				{
+					if (constraint->k2pg_index_params == NIL)
+					{
+						IndexElem *index_elem = makeNode(IndexElem);
+						index_elem->name = pstrdup(column->colname);
+						index_elem->expr = NULL;
+						index_elem->indexcolname = NULL;
+						index_elem->collation = NIL;
+						index_elem->opclass = NIL;
+						index_elem->ordering = SORTBY_DEFAULT;
+						index_elem->nulls_ordering = SORTBY_NULLS_DEFAULT;
+						constraint->k2pg_index_params = list_make1(index_elem);
+					}
+				}
                 cxt->ixconstraints = lappend(cxt->ixconstraints, constraint);
                 break;
 

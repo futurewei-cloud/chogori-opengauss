@@ -152,7 +152,6 @@ static void CreateTableAddColumns(TupleDesc desc,
 	ListCell *cell;
 	if (primary_key != NULL)
 	{
-        // TODO: didn't port k2pg_index_params to parser logic, i.e., gram.y and parse_utilcmd.cpp, consider removing this new syntax support.
 		foreach(cell, primary_key->k2pg_index_params)
 		{
 			IndexElem *index_elem = (IndexElem *)lfirst(cell);
