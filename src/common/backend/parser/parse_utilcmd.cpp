@@ -643,6 +643,16 @@ Oid *namespaceid, bool isFirstNode)
     if (stmt->internalData == NULL) {
         stmt->internalData = cxt.internalData;
     }
+
+ 	/*
+	 * If K2PG is enabled, add the index constraints to the statement as they
+	 * might be passed down to K2 platform (e.g. as primary key).
+	 */
+	if (IsK2PgEnabled())
+	{
+		stmt->constraints = list_concat(stmt->constraints, cxt.ixconstraints);
+	}
+    
     result = lappend(cxt.blist, stmt);
     result = list_concat(result, cxt.alist);
     result = list_concat(result, save_alist);
@@ -3504,7 +3514,7 @@ IndexStmt* transformIndexStmt(Oid relid, IndexStmt* stmt, const char* queryStrin
                     errmsg("access method \"%s\" does not support row store", stmt->accessMethod)));
         }
 
-        if (0 == pg_strcasecmp(stmt->accessMethod, DEFAULT_HASH_INDEX_TYPE) && 
+        if (0 == pg_strcasecmp(stmt->accessMethod, DEFAULT_HASH_INDEX_TYPE) &&
             t_thrd.proc->workingVersionNum < SUPPORT_HASH_XLOG_VERSION_NUM) {
             ereport(ERROR,
                 (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -4122,7 +4132,7 @@ List* transformAlterTableStmt(Oid relid, AlterTableStmt* stmt, const char* query
                     ereport(ERROR,
                         (errcode(ERRCODE_WRONG_OBJECT_TYPE), errmsg("can not split LIST/HASH partition table")));
                 }
-                
+
                 /* transform the boundary of range partition: from A_Const into Const */
                 splitDefState = (SplitPartitionState*)cmd->def;
                 if (!PointerIsValid(splitDefState->split_point)) {
