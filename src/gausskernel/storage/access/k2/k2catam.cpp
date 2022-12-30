@@ -899,8 +899,8 @@ static void camBindScanKeys(Relation relation,
 							break;
 
 						/* Build temporary vars */
-						IndexScanDescData tmp_scan_desc;
-						memset(&tmp_scan_desc, 0, sizeof(tmp_scan_desc));
+						IndexScanDescData tmp_scan_desc{};
+//						memset(&tmp_scan_desc, 0, sizeof(tmp_scan_desc));
 						tmp_scan_desc.indexRelation = index;
 
 						/*
