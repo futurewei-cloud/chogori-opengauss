@@ -1,43 +1,102 @@
-# Build and Run OpenGauss in a docker container
+# Build and run chogori-opengauss using docker containers
 
-## Build Docker Container image for OpenGauss
+Here, we demonstrate how to build and run chogori-opengauss. The instructions are organized into three sections. Section 1 demonstrates how to build the docker container images for the opengauss server and the [chogori-platform](https://github.com/futurewei-cloud/chogori-platform) (i.e., k2) runner. Section 2 demonstrates how to build and run chogori-opengauss using the images. Section 3 demonstrates how to build and run a vanilla openGauss server.
 
-We target for OpenGauss stable version V2.1.0. To build OpenGauss from source, we need both the openGauss-server and its dependencies in project openGauss-third_party. To avoid building the third party dependencies from source, we could download the [binary](https://opengauss.obs.cn-south-1.myhuaweicloud.com/2.1.0/openGauss-third_party_binarylibs.tar.gz) and use it directly.
+Some conventions we are following:
 
-Unfortunately, openGauss did not provide a docker file for V2.1.0, we created a file for V2.1.0 at docker/dockerfiles/dockerfile to help build the openGauss source code.
+- The "```$```" prompt means that the command is executed as a non-root user.
+- The "```#```" prompt means that the command is executed as the root user (usually within a docker container).
+- The "```DBNAME=#```" prompt means that the command is executed within the ```gsql``` terminal.
 
-The build steps:
-- Go to dockerfile fold:
-```bash
-cd docker/dockerfiles/
-```
-- Build docker image opengauss-server:
-```bash
-docker build -t opengauss-server  - < dockerfile
-```
-- We configure the openGauss server, for example, with this command, where GAUSSHOME is the location to install opengauss artifacts:
-```bash
-./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O0' --prefix=$GAUSSHOME --3rd=/tmp/openGauss-third_party_binarylibs
-```
-- Compile openGauss-server source code:
-```bash
-make -sj
-```
-- Install openGauss-server:
-```bash
-make install
-```
-The above command installs opengauss artifacts on the location that the environment variable GAUSSHOME is set to.
-For example, if GAUSSHOME is set to /opt/opengauss with the following configuration,
+## 1. Build docker container images for chogori-opengauss
 
-```bash
-# export GAUSSHOME=/opt/opengauss
-# ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/tmp/openGauss-third_party_binarylibs --enable-thread-safety --without-readline --without-zlib
-```
-To install the database, we need to copy the simpleInstall scripts in openGauss-server to the artifact directory and create a data directory and a logs directory to store data and log files, respectively. The directory layout is as follows.
+The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). Unfortunately, openGauss did not provide a docker file for v2.1.0. We created a dockerfile for v2.1.0 at ```docker/dockerfiles/dockerfile``` to help build the opengauss source code.
 
-```bash
-$ tree -L 1 /opt/opengauss/
+We assume that the chogori-opengauss project has been downloaded (i.e., cloned), and ```CHOGORI_OPENGAUSS``` refers to the root directory of the project. For example, if the project is cloned into ```/home/demouser/workspace```, then ```CHOGORI_OPENGAUSS``` is ```/home/demouser/workspace/chogori-opengauss```. If a relative path is used, we assume that the path prefix is ```CHOGORI_OPENGAUSS```.
+
+**Build the docker images:**
+
+1. Go to the dockerfile folder (that is, go to the ```CHOGORI_OPENGAUSS/docker/dockerfiles``` folder):
+```
+$ cd docker/dockerfiles/
+```
+2. Build the docker image named "```opengauss-server```":
+```
+$ docker build -t opengauss-server - < dockerfile
+```
+3. In the same folder, build the docker image named "```k2runner```", for chogori-platform (i.e., k2) runner:
+```
+$ docker build -t k2runner - < dockerfile_k2runner
+```
+
+The dockerfile for the ```opengauss-server``` image will take care of the following important things (in case you are curious). However, these steps should not be followed manually, as docker will make sure these steps have taken effect when the container image is built. You can jump to Section 2 to build and run the opengauss server directly.
+
+- The ```GAUSSHOME``` environment variable will be set as ```/opt/opengauss``` for the root user. This is where we will install all the gaussdb server artifacts.
+
+- To build openGauss from source, we need both the source code and its dependencies in project [openGauss-third_party](https://github.com/opengauss-mirror/openGauss-third_party). To avoid building the third party dependencies from source, we download the [binary](https://opengauss.obs.cn-south-1.myhuaweicloud.com/2.1.0/openGauss-third_party_binarylibs.tar.gz) and use it directly.
+
+- openGauss needs to use a dependent library (```libsecurec.so```) that we could put into system lib directory /usr/lib64. The full path for the library will be /usr/lib64/huawei/libsecurec.so in the container image.
+
+- openGauss cannot be run with the root user. As a result, we need to create a user, ```omm```. We also set up a password, for example, ```Test3456``` for this user and change the artifact directory owner to this user.
+
+- Finally, we need to set up environment variables for user ```omm``` in the user's ```.bashrc``` file.
+## 2. Build and run chogori-opengauss
+We need to open two command terminals on the host machine, one for the chogori-platform (i.e., k2) cluster and one for the opengauss server.
+
+### 2.1 Run the chogori-platform (i.e., k2) cluster
+Our script to run k2 cluster requires Asynchronous non-blocking IO (AIO). We need to increase the maximum number of concurrent requests for AIO. Run this on the host machine:
+```
+$ sudo bash -c "echo 1048576 > /proc/sys/fs/aio-max-nr"
+```
+Also, our k2 cluster uses huge pages. Run the following commands to set up huge pages:
+```
+$ sudo hugeadm --pool-pages-min 2MB:16000
+$ sudo hugeadm --pool-pages-max 2MB:20000
+```
+
+In the terminal for k2 cluster, go to the ```CHOGORI_OPENGAUSS``` directory. Use the following command to launch the container for k2 runner:
+```
+$ docker run -it --privileged -p 30000:30000 -v $PWD:/build:delegated --rm k2runner /build/simpleInstall/k2test/run_k2_cluster.sh
+```
+Some explanations on the options above: 
+- "```-p 30000:30000```" exposes the container's port 30000 to the host machine, so that it is accessible by chogori-openguass server.
+- "```-v $PWD:/build:delegated```" mounts the current working directory, i.e., ```CHOGORI_OPENGAUSS``` as the ```/build``` directory within the container. 
+- "```k2runner```" is the docker image built in the previous section.
+
+After this, the k2 cluster (within a container) will be live and running, waiting for the opengauss server to contact it. The k2 cluster will serve as the storage for opengauss server.
+
+### 2.2 Build and run opengauss server:
+
+In the terminal for opengauss server, go to the ```CHOGORI_OPENGAUSS``` directory. Use the following command to launch the container to build and run the opengauss server:
+```
+$ docker run -it --privileged --net=host -v $PWD:/build:delegated --rm -w /build opengauss-server bash
+```
+Here, we use the host networking mode for the ```opengauss-server``` container. This will make running TPCC test simpler, as we will also use a host mode container for the TPCC test client.  If we do not use the host mode, the ```opengauss-server``` container and the TPCC test client container will use the (default) bridge networking mode. Then, the connection from the client container to the server container will be remote. Allowing remote connections to the gaussdb server will require changes in gaussdb's settings files (for example, postgres.conf and pg_hba.conf), and we want to avoid that. For this reason, we are using the host networking mode.
+
+After this, we will be within the docker container as the root user in the ```/build``` directory. Note that our source code directory in the host machine is mounted as the ```/build``` directory in the container. Before building the opengauss server, we need to configure it, using the following command:
+```
+# ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/openGauss-third_party_binarylibs --enable-mot --enable-thread-safety --without-readline --without-zlib
+```
+Build opengauss:
+```
+# make -j 8
+```
+The ```-j``` option allows specifying the degree of parallelism for make. Use a proper number according to your system's configuration (number of cores, amount of memory, etc.). Install opengauss:
+
+```
+# make -j 8 install
+```
+The above command will copy the opengauss artifacts to the location that the environment variable ```GAUSSHOME``` is set to. In our case, it is ```/opt/opengauss``` within the container. To complete the opengauss installation, we need to copy the simpleInstall scripts in the source code to the installation directory and create a data directory and a logs directory to store data and log files, respectively:
+```
+# cp -r /build/simpleInstall /opt/opengauss
+# cd /opt/opengauss
+# mkdir data
+# mkdir logs
+```
+The directory layout is as follows:
+
+```
+# tree -L 1 /opt/opengauss/
 /opt/opengauss/
 ├── bin
 ├── data
@@ -50,68 +109,198 @@ $ tree -L 1 /opt/opengauss/
 └── simpleInstall
 ```
 
-OpenGauss needs to use a dependent library that we could put into system lib directory /usr/lib64
-
-```bash
-$ ls /usr/lib64/huawei/
-libsecurec.so
+Change the ownership of ```/opt/opengauss``` to the ```omm``` user:
+```
+# chown omm.dbgrp -R ${GAUSSHOME}
 ```
 
-then configure the ldd path so that it could be found and loaded correctly.
+Then, switch to the ```omm``` user, and run the opengauss database server using the ```pg_run.sh``` script:
 
-```bash
-$ cat /etc/ld.so.conf.d/huawei-x86_64.conf
-/usr/lib64/huawei
+```
+# su omm
+$ cd /opt/opengauss/simpleInstall/
+$ sh pg_run.sh -w Test3456
+```
+Type "no" when asked for creating a demo database:
+
+```
+Would you like to create a demo database (yes/no)? no
+```
+The original demo databases, ```finance``` and ```school``` (created by ```school.sql``` and ```finance.sql``` from the opengGauss-server project) are too large to fit in our k2 cluster running within a single container. Besides, we do not support some features in the vanilla openGauss server. After the ```pg_run.sh``` script finishes, we will have the database server (```gaussdb```) running, and we can use ```gsql``` to connect to the database server to create simpler databases.
+
+Within the ```/opt/opengauss/simpleInstall``` directory, we added ```finance_min.sql``` and ```school_min.sql``` that create two databases, ```finance_min``` and ```school_min```, which are the simplified verions of the original ```finance``` and ```school``` databases, respectively. Within the ```/opt/opengauss/simpleInstall``` directory, using the ```omm``` user, execute the following command to connect to the ```postgres``` database:
+```
+$ gsql -d postgres
+```
+Then, within the ```gsql``` terminal, we can create the simplified demo databases as follows:
+
+```sql
+openGauss=# \i finance_min.sql
+finance_min=# \i school_min.sql
 ```
 
-OpenGauss cannot be run with the root user, as a result, we need to create a user, omm, as follows.
+The first command will create the ```finance_min``` database, and connect to it. The second command will create the ```school_min``` database and connect to it. We can then read content from the tables.
 
-```bash
-groupadd dbgrp
-useradd omm
-usermod -G dbgrp omm
+```sql
+school_min=# select * from course;
+ cor_id |    cor_name    | cor_type | credit 
+--------+----------------+----------+--------
+      1 | 数据库系统概论 | 必修     |      3
+      2 | 艺术设计概论   | 选修     |      1
+      3 | 力学制图       | 必修     |      4
+      4 | 飞行器设计历史 | 选修     |      1
+(4 rows)
 ```
 
-We also set up a password, for example, "Test3456" for this account and change the artifact directory owner to this account.
-
-```bash
-chown omm.dbgrp -R /opt/opengauss
+To connect to the ```finance_min``` database:
+```sql
+school_min=# \c finance_min
 ```
-Finally, we need to set up environment variables for the user omm in .bashrc
-
-```bash
-export GS_CLUSTER_NAME=dbCluster
-export GAUSSLOG=/opt/opengauss/logs
-export PGDATA=/opt/opengauss/data
-export GAUSSHOME=/opt/opengauss
-export PATH=$GAUSSHOME/bin:$PATH
-export LD_LIBRARY_PATH=$GAUSSHOME/lib:$LD_LIBRARY_PATH
+Display the rows in the insurance table:
+```sql
+finance_min=# select * from insurance;
+  i_name  | i_id | i_amount |      i_person      | i_year | i_project 
+----------+------+----------+--------------------+--------+-----------
+ 健康保险 |    1 |     2000 | 老人               |     30 | 平安保险
+ 人寿保险 |    2 |     3000 | 老人               |     30 | 平安保险
+ 意外保险 |    3 |     5000 | 所有人             |     30 | 平安保险
+ 医疗保险 |    4 |     2000 | 所有人             |     30 | 平安保险
+(4 rows)
 ```
-## Run OpenGauss in docker container
+Exit the ```gsql``` client terminal:
+```sql
+finance_min=# \q
+```
+(Section 3 has more information on the ```gsql``` tool.)
 
-Once the above opengauss-server image was built from the dockerfile, we could configure opengauss and then run it.
 
-First, run the container and logon with bash
-```bash
-docker run --privileged -it -v /path/to/openGauss-server:/build:delegated -w /build opengauss-server bash
+### 2.3 Run multiple gaussdb instances using the same running k2 cluster:
+After we have gone through the steps above, we have the k2 cluster still running. And the gaussdb process is also running in the background. Notice that they are running in two different containers. In chogori-opengauss, we can run multiple gaussdb instances using the same k2 cluster as the underlying storage. We can use the same ```opengauss-server``` container to simulate running another gaussdb instance using the same running k2 cluster. To do this, we could just stop the gaussdb process, remove everything inside the ```/opt/opengauss/data``` directory within the container, and then run the ```/opt/opengauss/simpleInstall/local_run.sh``` script. 
+
+Here, we will demonstrate how to really run multiple gaussdb instances using the same running k2 cluster.
+
+Keep the k2 cluster running in the k2runner container. Open another command terminal in the host machine. Go to the ```CHOGORI_OPENGAUSS``` directory. Use the following command to launch another container for the second gaussdb instance:
+```
+$ docker run -it --privileged --net=host -v $PWD:/build:delegated --rm -w /build opengauss-server bash
+```
+After entering the container, configure, build, and install chogori-opengauss using the same steps as that in the previous subsection:
+```
+# ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/openGauss-third_party_binarylibs --enable-mot --enable-thread-safety --without-readline --without-zlib
+# make -j 8
+# make -j 8 install
+# cp -r /build/simpleInstall /opt/opengauss
+# cd /opt/opengauss
+# mkdir data
+# mkdir logs
+# chown omm.dbgrp -R /opt/opengauss
+```
+Then, switch to the ```omm``` user and launch the second gaussdb instance, now using the ```local_run.sh``` script:
+```
+# su omm
+$ cd /opt/opengauss/simpleInstall
+$ ./local_run.sh -w Test3456 -p 5442
+```
+Here, we specify a different port number ```5442```, because the default port number ```5432``` may still be used by the first gaussdb instance, and we don't want to have any conflicts. Type "no" when asked for creating a demo database. After this, we will have the second gaussdb instance running in the second ```opengauss-server``` container.
+
+Within either container for opengauss server, we can use ```gsql``` to connect to the gaussdb server. We are able to see the same information through these two gaussdb servers, as they have the same k2 cluster as the storeage, which is still running in the ```k2runner``` container. 
+
+For example, in the second ```opengauss-server``` container, we can connect to the second gaussdb instance:
+```
+$ gsql -d postgres -p 5442
+```
+Make sure to specify the same port number we used to launch the second gaussdb instance. Then, connect to the ```finance_min``` database and read some tables.
+```sql
+openGauss=# \c finance_min
+finance_min=# select * from insurance;
+  i_name  | i_id | i_amount |      i_person      | i_year | i_project 
+----------+------+----------+--------------------+--------+-----------
+ 健康保险 |    1 |     2000 | 老人               |     30 | 平安保险
+ 人寿保险 |    2 |     3000 | 老人               |     30 | 平安保险
+ 意外保险 |    3 |     5000 | 所有人             |     30 | 平安保险
+ 医疗保险 |    4 |     2000 | 所有人             |     30 | 平安保险
+(4 rows)
 ```
 
-Run build-install.sh to build opengauss and install it to $GAUSSHOME.
+### 2.4 Run TPCC test with chogori-opengauss
+We use our [chogori-oltpbench](https://github.com/futurewei-cloud/chogori-oltpbench) project to carry out TPCC test for chogori-opengauss. We have made some tweaks based on the original [oltpbench](https://github.com/oltpbenchmark/oltpbench) project to make it work with chogori-opengauss. The tweaks are within the ```chogori-opengauss``` branch of the chogori-oltpbench project. 
 
-Then change to user omm, configure and install the database
+We will be running the TPCC test client within a container, and we can use a public image on docker hub:  ```openjdk:16-slim-buster```. First, pull this image to our local host:
+```
+$ docker pull openjdk:16-slim-buster
+```
 
-```bash
-# su - omm
+Clone the [chogori-oltpbench](https://github.com/futurewei-cloud/chogori-oltpbench) project into your workspace, say ```/home/demouser/workspace```. The root directory of the oltpbench project will be ```/home/demouser/workspace/chogori-oltpbench```. Go to the project directory:
+```
+$ cd /home/demouser/workspace/chogori-oltpbench
+```
+Of course, you should use the correct directory based on your case. Checkout and switch to the ```chogori-opengauss``` branch:
+```
+$ git checkout chogori-opengauss
+```
+Launch the TPCC test container:
+```
+$ docker run -it --privileged --net=host -v $PWD:/host_mount:delegated --rm -w /host_mount openjdk:16-slim-buster bash
+```
+We use the host networking mode as mentioned before. The project directory in the host machine, ```/home/demouser/workspace/chogori-oltpbench```is mounted as ```/host_mount``` in the container. And we are in the ```/host_mount``` directory within the container. Install dependencies and build the chogori-oltpbench project:
+```
+# ./.deploy/install.sh
+```
+Note that if you want to redo the above step, make sure to clone the chogori-oltpbench project again, because the above step will move (instead of copy) a file in the project to a different location. If you don't clone the chogori-oltpbench again, the file will not be found if you redo the above step.
+
+
+Load TPCC test:
+```
+# ./oltpbenchmark -b tpcc -c config/tpcc_config_postgres.xml --create=true --load=true --execute=false
+```
+Execute TPCC test:
+```
+# ./oltpbenchmark -b tpcc -c config/tpcc_config_postgres.xml –create=false –load=false --execute=true -o outputfile
+```
+
+
+## 3. Build and run vanilla openGauss server 
+The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). We can build and run vanilla openGauss server v2.1.0 by folowing the instructions in this section. This can help us compare chogori-opengauss features against that of the vanilla openGauss-server. 
+
+In a host terminal, go to the ```CHOGORI_OPENGAUSS``` folder.
+Checkout openGauss server v2.1.0:
+```
+$ git checkout v2.1.0
+```
+Use the following command to launch the container to build and run the openGauss server:
+```
+$ docker run -it --privileged --net=host -v $PWD:/build:delegated --rm -w /build opengauss-server bash
+```
+Within the ```opengauss-server``` container, configure openGauss server:
+```
+# ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/openGauss-third_party_binarylibs --enable-mot --enable-thread-safety --without-readline --without-zlib
+```
+Build and install openGauss:
+```
+# make -j 8
+# make -j 8 install
+```
+To complete the opengauss installation, we need to copy the simpleInstall scripts in the source code to the installation directory and create a data directory and a logs directory to store data and log files, respectively:
+```
+# cp -r /build/simpleInstall /opt/opengauss
+# cd /opt/opengauss
+# mkdir data
+# mkdir logs
+```
+Change the ownership of /opt/opengauss to the ```omm``` user.
+```
+# chown omm.dbgrp -R ${GAUSSHOME}
+```
+
+Then, switch to the ```omm``` user and run the openGauss database server, using the ```install.sh``` script:
+
+```
+# su omm
 $ cd /opt/opengauss/simpleInstall/
 $ sh install.sh -w Test3456
 ```
-Type in "yes" when was asked for a demo database.
 
-```
-Would you like to create a demo database (yes/no)? yes
-```
 
-Some interesting log lines:
+Type "yes" when asked for creating a demo database. Some interesting log lines:
 
 ```
 $ sh install.sh -w Test3456
@@ -168,9 +357,9 @@ Load demoDB [school,finance] success.
 
 ```
 
-openGauss is running after the above script, then we could test with the demo database.
+openGauss is running after the above script. Then, we could test with the demo database.
 
-## Test gsql for OpenGauss
+**Test gsql for openGauss**
 
 ```sql
 $ gsql -d finance
@@ -228,232 +417,6 @@ finance=# \dS+
  pg_catalog | gs_auditing                       | view  | omm   | 0 bytes    |                                  |
  pg_catalog | gs_auditing_access                | view  | omm   | 0 bytes    |                                  |
  pg_catalog | gs_auditing_policy                | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_auditing_policy_access         | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_auditing_policy_filters        | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_auditing_policy_privileges     | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_auditing_privilege             | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_client_global_keys             | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_client_global_keys_args        | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_cluster_resource_info          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_column_keys                    | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_column_keys_args               | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_comm_proxy_thread_status       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_encrypted_columns              | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_encrypted_proc                 | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_file_stat                      | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_get_control_group_info         | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_global_chain                   | table | omm   | 8192 bytes |                                  |
- pg_catalog | gs_global_config                  | table | omm   | 40 kB      |                                  |
- pg_catalog | gs_instance_time                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_labels                         | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_masking                        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_masking_policy                 | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_masking_policy_actions         | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_masking_policy_filters         | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_matview                        | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_matview_dependency             | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_matviews                       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_model_warehouse                | table | omm   | 8192 bytes |                                  |
- pg_catalog | gs_obsscaninfo                    | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_opt_model                      | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_os_run_info                    | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_package                        | table | omm   | 8192 bytes |                                  |
- pg_catalog | gs_policy_label                   | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_recyclebin                     | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_redo_stat                      | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_session_cpu_statistics         | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_session_memory                 | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_session_memory_context         | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_session_memory_detail          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_session_memory_statistics      | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_session_stat                   | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_session_time                   | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_shared_memory_detail           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_sql_count                      | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_stat_session_cu                | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_thread_memory_context          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_total_memory_detail            | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_total_nodegroup_memory_detail  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_txn_snapshot                   | table | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_cgroup_info                | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_ec_operator_history        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_ec_operator_info           | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | gs_wlm_ec_operator_statistics     | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_instance_history           | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | gs_wlm_operator_history           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_operator_info              | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | gs_wlm_operator_statistics        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_plan_encoding_table        | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | gs_wlm_plan_operator_history      | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_plan_operator_info         | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | gs_wlm_rebuild_user_resource_pool | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_resource_pool              | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_session_history            | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_session_info               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_session_info_all           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_session_query_info_all     | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | gs_wlm_session_statistics         | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_user_info                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | gs_wlm_user_resource_history      | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | gs_wlm_workload_records           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | mpp_tables                        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_aggregate                      | table | omm   | 48 kB      |                                  |
- pg_catalog | pg_am                             | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_amop                           | table | omm   | 104 kB     |                                  |
- pg_catalog | pg_amproc                         | table | omm   | 64 kB      |                                  |
- pg_catalog | pg_app_workloadgroup_mapping      | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_attrdef                        | table | omm   | 48 kB      |                                  |
- pg_catalog | pg_attribute                      | table | omm   | 1448 kB    |                                  |
- pg_catalog | pg_auth_history                   | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_auth_members                   | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_authid                         | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_available_extension_versions   | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_available_extensions           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_cast                           | table | omm   | 56 kB      |                                  |
- pg_catalog | pg_class                          | table | omm   | 408 kB     |                                  |
- pg_catalog | pg_collation                      | table | omm   | 48 kB      |                                  |
- pg_catalog | pg_comm_delay                     | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_comm_recv_stream               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_comm_send_stream               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_comm_status                    | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_constraint                     | table | omm   | 48 kB      |                                  |
- pg_catalog | pg_control_group_config           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_conversion                     | table | omm   | 56 kB      |                                  |
- pg_catalog | pg_cursors                        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_database                       | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_db_role_setting                | table | omm   | 8192 bytes |                                  |
- pg_catalog | pg_default_acl                    | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_depend                         | table | omm   | 496 kB     |                                  |
- pg_catalog | pg_description                    | table | omm   | 184 kB     |                                  |
- pg_catalog | pg_directory                      | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_enum                           | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_ext_stats                      | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_extension                      | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_extension_data_source          | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_foreign_data_wrapper           | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_foreign_server                 | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_foreign_table                  | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_get_invalid_backends           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_get_senders_catchup_time       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_group                          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_gtt_attached_pids              | view  | omm   | 0 bytes    | {security_barrier=true}          |
- pg_catalog | pg_gtt_relstats                   | view  | omm   | 0 bytes    | {security_barrier=true}          |
- pg_catalog | pg_gtt_stats                      | view  | omm   | 0 bytes    | {security_barrier=true}          |
- pg_catalog | pg_hashbucket                     | table | omm   | 8192 bytes |                                  |
- pg_catalog | pg_index                          | table | omm   | 80 kB      |                                  |
- pg_catalog | pg_indexes                        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_inherits                       | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_job                            | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_job_proc                       | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_language                       | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_largeobject                    | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_largeobject_metadata           | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_locks                          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_namespace                      | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_node_env                       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_object                         | table | omm   | 8192 bytes |                                  |
- pg_catalog | pg_obsscaninfo                    | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_opclass                        | table | omm   | 64 kB      |                                  |
- pg_catalog | pg_operator                       | table | omm   | 152 kB     |                                  |
- pg_catalog | pg_opfamily                       | table | omm   | 56 kB      |                                  |
- pg_catalog | pg_os_threads                     | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_partition                      | table | omm   | 8192 bytes |                                  |
- pg_catalog | pg_pltemplate                     | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_prepared_statements            | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_prepared_xacts                 | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_proc                           | table | omm   | 1056 kB    |                                  |
- pg_catalog | pg_range                          | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_replication_slots              | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_resource_pool                  | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_rewrite                        | table | omm   | 1424 kB    |                                  |
- pg_catalog | pg_rlspolicies                    | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_rlspolicy                      | table | omm   | 8192 bytes |                                  |
- pg_catalog | pg_roles                          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_rules                          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_running_xacts                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_seclabel                       | table | omm   | 8192 bytes |                                  |
- pg_catalog | pg_seclabels                      | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_session_iostat                 | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_session_wlmstat                | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_settings                       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_shadow                         | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_shdepend                       | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_shdescription                  | table | omm   | 48 kB      |                                  |
- pg_catalog | pg_shseclabel                     | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_activity                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_activity_ng               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_all_indexes               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_all_tables                | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_bad_block                 | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_bgwriter                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_database                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_database_conflicts        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_replication               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_sys_indexes               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_sys_tables                | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_user_functions            | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_user_indexes              | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_user_tables               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_xact_all_tables           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_xact_sys_tables           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_xact_user_functions       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_stat_xact_user_tables          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_all_indexes             | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_all_sequences           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_all_tables              | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_sys_indexes             | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_sys_sequences           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_sys_tables              | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_user_indexes            | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_user_sequences          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statio_user_tables             | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_statistic                      | table | omm   | 264 kB     |                                  |
- pg_catalog | pg_statistic_ext                  | table | omm   | 8192 bytes |                                  |
- pg_catalog | pg_stats                          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_synonym                        | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_tables                         | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_tablespace                     | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_tde_info                       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_thread_wait_status             | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_timezone_abbrevs               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_timezone_names                 | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_total_memory_detail            | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_total_user_resource_info       | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_total_user_resource_info_oid   | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_trigger                        | table | omm   | 16 kB      |                                  |
- pg_catalog | pg_ts_config                      | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_ts_config_map                  | table | omm   | 48 kB      |                                  |
- pg_catalog | pg_ts_dict                        | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_ts_parser                      | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_ts_template                    | table | omm   | 40 kB      |                                  |
- pg_catalog | pg_type                           | table | omm   | 184 kB     |                                  |
- pg_catalog | pg_user                           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_user_mapping                   | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_user_mappings                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_user_status                    | table | omm   | 0 bytes    |                                  |
- pg_catalog | pg_variable_info                  | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_views                          | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_wlm_statistics                 | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pg_workload_group                 | table | omm   | 40 kB      |                                  |
- pg_catalog | pgxc_class                        | table | omm   | 8192 bytes |                                  |
- pg_catalog | pgxc_group                        | table | omm   | 8192 bytes |                                  |
- pg_catalog | pgxc_node                         | table | omm   | 0 bytes    |                                  |
- pg_catalog | pgxc_prepared_xacts               | view  | omm   | 0 bytes    |                                  |
- pg_catalog | pgxc_slice                        | table | omm   | 0 bytes    |                                  |
- pg_catalog | pgxc_thread_wait_status           | view  | omm   | 0 bytes    |                                  |
- pg_catalog | plan_table                        | view  | omm   | 0 bytes    |                                  |
- pg_catalog | plan_table_data                   | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- pg_catalog | statement_history                 | table | omm   | 16 kB      | {orientation=row,compression=no} |
- pg_catalog | streaming_cont_query              | table | omm   | 0 bytes    |                                  |
- pg_catalog | streaming_reaper_status           | table | omm   | 0 bytes    |                                  |
- pg_catalog | streaming_stream                  | table | omm   | 0 bytes    |                                  |
- pg_catalog | sys_dummy                         | view  | omm   | 0 bytes    |                                  |
- public     | bank_card                         | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- public     | client                            | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- public     | finances_product                  | table | omm   | 16 kB      | {orientation=row,compression=no} |
- public     | fund                              | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- public     | insurance                         | table | omm   | 8192 bytes | {orientation=row,compression=no} |
- public     | property                          | table | omm   | 8192 bytes | {orientation=row,compression=no} |
 (232 rows)
 ```
 
