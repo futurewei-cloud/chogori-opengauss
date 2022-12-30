@@ -97,6 +97,7 @@
 #include "client_logic/client_logic.h"
 #include "client_logic/client_logic_enums.h"
 #include "storage/checksum_impl.h"
+#include "access/k2/k2pg_aux.h"
 
 /* State shared by transformCreateSchemaStmt and its subroutines */
 typedef struct {
@@ -643,6 +644,16 @@ Oid *namespaceid, bool isFirstNode)
     if (stmt->internalData == NULL) {
         stmt->internalData = cxt.internalData;
     }
+
+ 	/*
+	 * If K2PG is enabled, add the index constraints to the statement as they
+	 * might be passed down to K2 platform (e.g. as primary key).
+	 */
+	if (IsK2PgEnabled())
+	{
+		stmt->constraints = list_concat(stmt->constraints, cxt.ixconstraints);
+	}
+
     result = lappend(cxt.blist, stmt);
     result = list_concat(result, cxt.alist);
     result = list_concat(result, save_alist);
@@ -976,6 +987,22 @@ static void transformColumnDefinition(CreateStmtContext* cxt, ColumnDef* column,
             case CONSTR_UNIQUE:
                 if (constraint->keys == NIL)
                     constraint->keys = list_make1(makeString(column->colname));
+
+				if (IsK2PgEnabled())
+				{
+					if (constraint->k2pg_index_params == NIL)
+					{
+						IndexElem *index_elem = makeNode(IndexElem);
+						index_elem->name = pstrdup(column->colname);
+						index_elem->expr = NULL;
+						index_elem->indexcolname = NULL;
+						index_elem->collation = NIL;
+						index_elem->opclass = NIL;
+						index_elem->ordering = SORTBY_DEFAULT;
+						index_elem->nulls_ordering = SORTBY_NULLS_DEFAULT;
+						constraint->k2pg_index_params = list_make1(index_elem);
+					}
+				}
                 cxt->ixconstraints = lappend(cxt->ixconstraints, constraint);
                 break;
 
@@ -3504,7 +3531,7 @@ IndexStmt* transformIndexStmt(Oid relid, IndexStmt* stmt, const char* queryStrin
                     errmsg("access method \"%s\" does not support row store", stmt->accessMethod)));
         }
 
-        if (0 == pg_strcasecmp(stmt->accessMethod, DEFAULT_HASH_INDEX_TYPE) && 
+        if (0 == pg_strcasecmp(stmt->accessMethod, DEFAULT_HASH_INDEX_TYPE) &&
             t_thrd.proc->workingVersionNum < SUPPORT_HASH_XLOG_VERSION_NUM) {
             ereport(ERROR,
                 (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -4122,7 +4149,7 @@ List* transformAlterTableStmt(Oid relid, AlterTableStmt* stmt, const char* query
                     ereport(ERROR,
                         (errcode(ERRCODE_WRONG_OBJECT_TYPE), errmsg("can not split LIST/HASH partition table")));
                 }
-                
+
                 /* transform the boundary of range partition: from A_Const into Const */
                 splitDefState = (SplitPartitionState*)cmd->def;
                 if (!PointerIsValid(splitDefState->split_point)) {
