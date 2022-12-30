@@ -44,6 +44,15 @@ The dockerfile for the ```opengauss-server``` image will take care of the follow
 We need to open two command terminals on the host machine, one for the chogori-platform (i.e., k2) cluster and one for the opengauss server.
 
 ### 2.1 Run the chogori-platform (i.e., k2) cluster
+Our script to run k2 cluster requires Asynchronous non-blocking IO (AIO). We need to increase the maximum number of concurrent requests for AIO. Run this on the host machine:
+```
+$ sudo bash -c "echo 1048576 > /proc/sys/fs/aio-max-nr"
+```
+Also, our k2 cluster uses huge pages. Run the following commands to set up huge pages:
+```
+$ sudo hugeadm --pool-pages-min 2MB:16000
+$ sudo hugeadm --pool-pages-max 2MB:20000
+```
 
 In the terminal for k2 cluster, go to the ```CHOGORI_OPENGAUSS``` directory. Use the following command to launch the container for k2 runner:
 ```
