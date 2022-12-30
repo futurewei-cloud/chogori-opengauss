@@ -252,6 +252,7 @@ K2PgCreateTable(CreateStmt *stmt, char relkind, bool is_shared, TupleDesc desc, 
 
 		if (constraint->contype == CONSTR_PRIMARY)
 		{
+			elog(INFO, "Create table with primary key: %s", constraint->conname);
 			primary_key = constraint;
 		}
 	}

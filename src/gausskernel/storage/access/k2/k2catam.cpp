@@ -1282,7 +1282,11 @@ SysScanDesc cam_systable_beginscan(Relation relation,
 	if (indexOK && !u_sess->attr.attr_common.IgnoreSystemIndexes && !ReindexIsProcessingIndex(indexId))
 	{
 		index = RelationIdGetRelation(indexId);
-
+        if (index->rd_index->indisprimary)
+        {
+                RelationClose(index);
+                index = NULL;
+        }
 		if (index) {
 			/*
 			 * Change attribute numbers to be index column numbers.
