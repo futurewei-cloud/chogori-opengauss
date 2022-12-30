@@ -1,0 +1,19 @@
+FROM ubuntu:20.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt update && apt upgrade -y
+RUN apt install -y build-essential vim gdb strace psmisc pkg-config python3 python3-pip git sed nlohmann-json3-dev
+RUN pip3 install cmake
+RUN apt install -y libreadline-dev bison flex libboost-dev uuid-dev librust-backtrace+libbacktrace-dev libboost-thread-dev libssl-dev
+
+RUN cd /tmp && \
+   git clone https://github.com/futurewei-cloud/chogori-seastar-rd.git && \
+   cd chogori-seastar-rd && ./install-dependencies.sh && ./configure.py --mode=release && ninja -C build/release && \
+   ninja -C build/release install
+
+RUN cd /tmp && git clone https://github.com/futurewei-cloud/chogori-platform.git && \
+    cd chogori-platform && git checkout tags/0.8.7 && \
+    ./install_deps.sh && mkdir -p build && cd build && cmake ../ && make -j 4 && make install
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
