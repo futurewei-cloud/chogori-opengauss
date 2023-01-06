@@ -1,6 +1,6 @@
 # Build and run chogori-opengauss using docker containers
 
-Here, we demonstrate how to build and run chogori-opengauss. The instructions are organized into three sections. Section 1 demonstrates how to build the docker container images for the opengauss server and the [chogori-platform](https://github.com/futurewei-cloud/chogori-platform) (i.e., k2) runner. Section 2 demonstrates how to build and run chogori-opengauss using the images. Section 3 demonstrates how to build and run a vanilla openGauss server.
+Here, we demonstrate how to build and run chogori-opengauss. The instructions are organized into three sections. Section 1 demonstrates how to build the docker container images for the opengauss server and the [chogori-platform](https://github.com/futurewei-cloud/chogori-platform) (i.e., k2) runner. Section 2 demonstrates how to build and run chogori-opengauss using the images. Specifically, Section 2.3 shows how to run multiple database server instances against the same k2 cluster, and Section 2.4 demonstrates how to run TPCC test against chogori-opengauss database server. Section 3 demonstrates how to build and run a vanilla openGauss server.
 
 Some conventions we are following:
 
@@ -12,19 +12,19 @@ Some conventions we are following:
 
 The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). Unfortunately, openGauss did not provide a docker file for v2.1.0. We created a dockerfile for v2.1.0 at ```docker/dockerfiles/dockerfile``` to help build the opengauss source code.
 
-We assume that the chogori-opengauss project has been downloaded (i.e., cloned), and ```CHOGORI_OPENGAUSS``` refers to the root directory of the project. For example, if the project is cloned into ```/home/demouser/workspace```, then ```CHOGORI_OPENGAUSS``` is ```/home/demouser/workspace/chogori-opengauss```. If a relative path is used, we assume that the path prefix is ```CHOGORI_OPENGAUSS```.
+We assume that the chogori-opengauss project has been downloaded (i.e., cloned), and ```CHOGORI_OPENGAUSS``` refers to the root directory of the project. For example, if the project is cloned into ```/home/demouser/workspace```, then ```CHOGORI_OPENGAUSS``` is ```/home/demouser/workspace/chogori-opengauss```.
 
 **Build the docker images:**
 
 1. Go to the dockerfile folder (that is, go to the ```CHOGORI_OPENGAUSS/docker/dockerfiles``` folder):
 ```
-$ cd docker/dockerfiles/
+$ cd chogori-opengauss/docker/dockerfiles/
 ```
 2. Build the docker image named "```opengauss-server```":
 ```
 $ docker build -t opengauss-server - < dockerfile
 ```
-3. In the same folder, build the docker image named "```k2runner```", for chogori-platform (i.e., k2) runner:
+3. In the same folder, build the docker image named "```k2runner```", for chogori-platform (i.e., k2) cluster:
 ```
 $ docker build -t k2runner - < dockerfile_k2runner
 ```
@@ -54,7 +54,7 @@ $ sudo hugeadm --pool-pages-min 2MB:16000
 $ sudo hugeadm --pool-pages-max 2MB:20000
 ```
 
-In the terminal for k2 cluster, go to the ```CHOGORI_OPENGAUSS``` directory. Use the following command to launch the container for k2 runner:
+In the terminal for k2 cluster, go to the ```CHOGORI_OPENGAUSS``` directory. Use the following command to launch the container for k2 cluster:
 ```
 $ docker run -it --privileged -p 30000:30000 -v $PWD:/build:delegated --rm k2runner /build/simpleInstall/k2test/run_k2_cluster.sh
 ```
@@ -62,6 +62,7 @@ Some explanations on the options above:
 - "```-p 30000:30000```" exposes the container's port 30000 to the host machine, so that it is accessible by chogori-openguass server.
 - "```-v $PWD:/build:delegated```" mounts the current working directory, i.e., ```CHOGORI_OPENGAUSS``` as the ```/build``` directory within the container. 
 - "```k2runner```" is the docker image built in the previous section.
+- "```/build/simpleInstall/k2test/run_k2_cluster.sh```" is the script we will run within the container to start the k2 cluster. 
 
 After this, the k2 cluster (within a container) will be live and running, waiting for the opengauss server to contact it. The k2 cluster will serve as the storage for opengauss server.
 
@@ -81,7 +82,7 @@ Build opengauss:
 ```
 # make -j 8
 ```
-The ```-j``` option allows specifying the degree of parallelism for make. Use a proper number according to your system's configuration (number of cores, amount of memory, etc.). Install opengauss:
+The ```-j``` option allows specifying the degree of parallelism for make. Use a proper number according to your machine's configuration (number of cores, amount of memory, etc.). If the build fails, you can use a smaller number such as 4 or 2, or just do ```make``` without ```-j```. Install opengauss:
 
 ```
 # make -j 8 install
@@ -128,21 +129,27 @@ Would you like to create a demo database (yes/no)? no
 ```
 The original demo databases, ```finance``` and ```school``` (created by ```school.sql``` and ```finance.sql``` from the opengGauss-server project) are too large to fit in our k2 cluster running within a single container. Besides, we do not support some features in the vanilla openGauss server. After the ```pg_run.sh``` script finishes, we will have the database server (```gaussdb```) running, and we can use ```gsql``` to connect to the database server to create simpler databases.
 
-Within the ```/opt/opengauss/simpleInstall``` directory, we added ```finance_min.sql``` and ```school_min.sql``` that create two databases, ```finance_min``` and ```school_min```, which are the simplified verions of the original ```finance``` and ```school``` databases, respectively. Within the ```/opt/opengauss/simpleInstall``` directory, using the ```omm``` user, execute the following command to connect to the ```postgres``` database:
+We added ```finance_min.sql``` and ```school_min.sql``` that create simplified tables of the ```finance``` and ```school``` databases. We create these simplified tables within the ```testdb``` database. Within the ```/opt/opengauss/simpleInstall``` directory, using the ```omm``` user, execute the following command to connect to the ```postgres``` database:
 ```
 $ gsql -d postgres
 ```
-Then, within the ```gsql``` terminal, we can create the simplified demo databases as follows:
+Then, within the ```gsql``` terminal, create the ```testdb``` database.
 
 ```sql
-openGauss=# \i finance_min.sql
-finance_min=# \i school_min.sql
+openGauss=# CREATE DATABASE testdb;
 ```
-
-The first command will create the ```finance_min``` database, and connect to it. The second command will create the ```school_min``` database and connect to it. We can then read content from the tables.
-
+Make sure to end the command with the semicolon. Otherwise, the command will not be executed. Then, connect to the ```testdb``` database:
 ```sql
-school_min=# select * from course;
+openGauss=# \c testdb
+```
+We can then create the simplified tables: 
+```sql
+testdb=# \i finance_min.sql
+testdb=# \i school_min.sql
+```
+The above commands will find the ```finance_min.sql``` and ```school_min.sql``` files and execute the SQL statements within them.  Check content of the course table:
+```sql
+testdb=# SELECT * FROM course;
  cor_id |    cor_name    | cor_type | credit 
 --------+----------------+----------+--------
       1 | 数据库系统概论 | 必修     |      3
@@ -151,14 +158,9 @@ school_min=# select * from course;
       4 | 飞行器设计历史 | 选修     |      1
 (4 rows)
 ```
-
-To connect to the ```finance_min``` database:
+Check content of the insurance table:
 ```sql
-school_min=# \c finance_min
-```
-Display the rows in the insurance table:
-```sql
-finance_min=# select * from insurance;
+testdb=# SELECT * FROM insurance;
   i_name  | i_id | i_amount |      i_person      | i_year | i_project 
 ----------+------+----------+--------------------+--------+-----------
  健康保险 |    1 |     2000 | 老人               |     30 | 平安保险
@@ -169,7 +171,7 @@ finance_min=# select * from insurance;
 ```
 Exit the ```gsql``` client terminal:
 ```sql
-finance_min=# \q
+testdb=# \q
 ```
 (Section 3 has more information on the ```gsql``` tool.)
 
@@ -198,7 +200,7 @@ Then, switch to the ```omm``` user and launch the second gaussdb instance, now u
 ```
 # su omm
 $ cd /opt/opengauss/simpleInstall
-$ ./local_run.sh -w Test3456 -p 5442
+$ sh local_run.sh -w Test3456 -p 5442
 ```
 Here, we specify a different port number ```5442```, because the default port number ```5432``` may still be used by the first gaussdb instance, and we don't want to have any conflicts. Type "no" when asked for creating a demo database. After this, we will have the second gaussdb instance running in the second ```opengauss-server``` container.
 
@@ -208,10 +210,10 @@ For example, in the second ```opengauss-server``` container, we can connect to t
 ```
 $ gsql -d postgres -p 5442
 ```
-Make sure to specify the same port number we used to launch the second gaussdb instance. Then, connect to the ```finance_min``` database and read some tables.
+Make sure to specify the same port number we used to launch the second gaussdb instance. Then, connect to the ```testdb``` database and read some tables.
 ```sql
-openGauss=# \c finance_min
-finance_min=# select * from insurance;
+openGauss=# \c testdb
+testdb=# SELECT * FROM insurance;
   i_name  | i_id | i_amount |      i_person      | i_year | i_project 
 ----------+------+----------+--------------------+--------+-----------
  健康保险 |    1 |     2000 | 老人               |     30 | 平安保险
@@ -220,6 +222,7 @@ finance_min=# select * from insurance;
  医疗保险 |    4 |     2000 | 所有人             |     30 | 平安保险
 (4 rows)
 ```
+The content of the insurance table should be the same as what we saw before.
 
 ### 2.4 Run TPCC test with chogori-opengauss
 We use our [chogori-oltpbench](https://github.com/futurewei-cloud/chogori-oltpbench) project to carry out TPCC test for chogori-opengauss. We have made some tweaks based on the original [oltpbench](https://github.com/oltpbenchmark/oltpbench) project to make it work with chogori-opengauss. The tweaks are within the ```chogori-opengauss``` branch of the chogori-oltpbench project. 
@@ -247,16 +250,72 @@ We use the host networking mode as mentioned before. The project directory in th
 ```
 Note that if you want to redo the above step, make sure to clone the chogori-oltpbench project again, because the above step will move (instead of copy) a file in the project to a different location. If you don't clone the chogori-oltpbench again, the file will not be found if you redo the above step.
 
+We will use the ```testdb``` database to conduct the TPCC test. Our ```run_k2_cluster.sh``` script has made sure we have enough memory for the test. We've configured the oltpbench test client to use the ```testdb``` database (see ```chogori-oltpbench/config/tpcc_config_postgres.xml```). If you want to use another database to do the test, you need to change several things:
+- Add the database name to the collection list in ```chogori-opengauss/simpleInstall/k2config_pgrun.json```. Otherwise, we cannot create the new database.
+- Add more endpoints to the nodepool endpoints in ```chogori-opengauss/simpleInstall/k2test/run_k2_cluster.sh```. Each new database needs at least one more core. Also, allocate more memory for the nodepool to make sure each core has least 1G memory.
+- Change the database name in ```chogori-oltpbench/config/tpcc_config_postgres.xml``` from ```testdb``` to the name of your new database. 
 
-Load TPCC test:
+After these changes, you need to reinstall chogori-opengauss, rerun the k2 cluster, and rerun chogori-opengauss. Again, we will just use the ```testdb``` database for TPCC test. So, we don't need to change any files. 
+
+Switch to the terminal for opengauss server. Within the container, go to the ```/opt/opengauss/simpleInstall``` folder. Connect to the ```testdb``` database (if not already connected):
 ```
-# ./oltpbenchmark -b tpcc -c config/tpcc_config_postgres.xml --create=true --load=true --execute=false
+$ gsql -d testdb
 ```
+Create the tables needed for TPCC test:
+```sql
+testdb=# \i k2test/tpcc_ddl.sql
+```
+The above command will find the ```/opt/opengauss/simpleInstall/k2test/tpcc_ddl.sql``` file and execute the SQL statements within it. After this, we can load TPCC test: 
+```
+# ./oltpbenchmark -b tpcc -c config/tpcc_config_postgres.xml --create=false --load=true --execute=false
+```
+You should see similar output as follows:
+```
+21:45:23,153 (DBWorkload.java:270) INFO  - ======================================================================
+
+Benchmark:     TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}
+Configuration: config/tpcc_config_postgres.xml
+Type:          POSTGRES
+Driver:        org.postgresql.Driver
+URL:           jdbc:postgresql://localhost:5432/tpcc
+Isolation:     TRANSACTION_READ_COMMITTED
+Scale Factor:  1.0
+
+21:45:23,154 (DBWorkload.java:271) INFO  - ======================================================================
+21:45:23,174 (DBWorkload.java:559) INFO  - Loading data into TPCC database with 1 threads...
+22:01:20,050 (DBWorkload.java:563) INFO  - Finished!
+22:01:20,051 (DBWorkload.java:564) INFO  - ======================================================================
+22:01:20,052 (DBWorkload.java:598) INFO  - Skipping benchmark workload execution
+```
+
 Execute TPCC test:
 ```
-# ./oltpbenchmark -b tpcc -c config/tpcc_config_postgres.xml –create=false –load=false --execute=true -o outputfile
+# ./oltpbenchmark -b tpcc -c config/tpcc_config_postgres.xml --create=false --load=false --execute=true -o outputfile
 ```
+You should see similar output as follows:
+```
+22:04:30,221 (DBWorkload.java:270) INFO  - ======================================================================
 
+Benchmark:     TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}
+Configuration: config/tpcc_config_postgres.xml
+Type:          POSTGRES
+Driver:        org.postgresql.Driver
+URL:           jdbc:postgresql://localhost:5432/tpcc
+Isolation:     TRANSACTION_READ_COMMITTED
+Scale Factor:  1.0
+
+22:04:30,223 (DBWorkload.java:271) INFO  - ======================================================================
+22:04:30,240 (DBWorkload.java:849) INFO  - Creating 1 virtual terminals...
+22:04:33,018 (DBWorkload.java:854) INFO  - Launching the TPCC Benchmark with 1 Phase...
+22:04:33,028 (ThreadBench.java:341) INFO  - PHASE START :: [Workload=TPCC] [Serial=false] [Time=200] [WarmupTime=0] [Rate=10000] [Arrival=REGULAR] [Ratios=[100.0, 0.0, 0.0, 0.0, 0.0]] [ActiveWorkers=1]
+22:04:33,029 (ThreadBench.java:492) INFO  - MEASURE :: Warmup complete, starting measurements.
+22:07:53,032 (ThreadBench.java:447) INFO  - TERMINATE :: Waiting for all terminals to finish ..
+22:26:30,806 (ThreadBench.java:508) INFO  - Attempting to stop worker threads and collect measurements
+22:26:30,807 (ThreadBench.java:247) INFO  - Starting WatchDogThread
+22:26:30,808 (DBWorkload.java:860) INFO  - ======================================================================
+22:26:30,813 (DBWorkload.java:861) INFO  - Rate limited reqs/s: Results(nanoSeconds=200000742364, measuredRequests=1) = 0.004999981440968888 requests/sec
+22:26:30,818 (DBWorkload.java:700) INFO  - Output Raw data into file: results/outputfile.2.csv
+```
 
 ## 3. Build and run vanilla openGauss server 
 The chogori-opengauss project was forked from [openGauss-server v2.1.0](https://gitee.com/opengauss/openGauss-server/tree/v2.1.0). We can build and run vanilla openGauss server v2.1.0 by folowing the instructions in this section. This can help us compare chogori-opengauss features against that of the vanilla openGauss-server. 
@@ -270,12 +329,9 @@ Use the following command to launch the container to build and run the openGauss
 ```
 $ docker run -it --privileged --net=host -v $PWD:/build:delegated --rm -w /build opengauss-server bash
 ```
-Within the ```opengauss-server``` container, configure openGauss server:
+Within the ```opengauss-server``` container, configure, build and install openGauss server:
 ```
 # ./configure --gcc-version=8.5.0 CC=g++ CFLAGS='-O2 -g3' --prefix=$GAUSSHOME --3rd=/openGauss-third_party_binarylibs --enable-mot --enable-thread-safety --without-readline --without-zlib
-```
-Build and install openGauss:
-```
 # make -j 8
 # make -j 8 install
 ```

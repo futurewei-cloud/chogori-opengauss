@@ -1,6 +1,3 @@
-create database finance_min;
-
-\c finance_min;
 
 SET AUTOCOMMIT TO ON;
 

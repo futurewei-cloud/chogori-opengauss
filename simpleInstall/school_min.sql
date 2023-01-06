@@ -1,6 +1,3 @@
-create database school_min;
-
-\c school_min;
 
 SET AUTOCOMMIT TO ON;
 
