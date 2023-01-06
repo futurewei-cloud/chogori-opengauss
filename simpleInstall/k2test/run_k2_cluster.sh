@@ -6,7 +6,7 @@ PROTO="tcp+k2rpc"
 
 CPODIR=${CPODIR:=/tmp/___cpo_integ_test}
 rm -rf ${CPODIR}
-DEFAULT_EPS=("${PROTO}://0.0.0.0:10000" "${PROTO}://0.0.0.0:10001" "${PROTO}://0.0.0.0:10002" "${PROTO}://0.0.0.0:10003" "${PROTO}://0.0.0.0:10004" "${PROTO}://0.0.0.0:10005" "${PROTO}://0.0.0.0:10006" "${PROTO}://0.0.0.0:10007")
+DEFAULT_EPS=("${PROTO}://0.0.0.0:10000" "${PROTO}://0.0.0.0:10001" "${PROTO}://0.0.0.0:10002" "${PROTO}://0.0.0.0:10003" "${PROTO}://0.0.0.0:10004")
 EPS=( ${EPS:=${DEFAULT_EPS[@]}} )
 NUMCORES=${NUMCORES:=`nproc`}
 # core on which to run the TSO poller thread. Pick 4 if we have that many, or the highest-available otherwise
@@ -26,7 +26,7 @@ cpo_main ${COMMON_ARGS} -c1 --tcp_endpoints ${CPO}  --data_dir ${CPODIR} --prome
 cpo_child_pid=$!
 
 # start nodepool
-nodepool ${COMMON_ARGS} -c${#EPS[@]} --tcp_endpoints ${EPS[@]} --k23si_persistence_endpoint ${PERSISTENCE} --prometheus_port $(($PROMETHEUS_PORT_START+1)) --memory=2G --partition_request_timeout=6s &
+nodepool ${COMMON_ARGS} -c${#EPS[@]} --tcp_endpoints ${EPS[@]} --k23si_persistence_endpoint ${PERSISTENCE} --prometheus_port $(($PROMETHEUS_PORT_START+1)) --memory=5G --partition_request_timeout=6s &
 nodepool_child_pid=$!
 
 # start persistence
