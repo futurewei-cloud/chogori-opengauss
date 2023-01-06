@@ -45,6 +45,7 @@
 #include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/pruning.h"
+#include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
 #include "access/ustore/knl_uheap.h"
 #include "access/ustore/knl_uscan.h"
@@ -392,10 +393,11 @@ static TableScanDesc InitBeginScan(SeqScanState* node, Relation current_relation
             node->ps.qual = (List*)ExecInitExpr((Expr*)node->ps.plan->qual, (PlanState*)&node->ps);
             node->ps.qual_is_inited = true;
         }
+        List *scan_clauses = extract_actual_clauses(node->ps.qual, false);
 
-        std::vector<ScanKeyData> skeys = std::move(parse_conditions(node->ps.qual, node->ps.state->es_param_list_info));
+        std::vector<ScanKeyData> skeys = std::move(parse_conditions(scan_clauses, node->ps.state->es_param_list_info));
         if (!skeys.empty()) {
-            elog(INFO, "InitBeginScan with %d skeys", skeys.size());
+            elog(INFO, "InitBeginScan with %lu skeys", skeys.size());
             current_scan_desc = scan_handler_tbl_beginscan(current_relation,
                 scanSnap, skeys.size(), skeys.data(), (ScanState*)node);
         } else {
