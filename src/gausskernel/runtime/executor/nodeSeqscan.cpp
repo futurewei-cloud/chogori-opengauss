@@ -92,7 +92,6 @@ struct K2ExprRefValues
    List *column_refs;
    List *const_values;
    ParamListInfo paramLI; // parameters binding information for prepare statements
-   bool column_ref_first;
 };
 
 std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI);
@@ -100,6 +99,8 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI);
 void parse_expr(Expr *node,  K2ExprRefValues *ref_values);
 
 void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values);
+
+void parse_relable_type(RelabelType *node, K2ExprRefValues *ref_values);
 
 void parse_var(Var *node, K2ExprRefValues *ref_values);
 
@@ -646,18 +647,8 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
         parse_expr(expr, &ref_values);
         if (list_length(ref_values.column_refs) == 1 && list_length(ref_values.const_values) == 1) {
             ScanKeyData skey;
-            ListCell   *l_col_ref;
-            K2ColumnRef *col_ref = NULL;
-            foreach(l_col_ref, ref_values.column_refs) {
-                col_ref = (K2ColumnRef *)lfirst(l_col_ref);
-            }
-
-            ListCell   *l_const_value;
-            K2ConstValue *const_value = NULL;
-            foreach(l_const_value, ref_values.const_values) {
-                const_value = (K2ConstValue *)lfirst(l_const_value);
-            }
-
+            K2ColumnRef *col_ref = (K2ColumnRef *)linitial(ref_values.column_refs);
+            K2ConstValue *const_value = (K2ConstValue *)linitial(ref_values.const_values);
             switch (get_oprrest(ref_values.opno)) {
                case F_EQSEL: {
                     ScanKeyInit(&skey, col_ref->attr_num, BTEqualStrategyNumber, ref_values.opfunc_id, const_value->value);
@@ -711,6 +702,9 @@ void parse_expr(Expr *node,  K2ExprRefValues *ref_values) {
         case T_Param:
             parse_param((Param *) node, ref_values);
             break;
+        case T_RelabelType:
+            parse_relable_type((RelabelType *)node, ref_values);
+            break;
         default:
             elog(INFO, "K2: unsupported expression type for expr: %s", nodeToString(node));
             break;
@@ -726,7 +720,6 @@ void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
     }
 
     ListCell *lc;
-    bool checkOrder;
     switch (get_oprrest(node->opno))
     {
         case F_EQSEL: //  equal =
@@ -737,23 +730,12 @@ void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
 //        case F_SCALARGESEL: // Greater Equal >=
             elog(INFO, "K2: parsing OpExpr: %d", get_oprrest(node->opno));
 
-            // Creating the K2ExprRefValues loses the tree structure of the original expression
-            // so we need to keep track if the column reference or the constant was first
-            checkOrder = true;
-
             ref_values->opno = node->opno;
             ref_values->opfunc_id = node->opfuncid;
             foreach(lc, node->args)
             {
                 Expr *arg = (Expr *) lfirst(lc);
                 parse_expr(arg, ref_values);
-
-                if (checkOrder && list_length(ref_values->column_refs) == 1) {
-                    ref_values->column_ref_first = true;
-                } else if (checkOrder) {
-                    ref_values->column_ref_first = false;
-                }
-                checkOrder = false;
             }
 
             break;
@@ -761,6 +743,12 @@ void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
             elog(INFO, "K2: unsupported OpExpr type: %d", get_oprrest(node->opno));
             break;
     }
+}
+
+void parse_relable_type(RelabelType *node, K2ExprRefValues *ref_values) {
+    elog(INFO, "K2: parsing RelabelType %s", nodeToString(node));
+    // the condition is at the current level
+    parse_expr(node->arg, ref_values);
 }
 
 void parse_var(Var *node, K2ExprRefValues *ref_values) {
