@@ -389,11 +389,11 @@ static TableScanDesc InitBeginScan(SeqScanState* node, Relation current_relation
      */
     scanSnap = TvChooseScanSnap(current_relation, (Scan *)node->ps.plan, (ScanState *)node);
     if (IsK2PgRelation(current_relation)) {
-        if (!node->ps.qual_is_inited) {
-            node->ps.qual = (List*)ExecInitExpr((Expr*)node->ps.plan->qual, (PlanState*)&node->ps);
-            node->ps.qual_is_inited = true;
-        }
-        List *scan_clauses = extract_actual_clauses(node->ps.qual, false);
+        // if (!node->ps.qual_is_inited) {
+        //     node->ps.qual = (List*)ExecInitExpr((Expr*)node->ps.plan->qual, (PlanState*)&node->ps);
+        //     node->ps.qual_is_inited = true;
+        // }
+        List *scan_clauses = extract_actual_clauses(node->ps.plan->qual, false);
 
         std::vector<ScanKeyData> skeys = std::move(parse_conditions(scan_clauses, node->ps.state->es_param_list_info));
         if (!skeys.empty()) {
