@@ -230,6 +230,54 @@ namespace k2pg {
         return kFirstColumnId;
     }
 
+    IndexInfo::IndexInfo(std::string table_name, uint32_t table_oid, std::string table_uuid,
+        std::string base_table_id, uint32_t schema_version, bool is_unique,
+        bool is_shared, std::vector<IndexColumn> columns,
+        size_t range_column_count,
+        std::vector<ColumnId> indexed_range_column_ids, IndexPermissions index_permissions,
+        bool use_mangled_column_name)
+        : table_name_(table_name),
+          table_oid_(table_oid),
+          table_id_(PgObjectId::GetTableId(table_oid)),
+          table_uuid_(table_uuid),
+          base_table_id_(base_table_id),
+          schema_version_(schema_version),
+          is_unique_(is_unique),
+          is_shared_(is_shared),
+          columns_(std::move(columns)),
+          range_column_count_(range_column_count),
+          indexed_range_column_ids_(std::move(indexed_range_column_ids)),
+          index_permissions_(index_permissions) {
+        elog(INFO, "Creating IndexInfo: oid: %d, name: %s, basetable: %s", table_oid, table_name.c_str(), base_table_id.c_str());
+    }
+
+    explicit IndexInfo(std::string table_name,
+        uint32_t table_oid,
+        std::string table_uuid,
+        std::string base_table_id,
+        uint32_t schema_version,
+        bool is_unique,
+        bool is_shared,
+        std::vector<IndexColumn> columns,
+        IndexPermissions index_permissions)
+            : table_name_(table_name),
+              table_oid_(table_oid),
+              table_id_(PgObjectId::GetTableId(table_oid)),
+              table_uuid_(table_uuid),
+              base_table_id_(base_table_id),
+              schema_version_(schema_version),
+              is_unique_(is_unique),
+              is_shared_(is_shared),
+              columns_(std::move(columns)),
+              index_permissions_(index_permissions) {
+              for (auto& column : columns_) {
+                  if (column.is_range) {
+                      range_column_count_++;
+                  }
+              }
+        elog(INFO, "Creating IndexInfo: oid: %d, name: %s, basetable: %s", table_oid, table_name.c_str(), base_table_id.c_str());
+    }
+
     std::vector<ColumnId> IndexInfo::index_key_column_ids() const {
         std::unordered_map<ColumnId, ColumnId> map;
         for (const auto column : columns_) {
