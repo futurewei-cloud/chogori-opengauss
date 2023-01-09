@@ -251,7 +251,7 @@ namespace k2pg {
         elog(INFO, "Creating IndexInfo: oid: %d, name: %s, basetable: %s", table_oid, table_name.c_str(), base_table_id.c_str());
     }
 
-    IndexInfo(std::string table_name,
+    IndexInfo::IndexInfo(std::string table_name,
         uint32_t table_oid,
         std::string table_uuid,
         std::string base_table_id,
