@@ -571,10 +571,7 @@ namespace k2pg {
 
         typedef std::shared_ptr<TableInfo> SharedPtr;
 
-        TableInfo(std::string database_id, std::string database_name, uint32_t table_oid, std::string table_name, std::string table_uuid, Schema schema) :
-            database_id_(database_id), database_name_(database_name), table_oid_(table_oid), table_id_(PgObjectId::GetTableId(table_oid)), table_name_(table_name),
-            table_uuid_(table_uuid), schema_(std::move(schema)) {
-        }
+        TableInfo(std::string database_id, std::string database_name, uint32_t table_oid, std::string table_name, std::string table_uuid, Schema schema);
 
         const std::string& database_id() const {
             return database_id_;
