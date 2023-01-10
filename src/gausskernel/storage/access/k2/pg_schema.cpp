@@ -248,7 +248,7 @@ namespace k2pg {
           range_column_count_(range_column_count),
           indexed_range_column_ids_(std::move(indexed_range_column_ids)),
           index_permissions_(index_permissions) {
-        elog(INFO, "Creating IndexInfo: oid: %d, name: %s, basetable: %s", table_oid, table_name.c_str(), base_table_id.c_str());
+//        elog(INFO, "Creating IndexInfo: oid: %d, name: %s, basetable: %s", table_oid, table_name.c_str(), base_table_id.c_str());
     }
 
     IndexInfo::IndexInfo(std::string table_name,
@@ -275,7 +275,7 @@ namespace k2pg {
                       range_column_count_++;
                   }
               }
-        elog(INFO, "Creating IndexInfo: oid: %d, name: %s, basetable: %s", table_oid, table_name.c_str(), base_table_id.c_str());
+ //       elog(INFO, "Creating IndexInfo: oid: %d, name: %s, basetable: %s", table_oid, table_name.c_str(), base_table_id.c_str());
     }
 
     std::vector<ColumnId> IndexInfo::index_key_column_ids() const {
@@ -348,7 +348,7 @@ namespace k2pg {
     TableInfo::TableInfo(std::string database_id, std::string database_name, uint32_t table_oid, std::string table_name, std::string table_uuid, Schema schema) :
         database_id_(database_id), database_name_(database_name), table_oid_(table_oid), table_id_(PgObjectId::GetTableId(table_oid)), table_name_(table_name),
         table_uuid_(table_uuid), schema_(std::move(schema)) {
-        elog(INFO, "Creating TableInfo: oid: %d, name: %s, database: %s", table_oid, table_name.c_str(), database_name.c_str());
+  //      elog(INFO, "Creating TableInfo: oid: %d, name: %s, database: %s", table_oid, table_name.c_str(), database_name.c_str());
     }
 
     std::shared_ptr<TableInfo> TableInfo::Clone(std::shared_ptr<TableInfo> table_info, std::string database_id,
