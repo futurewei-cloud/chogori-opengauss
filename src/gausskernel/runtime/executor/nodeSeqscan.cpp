@@ -631,7 +631,6 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
     std::vector<ScanKeyData> result;
     foreach(lc, exprs)
     {
-        result.clear();
         Expr *expr = (Expr *) lfirst(lc);
 
         /* Extract clause from RestrictInfo, if required */
