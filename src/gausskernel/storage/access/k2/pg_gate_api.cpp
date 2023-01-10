@@ -1008,7 +1008,7 @@ K2PgStatus PgGate_ExecSelect(
             }
         }
 
-        for(int i=0; i < schema->partitionKeyFields.size(); ++i) {
+        for(size_t i = 0; i < schema->partitionKeyFields.size(); ++i) {
             if (schema->fields[i].descending) {
                 elog(WARNING, "Trying to range scan wih a descending key, converting to full scan");
                 convertToFullScan = true;

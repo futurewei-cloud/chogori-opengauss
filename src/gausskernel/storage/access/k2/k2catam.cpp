@@ -60,7 +60,7 @@ typedef struct CamScanPlanData
 
 	/* Primary and hash key columns of the referenced table/relation. */
 	Bitmapset *primary_key;
-	Bitmapset *hash_key;
+	Bitmapset *nonprimary_key;
 
 	/* Set of key columns whose values will be used for scanning. */
 	Bitmapset *sk_cols;
@@ -525,23 +525,15 @@ camSetupScanPlan(Relation relation, Relation index, bool xs_want_itup,
 
 static bool cam_should_pushdown_op(CamScanPlan scan_plan, AttrNumber attnum, int op_strategy)
 {
-	const int idx =  K2PgAttnumToBmsIndex(scan_plan->target_relation, attnum);
-
 	switch (op_strategy)
 	{
 		case BTEqualStrategyNumber:
-			return bms_is_member(idx, scan_plan->primary_key);
-
 		case BTLessStrategyNumber:
 		case BTLessEqualStrategyNumber:
 		case BTGreaterEqualStrategyNumber:
 		case BTGreaterStrategyNumber:
-			/* range key */
-			return (!bms_is_member(idx, scan_plan->hash_key) &&
-				bms_is_member(idx, scan_plan->primary_key));
-
+			return true;
 		default:
-			/* TODO: support other logical operators */
 			return false;
 	}
 }
@@ -594,7 +586,7 @@ ShouldPushdownScanKey(Relation relation, CamScanPlan scan_plan, AttrNumber attnu
 		{
 			/* Always expect InvalidStrategy for NULL search. */
 			Assert(key->sk_strategy == InvalidStrategy);
-			return is_primary_key;
+			return true;
 		}
 
 		if (IsSearchArray(key->sk_flags))
@@ -605,7 +597,7 @@ ShouldPushdownScanKey(Relation relation, CamScanPlan scan_plan, AttrNumber attnu
 			 * operator, so it should not get to this point.
 			 */
 			Assert(key->sk_strategy == BTEqualStrategyNumber);
-			return is_primary_key;
+			return true;
 		}
 		/* No other operators are supported. */
 		return false;
@@ -642,10 +634,6 @@ static void	camSetupScanKeys(Relation relation,
 			break;
 
 		int idx = K2PgAttnumToBmsIndex(scan_plan->target_relation, scan_plan->bind_key_attnums[i]);
-		/*
-		 * TODO: Can we have bound keys on non-pkey columns here?
-		 *       If not we do not need the is_primary_key below.
-		 */
 		bool is_primary_key = bms_is_member(idx, scan_plan->primary_key);
 
 		if (!ShouldPushdownScanKey(relation, scan_plan, scan_plan->bind_key_attnums[i],
@@ -658,61 +646,6 @@ static void	camSetupScanKeys(Relation relation,
 		}
 
 		scan_plan->sk_cols = bms_add_member(scan_plan->sk_cols, idx);
-	}
-
-	/*
-     * TODO: figure out how much of the following is still relevant
-	 * All or some of the keys should not be pushed down if any of the following is true.
-	 * - If hash key is not fully set, we must do a full-table scan so we will clear all the scan
-	 * keys.
-	 * - For RANGE columns, if condition on a precedent column in RANGE is not specified, the
-	 * subsequent columns in RANGE are dropped from the optimization.
-	 *
-	 * Implementation Notes:
-	 * Because internally, hash and range columns are cached and stored prior to other columns in
-	 * K2PG, the columns' indexes are different from the columns' attnum.
-	 * Example:
-	 *   CREATE TABLE tab(i int, j int, k int, primary key(k HASH, j ASC))
-	 *   Column k's index is 1, but its attnum is 3.
-	 *
-	 * Additionally, we currently have the following setup.
-	 * - For PRIMARY KEY SCAN, the key is specified by columns' attnums by both Postgres and K2PG
-	 *   code components.
-	 * - For SECONDARY INDEX SCAN and INDEX-ONLY SCAN, column_attnums and column_indexes are
-	 *   identical, so they can be both used interchangeably. This is because of CREATE_INDEX
-	 *   syntax rules enforce that HASH columns are specified before RANGE columns which comes
-	 *   before INCLUDE columns.
-	 * - For SYSTEM SCAN, Postgres's layer use attnums to specify a catalog INDEX, but K2PG
-	 *   layer is using column_indexes to specify them.
-	 * - For SEQUENTIAL SCAN, column_attnums and column_indexes are the same.
-	 *
-	 * TODO(neil) The above differences between different INDEX code path should be changed so that
-	 * different kinds of indexes and scans share the same behavior.
-	 */
-	bool delete_key = !bms_is_subset(scan_plan->hash_key, scan_plan->sk_cols);
-	if (index && index->rd_index->indisprimary) {
-		/* For primary key, column_attnums are used, so we process it different from other scans */
-		for (int i = 0; i < index->rd_index->indnatts; i++) {
-			int key_column = K2PgAttnumToBmsIndex(index, index->rd_index->indkey.values[i]);
-			if (!delete_key && !bms_is_member(key_column, scan_plan->sk_cols)) {
-				delete_key = true;
-			}
-
-			if (delete_key)
-				bms_del_member(scan_plan->sk_cols, key_column);
-		}
-	} else {
-		int max_idx = K2PgAttnumToBmsIndex(relation, scan_plan->bind_desc->natts);
-		for (int idx = 0; idx <= max_idx; idx++)
-		{
-			if (!delete_key &&
-					bms_is_member(idx, scan_plan->primary_key) &&
-					!bms_is_member(idx, scan_plan->sk_cols))
-				delete_key = true;
-
-			if (delete_key)
-				bms_del_member(scan_plan->sk_cols, idx);
-		}
 	}
 }
 
@@ -900,7 +833,6 @@ static void camBindScanKeys(Relation relation,
 
 						/* Build temporary vars */
 						IndexScanDescData tmp_scan_desc{};
-//						memset(&tmp_scan_desc, 0, sizeof(tmp_scan_desc));
 						tmp_scan_desc.indexRelation = index;
 
 						/*
@@ -1049,8 +981,7 @@ static void camSetupTargets(Relation relation,
  * - If "xs_want_itup" is true, Postgres layer is expecting an IndexTuple that has k2pgctid to
  *   identify the desired row.
  */
-CamScanDesc
-camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, ScanKey key)
+CamScanDesc camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, ScanKey key)
 {
 	if (nkeys > K2PG_MAX_SCAN_KEYS)
 		ereport(ERROR,
@@ -1091,7 +1022,7 @@ camBeginScan(Relation relation, Relation index, bool xs_want_itup, int nkeys, Sc
 	// 	HandleK2PgStatus(PgGate_SetCatalogCacheVersion((K2PgStatement)camScan->handle, k2pg_catalog_cache_version));
 	// }
 
-	bms_free(scan_plan.hash_key);
+	bms_free(scan_plan.nonprimary_key);
 	bms_free(scan_plan.primary_key);
 	bms_free(scan_plan.sk_cols);
 
@@ -1432,14 +1363,14 @@ void camCostEstimate(RelOptInfo *baserel, Selectivity selectivity,
  */
 static double camIndexEvalClauseSelectivity(Bitmapset *qual_cols,
                                             bool is_unique_idx,
-                                            Bitmapset *hash_key,
+                                            Bitmapset *nonprimary_key,
                                             Bitmapset *primary_key)
 {
 	/*
-	 * If there is no search condition, or not all of the hash columns have
+	 * If there is no search condition, or not all of the non-primary columns have
 	 * search conditions, it will be a full-table scan.
 	 */
-	if (bms_is_empty(qual_cols) || !bms_is_subset(hash_key, qual_cols))
+	if (bms_is_empty(qual_cols) || !bms_is_subset(nonprimary_key, qual_cols))
 	{
 		return K2PG_FULL_SCAN_SELECTIVITY;
 	}
@@ -1533,7 +1464,7 @@ void camIndexCostEstimate(IndexPath *path, Selectivity *selectivity,
 	 */
 	*selectivity = camIndexEvalClauseSelectivity(scan_plan.sk_cols,
 	                                             is_unique,
-	                                             scan_plan.hash_key,
+	                                             scan_plan.nonprimary_key,
 	                                             scan_plan.primary_key);
 	path->path.rows = baserel->tuples * (*selectivity);
 
@@ -1558,7 +1489,7 @@ void camIndexCostEstimate(IndexPath *path, Selectivity *selectivity,
 	 */
 	double const_qual_selectivity = camIndexEvalClauseSelectivity(const_quals,
 	                                                              is_unique,
-	                                                              scan_plan.hash_key,
+	                                                              scan_plan.nonprimary_key,
 	                                                              scan_plan.primary_key);
 	double baserel_rows_estimate = const_qual_selectivity * baserel->tuples;
 	if (baserel_rows_estimate < baserel->rows)
