@@ -621,7 +621,7 @@ skv::http::dto::expression::Expression buildScanExpr(K2PgScanHandle* scan, const
     expression::Value constant = serializePGConstToValue(constraint.constants[0]);
     opr_expr.valueChildren.push_back(std::move(col_ref));
     opr_expr.valueChildren.push_back(std::move(constant));
-
+    K2LOG_I(k2log::k2pg, "Built expression: {}", opr_expr);
     return opr_expr;
 }
 
