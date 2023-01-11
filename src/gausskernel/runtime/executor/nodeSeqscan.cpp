@@ -28,6 +28,7 @@
 #include "access/relscan.h"
 #include "access/tableam.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_operator.h"
 #include "commands/cluster.h"
 #include "executor/exec/execdebug.h"
 #include "executor/node/nodeModifyTable.h"
@@ -55,6 +56,7 @@
 
 #include <vector>
 #include <set>
+#include <map>
 #include "access/k2/k2pg_aux.h"
 
 struct K2ColumnRef {
@@ -81,6 +83,114 @@ struct K2ExprRefValues
    List *const_values;
    ParamListInfo paramLI; // parameters binding information for prepare statements
 };
+
+static std::unordered_map<int, StrategyNumber> operator_to_strategy_map =
+{
+    {INT48EQOID, BTEqualStrategyNumber},
+    {BooleanEqualOperator, BTEqualStrategyNumber},
+    {CHAREQOID, BTEqualStrategyNumber},
+    {INT2EQOID, BTEqualStrategyNumber},
+    {INT4EQOID, BTEqualStrategyNumber},
+    {TEXTEQOID, BTEqualStrategyNumber},
+    {INT8EQOID, BTEqualStrategyNumber},
+    {INT84EQOID, BTEqualStrategyNumber},
+    {INT42EQOID, BTEqualStrategyNumber},
+    {FLOAT4EQOID, BTEqualStrategyNumber},
+    {INT1EQOID, BTEqualStrategyNumber},
+    {FLOAT8EQOID, BTEqualStrategyNumber},
+    {TIMETZEQOID, BTEqualStrategyNumber},
+    {FLOAT48EQOID, BTEqualStrategyNumber},
+    {FLOAT84EQOID, BTEqualStrategyNumber},
+    {INTERVALEQOID, BTEqualStrategyNumber},
+    {NUMEQOID, BTEqualStrategyNumber},
+    {NUMERICEQOID, BTEqualStrategyNumber},
+    {INT28EQOID, BTEqualStrategyNumber},
+    {INT82EQOID, BTEqualStrategyNumber},
+    {TIMESTAMPEQOID, BTEqualStrategyNumber},
+    {BPCHAREQOID, BTEqualStrategyNumber},
+    {DATEEQOID, BTEqualStrategyNumber},
+    {INT48LTOID, BTLessStrategyNumber},
+    {INT2LTOID, BTLessStrategyNumber},
+    {INT4LTOID, BTLessStrategyNumber},
+    {INT8LTOID, BTLessStrategyNumber},
+    {INT84LTOID, BTLessStrategyNumber},
+    {INT24LTOID, BTLessStrategyNumber},
+    {INT42LTOID, BTLessStrategyNumber},
+    {FLOAT4LTOID, BTLessStrategyNumber},
+    {TEXTLTOID, BTLessStrategyNumber},
+    {FLOAT8LTOID, BTLessStrategyNumber},
+    {BPCHARLTOID, BTLessStrategyNumber},
+    {DATELTOID, BTLessStrategyNumber},
+    {FLOAT48LTOID, BTLessStrategyNumber},
+    {FLOAT84LTOID, BTLessStrategyNumber},
+    {TIMESTAMPTZLTOID, BTLessStrategyNumber},
+    {NUMERICLTOID, BTLessStrategyNumber},
+    {INT28LTOID, BTLessStrategyNumber},
+    {INT82LTOID, BTLessStrategyNumber},
+    {TIMESTAMPLTOID, BTLessStrategyNumber},
+    {INT48LEOID, BTLessEqualStrategyNumber},
+    {INT8LEOID, BTLessEqualStrategyNumber},
+    {INT84LEOID, BTLessEqualStrategyNumber},
+    {INT2LEOID, BTLessEqualStrategyNumber},
+    {INT4LEOID, BTLessEqualStrategyNumber},
+    {INT24LEOID, BTLessEqualStrategyNumber},
+    {INT42LEOID, BTLessEqualStrategyNumber},
+    {FLOAT4LEOID, BTLessEqualStrategyNumber},
+    {FLOAT8LEOID, BTLessEqualStrategyNumber},
+    {DATELEOID, BTLessEqualStrategyNumber},
+    {FLOAT48LEOID, BTLessEqualStrategyNumber},
+    {FLOAT84LEOID, BTLessEqualStrategyNumber},
+    {TIMESTAMPTZLEOID, BTLessEqualStrategyNumber},
+    {INTERVALEQOID, BTLessEqualStrategyNumber},
+    {NUMERICLEOID, BTLessEqualStrategyNumber},
+    {INT28LEOID, BTLessEqualStrategyNumber},
+    {INT82LEOID, BTLessEqualStrategyNumber},
+    {TIMESTAMPLEOID, BTLessEqualStrategyNumber},
+    {INT48GTOID, BTGreaterStrategyNumber},
+    {INT8GTOID, BTGreaterStrategyNumber},
+    {INT84GTOID, BTGreaterStrategyNumber},
+    {INT2GTOID, BTGreaterStrategyNumber},
+    {INT4GTOID, BTGreaterStrategyNumber},
+    {INT24GTOID, BTGreaterStrategyNumber},
+    {INT42GTOID, BTGreaterStrategyNumber},
+    {FLOAT4GTOID, BTGreaterStrategyNumber},
+    {TEXTGTOID, BTGreaterStrategyNumber},
+    {FLOAT8GTOID, BTGreaterStrategyNumber},
+    {BPCHARGTOID, BTGreaterStrategyNumber},
+    {DATEGTOID, BTGreaterStrategyNumber},
+    {FLOAT48GTOID, BTGreaterStrategyNumber},
+    {FLOAT84GTOID, BTGreaterStrategyNumber},
+    {TIMESTAMPTZGTOID, BTGreaterStrategyNumber},
+    {NUMERICGTOID, BTGreaterStrategyNumber},
+    {INT28GTOID, BTGreaterStrategyNumber},
+    {INT82GTOID, BTGreaterStrategyNumber},
+    {TIMESTAMPGTOID, BTGreaterStrategyNumber},
+    {INT48GEOID, BTGreaterEqualStrategyNumber},
+    {INT8GEOID, BTGreaterEqualStrategyNumber},
+    {INT84GEOID, BTGreaterEqualStrategyNumber},
+    {INT2GEOID, BTGreaterEqualStrategyNumber},
+    {INT4GEOID, BTGreaterEqualStrategyNumber},
+    {INT24GEOID, BTGreaterEqualStrategyNumber},
+    {INT42GEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT4GEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT8GEOID, BTGreaterEqualStrategyNumber},
+    {DATEGEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT48GEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT84GEOID, BTGreaterEqualStrategyNumber},
+    {TIMESTAMPTZGEOID, BTGreaterEqualStrategyNumber},
+    {NUMERICGEOID, BTGreaterEqualStrategyNumber},
+    {INT28GEOID, BTGreaterEqualStrategyNumber},
+    {INT82GEOID, BTGreaterEqualStrategyNumber},
+    {TIMESTAMPGEOID, BTGreaterEqualStrategyNumber}
+};
+
+static StrategyNumber get_strategy_number(int operator_no) {
+    auto result = operator_to_strategy_map.find(operator_no);
+    if (result == operator_to_strategy_map.end()) {
+        return InvalidStrategy;
+    }
+    return result.second();
+}
 
 std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI);
 
@@ -594,7 +704,7 @@ static inline void FlatTLtoBool(const List* targetList, bool* boolArr, AttrNumbe
 }
 
 std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
-    elog(INFO, "K2: parsing %d remote expressions", list_length(exprs));
+    elog(INFO, "SeqScan parsing %d remote expressions", list_length(exprs));
     ListCell   *lc;
     std::vector<ScanKeyData> result;
     foreach(lc, exprs)
@@ -605,7 +715,7 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
         if (IsA(expr, RestrictInfo)) {
             expr = ((RestrictInfo *) expr)->clause;
         }
-        elog(INFO, "K2: parsing expression: %s", nodeToString(expr));
+        elog(INFO, "SeqScan parsing expression: %s", nodeToString(expr));
         // parse a single clause
         K2ExprRefValues ref_values;
         ref_values.column_refs = NIL;
@@ -616,26 +726,35 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
             ScanKeyData skey;
             K2ColumnRef *col_ref = (K2ColumnRef *)linitial(ref_values.column_refs);
             K2ConstValue *const_value = (K2ConstValue *)linitial(ref_values.const_values);
-            switch (get_oprrest(ref_values.opno)) {
-               case F_EQSEL: {
-                    ScanKeyInit(&skey, col_ref->attr_num, BTEqualStrategyNumber, ref_values.opfunc_id, const_value->value);
-                    result.push_back(std::move(skey));
-                    break;
-               }
-               case F_SCALARLTSEL: {
-                    ScanKeyInit(&skey, col_ref->attr_num, BTLessStrategyNumber, ref_values.opfunc_id, const_value->value);
-                    result.push_back(std::move(skey));
-                    break;
-               }
-               case F_SCALARGTSEL: {
-                    ScanKeyInit(&skey, col_ref->attr_num, BTGreaterStrategyNumber, ref_values.opfunc_id, const_value->value);
-                    result.push_back(std::move(skey));
-                    break;
-               }
-               default:
-                   elog(WARNING, "Unsupported operator: %d", ref_values.opno);
-                   break;
+            StrategyNumber strategy_no = get_strategy_number(ref_values.opno);
+            if (strategy_no!= InvalidStrategy) {
+                elog(INFO, "SeqScan using strategy number %d for operator: %d", strategy_no, ref_values.opno);
+                ScanKeyInit(&skey, col_ref->attr_num, strategy_no, ref_values.opfunc_id, const_value->value);
+                result.push_back(std::move(skey));
+            } else {
+                elog(WARNING, "Unsupported operator for SeqScan: %d", ref_values.opno);
             }
+
+            // switch (get_oprrest(ref_values.opno)) {
+            //    case F_EQSEL: {
+            //         ScanKeyInit(&skey, col_ref->attr_num, BTEqualStrategyNumber, ref_values.opfunc_id, const_value->value);
+            //         result.push_back(std::move(skey));
+            //         break;
+            //    }
+            //    case F_SCALARLTSEL: {
+            //         ScanKeyInit(&skey, col_ref->attr_num, BTLessStrategyNumber, ref_values.opfunc_id, const_value->value);
+            //         result.push_back(std::move(skey));
+            //         break;
+            //    }
+            //    case F_SCALARGTSEL: {
+            //         ScanKeyInit(&skey, col_ref->attr_num, BTGreaterStrategyNumber, ref_values.opfunc_id, const_value->value);
+            //         result.push_back(std::move(skey));
+            //         break;
+            //    }
+            //    default:
+            //        elog(WARNING, "Unsupported operator: %d", ref_values.opno);
+            //        break;
+            // }
         }
     }
     return result;
