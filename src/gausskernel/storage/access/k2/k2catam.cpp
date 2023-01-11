@@ -420,16 +420,12 @@ static IndexTuple camFetchNextIndexTuple(CamScanDesc camScan, Relation index, bo
  *    - Both target and bind descriptors are specifed by the IndexTable.
  *    - For this scan, K2PG returns an index-tuple, which has a k2pgctid (ROWID) to be used for
  *      querying data from the UserTable.
- *    - TODO(neil) By batching k2pgctid and processing it on K2PG for all index-scans, the target
- *      for index-scan on regular table should also be the table itself (relation).
- *
  * 4. IndexOnlyScan(Table, Index)
  *    - Table can be systable or usertable.
  *    - Both target and bind descriptors are specifed by the IndexTable.
  *    - For this scan, K2PG ALWAYS return index-tuple, which is expected by Postgres layer.
  */
-static void
-camSetupScanPlan(Relation relation, Relation index, bool xs_want_itup,
+static void camSetupScanPlan(Relation relation, Relation index, bool xs_want_itup,
 				 CamScanDesc camScan, CamScanPlan scan_plan)
 {
 	int i;
@@ -587,8 +583,7 @@ static bool IsSearchArray(int sk_flags) {
 	return sk_flags == SK_SEARCHARRAY;
 }
 
-static bool
-ShouldPushdownScanKey(Relation relation, CamScanPlan scan_plan, AttrNumber attnum,
+static bool ShouldPushdownScanKey(Relation relation, CamScanPlan scan_plan, AttrNumber attnum,
                       ScanKey key, bool is_primary_key) {
 	if (IsSystemRelation(relation))
 	{
@@ -718,15 +713,6 @@ static void camBindScanKeys(Relation relation,
 
 		bool is_column_bound[max_idx]; /* VLA - scratch space */
 		memset(is_column_bound, 0, sizeof(bool) * max_idx);
-
-//		bool start_valid[max_idx]; /* VLA - scratch space */
-//		memset(start_valid, 0, sizeof(bool) * max_idx);
-
-//		bool end_valid[max_idx]; /* VLA - scratch space */
-//		memset(end_valid, 0, sizeof(bool) * max_idx);
-
-//		Datum start[max_idx]; /* VLA - scratch space */
-//		Datum end[max_idx]; /* VLA - scratch space */
 
 		/*
 		 * find an order of relevant keys such that for the same column, an EQUAL
@@ -890,21 +876,6 @@ static void camBindScanKeys(Relation relation,
 					is_column_bound[idx] = true;
 					break;
 				case BTGreaterStrategyNumber:
-					// if (start_valid[idx]) {
-					// 	/* take max of old value and new value */
-					// 	bool is_gt = DatumGetBool(FunctionCall2Coll(&camScan->key[i].sk_func,
-					// 	                                            camScan->key[i].sk_collation,
-					// 	                                            start[idx],
-					// 	                                            camScan->key[i].sk_argument));
-					// 	if (!is_gt) {
-					// 	start[idx] = camScan->key[i].sk_argument;
-					// 	}
-					// }
-					// else
-					// {
-					// 	start[idx] = camScan->key[i].sk_argument;
-					// 	start_valid[idx] = true;
-					// }
 					camBindColumnCondInequal(camScan,
 									scan_plan->bind_desc,
 									scan_plan->bind_key_attnums[i],
@@ -923,22 +894,6 @@ static void camBindScanKeys(Relation relation,
 					is_column_bound[idx] = true;
 					break;
 				case BTLessEqualStrategyNumber:
-					// if (end_valid[idx])
-					// {
-					// 	/* take min of old value and new value */
-					// 	bool is_lt = DatumGetBool(FunctionCall2Coll(&camScan->key[i].sk_func,
-					// 	                                            camScan->key[i].sk_collation,
-					// 	                                            end[idx],
-					// 	                                            camScan->key[i].sk_argument));
-					// 	if (!is_lt) {
-					// 		end[idx] = camScan->key[i].sk_argument;
-					// 	}
-					// }
-					// else
-					// {
-					// 	end[idx] = camScan->key[i].sk_argument;
-					// 	end_valid[idx] = true;
-					// }
 					camBindColumnCondInequal(camScan,
 									scan_plan->bind_desc,
 									scan_plan->bind_key_attnums[i],
@@ -951,25 +906,6 @@ static void camBindScanKeys(Relation relation,
 					break;
 			}
 		}
-
-		/* Bind keys for BETWEEN */
-		// int min_idx = K2PgAttnumToBmsIndex(relation, 1);
-		// for (int idx = min_idx; idx < max_idx; idx++)
-		// {
-		// 	/* Do not bind more than one condition to a column */
-		// 	if (is_column_bound[idx])
-		// 		continue;
-
-		// 	if (!start_valid[idx] && !end_valid[idx])
-		// 		continue;
-
-		// 	camBindColumnCondBetween(camScan,
-		// 	                         scan_plan->bind_desc,
-		// 							 K2PgBmsIndexToAttnum(relation, idx),
-		// 							 start_valid[idx], start[idx],
-		// 							 end_valid[idx], end[idx]);
-		// 	is_column_bound[idx] = true;
-		// }
 	}
 }
 
@@ -1087,8 +1023,7 @@ void camEndScan(CamScanDesc camScan)
 	pfree(camScan);
 }
 
-static bool
-heaptuple_matches_key(HeapTuple tup,
+static bool heaptuple_matches_key(HeapTuple tup,
 					  TupleDesc tupdesc,
 					  int nkeys,
 					  ScanKey key,
@@ -1144,8 +1079,7 @@ heaptuple_matches_key(HeapTuple tup,
 	return true;
 }
 
-static bool
-indextuple_matches_key(IndexTuple tup,
+static bool indextuple_matches_key(IndexTuple tup,
 					   TupleDesc tupdesc,
 					   int nkeys,
 					   ScanKey key,
