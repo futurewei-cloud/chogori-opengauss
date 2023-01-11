@@ -734,27 +734,6 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
             } else {
                 elog(WARNING, "Unsupported operator for SeqScan: %d", ref_values.opno);
             }
-
-            // switch (get_oprrest(ref_values.opno)) {
-            //    case F_EQSEL: {
-            //         ScanKeyInit(&skey, col_ref->attr_num, BTEqualStrategyNumber, ref_values.opfunc_id, const_value->value);
-            //         result.push_back(std::move(skey));
-            //         break;
-            //    }
-            //    case F_SCALARLTSEL: {
-            //         ScanKeyInit(&skey, col_ref->attr_num, BTLessStrategyNumber, ref_values.opfunc_id, const_value->value);
-            //         result.push_back(std::move(skey));
-            //         break;
-            //    }
-            //    case F_SCALARGTSEL: {
-            //         ScanKeyInit(&skey, col_ref->attr_num, BTGreaterStrategyNumber, ref_values.opfunc_id, const_value->value);
-            //         result.push_back(std::move(skey));
-            //         break;
-            //    }
-            //    default:
-            //        elog(WARNING, "Unsupported operator: %d", ref_values.opno);
-            //        break;
-            // }
         }
     }
     return result;
