@@ -594,7 +594,7 @@ static inline void FlatTLtoBool(const List* targetList, bool* boolArr, AttrNumbe
 }
 
 std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
-    elog(DEBUG1, "K2: parsing %d remote expressions", list_length(exprs));
+    elog(INFO, "K2: parsing %d remote expressions", list_length(exprs));
     ListCell   *lc;
     std::vector<ScanKeyData> result;
     foreach(lc, exprs)
@@ -605,7 +605,7 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
         if (IsA(expr, RestrictInfo)) {
             expr = ((RestrictInfo *) expr)->clause;
         }
-        elog(DEBUG1, "K2: parsing expression: %s", nodeToString(expr));
+        elog(INFO, "K2: parsing expression: %s", nodeToString(expr));
         // parse a single clause
         K2ExprRefValues ref_values;
         ref_values.column_refs = NIL;

@@ -913,7 +913,7 @@ K2PgStatus PgGate_ExecSelect(
 
     std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
     for (const K2PgConstraintDef& constraint: constraints) {
-
+        elog(INFO, "Processing BETWEEN constraint for %s", pg_table->table_name().c_str());
         if (constraint.constraint == K2PG_CONSTRAINT_BETWEEN) {
             // Special case for BETWEEN since SKV does not have a 1:1 match
             K2PgConstraintDef gteConstraint = constraint;
@@ -936,7 +936,8 @@ K2PgStatus PgGate_ExecSelect(
             }
         }
         else if (constraint.constraint == K2PG_CONSTRAINT_IN) {
-            // Special case for IN since SKV does not have a 1:1 match
+            elog(INFO, "Processing IN constraint for %s", pg_table->table_name().c_str());
+           // Special case for IN since SKV does not have a 1:1 match
             std::vector<Expression> expr_to_add;
             for (const K2PgConstant& constant : constraint.constants) {
                 K2PgConstraintDef eqConstraint {
@@ -955,6 +956,29 @@ K2PgStatus PgGate_ExecSelect(
             where_conds.expressionChildren.push_back(std::move(or_expr));
         }
         else {
+            std::string con_type;
+            switch(constraint.constraint) {
+                case K2PgConstraintType::K2PG_CONSTRAINT_EQ:
+                    con_type = "EQ";
+                    break;
+                case K2PgConstraintType::K2PG_CONSTRAINT_LT:
+                    con_type = "LT";
+                    break;
+                case K2PgConstraintType::K2PG_CONSTRAINT_LTE:
+                    con_type = "LTE";
+                    break;
+                case K2PgConstraintType::K2PG_CONSTRAINT_GT:
+                    con_type = "GT";
+                    break;
+                case K2PgConstraintType::K2PG_CONSTRAINT_GTE:
+                    con_type = "GTE";
+                    break;
+                default:
+                    con_type = "UNKNOWN";
+                    break;
+            }
+            elog(INFO, "Processing %s constraint for %s", con_type.c_str(), pg_table->table_name().c_str());
+
             // Normal case of 1 constant expression that has 1:1 map to SKV expression
             Expression expr = buildScanExpr(handle, constraint, attr_to_offset);
             if (expr.op == Operation::UNKNOWN) {
@@ -964,8 +988,10 @@ K2PgStatus PgGate_ExecSelect(
 
             uint32_t offset = attr_to_offset[constraint.attr_num];
             if (offset < schema->partitionKeyFields.size()) {
+                elog(INFO, "Adding %s constraint for %s to range_conds", con_type.c_str(), pg_table->table_name().c_str());
                 range_conds.expressionChildren.push_back(std::move(expr));
             } else {
+                elog(INFO, "Adding %s constraint for %s to where_conds", con_type.c_str(), pg_table->table_name().c_str());
                 where_conds.expressionChildren.push_back(std::move(expr));
             }
         }
@@ -1000,6 +1026,7 @@ K2PgStatus PgGate_ExecSelect(
     // Check if we are trying to range scan an index that does not support it
     bool convertToFullScan = false;
     if (isRangeScan) {
+        elog(INFO, "Processing a range scan for %s", pg_table->table_name().c_str());
         for (const K2PgConstraintDef& constraint: constraints) {
             if (constraint.constants.size() && !K2PgAllowForPrimaryKey(constraint.constants[0].type_id, constraint.constants[0].attr_size, constraint.constants[0].attr_byvalue)) {
                 elog(WARNING, "Trying to range scan wih an unsupported type, converting to full scan");
@@ -1017,6 +1044,7 @@ K2PgStatus PgGate_ExecSelect(
         }
     }
     if (convertToFullScan) {
+        elog(INFO, "Processing a full scan for %s", pg_table->table_name().c_str());
         start = skv::http::dto::SKVRecordBuilder(handle->collectionName, schema);
         end = skv::http::dto::SKVRecordBuilder(handle->collectionName, schema);
 

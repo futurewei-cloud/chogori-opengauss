@@ -388,7 +388,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
     std::shared_ptr<skv::http::dto::Schema> schema = start.getSchema();
 
     if (range_conds.op == Operation::UNKNOWN) {
-        K2LOG_D(k2log::k2pg, "range_conds UNKNOWN");
+        K2LOG_I(k2log::k2pg, "range_conds UNKNOWN");
         return;
     }
 
@@ -432,7 +432,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
             // there was a branch in the processing of previous condition and we cannot continue.
             // Ideally, this shouldn't happen if the query parser did its job well.
             // This is not an error, and so we can still process the request. PG would down-filter the result set after
-            K2LOG_D(k2log::k2pg, "Condition branched at previous key field. Use the condition as filter condition");
+            K2LOG_I(k2log::k2pg, "Condition branched at previous key field. Use the condition as filter condition");
             leftover_exprs.push_back(pg_expr);
             continue; // keep going so that we log all skipped expressions;
         }
@@ -446,13 +446,13 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
 
-                    K2LOG_D(k2log::k2pg, "Appending to start");
+                    K2LOG_I(k2log::k2pg, "Appending to start");
                     AppendValueToRecord(val, start);
-                    K2LOG_D(k2log::k2pg, "Appending to end");
+                    K2LOG_I(k2log::k2pg, "Appending to end");
                     AppendValueToRecord(val, end);
                 } else {
                     didBranch = true;
-                    K2LOG_D(k2log::k2pg, "Appending to leftover EQ else cur: {}, start: {}", cur_idx, start_idx);
+                    K2LOG_I(k2log::k2pg, "Appending to leftover EQ else cur: {}, start: {}", cur_idx, start_idx);
                     leftover_exprs.emplace_back(pg_expr);
                 }
             } break;
@@ -460,27 +460,27 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
             case Operation::GT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
-                    K2LOG_D(k2log::k2pg, "Appending to start");
+                    K2LOG_I(k2log::k2pg, "Appending to start");
                     AppendValueToRecord(val, start);
                     isRangeScan = true;
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
-                K2LOG_D(k2log::k2pg, "Appending to leftover GT");
+                K2LOG_I(k2log::k2pg, "Appending to leftover GT");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LT: {
                 if (cur_idx - start_idx == 0 || cur_idx - start_idx == 1) {
                     start_idx = cur_idx;
-                    K2LOG_D(k2log::k2pg, "Appending to end");
+                    K2LOG_I(k2log::k2pg, "Appending to end");
                     AppendValueToRecord(val, end);
                     isRangeScan = true;
                 } else {
                     didBranch = true;
                 }
                 // always push the comparison operator to K2 as discussed
-                K2LOG_D(k2log::k2pg, "Appending to leftover LT");
+                K2LOG_I(k2log::k2pg, "Appending to leftover LT");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             case Operation::LTE: {
@@ -497,7 +497,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                 // Not pushing LTE to range record because end record is exclusive
                 didBranch = true;
                 isRangeScan = true;
-                K2LOG_D(k2log::k2pg, "Appending to leftover LTE");
+                K2LOG_I(k2log::k2pg, "Appending to leftover LTE");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
             default: {
@@ -505,7 +505,7 @@ void BuildRangeRecords(skv::http::dto::expression::Expression& range_conds, std:
                 //K2LOG_WCT(log::k2Adapter, "{}", msg);
                 didBranch = true;
                 isRangeScan = true;
-                K2LOG_D(k2log::k2pg, "Appending to leftover default");
+                K2LOG_I(k2log::k2pg, "Appending to leftover default");
                 leftover_exprs.emplace_back(pg_expr);
             } break;
         }
