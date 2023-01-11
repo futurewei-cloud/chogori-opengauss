@@ -177,6 +177,30 @@ static void camBindColumn(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber a
     camScan->constraints.push_back(std::move(constraint));
 }
 
+// bind a column for a single condition for example, < or >
+static void camBindColumnCondInequal(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum, Datum value, bool is_null, K2PgConstraintType type)
+{
+    Oid     atttypid;
+    int att_size;
+    bool att_byval;
+    cam_get_att_type_info(bind_desc, attnum, atttypid, att_size, att_byval);
+    K2PgConstant constant {
+        .type_id = atttypid,
+        .attr_size = att_size,
+        .attr_byvalue = att_byval,
+        .datum = value,
+        .is_null = is_null
+    };
+
+    K2PgConstraintDef constraint {
+        .attr_num = attnum,
+        .constraint = type,
+        .constants = {constant}
+    };
+
+    camScan->constraints.push_back(std::move(constraint));
+}
+
 static void camBindColumnCondBetween(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum,
                                      bool start_valid, Datum value, bool end_valid, Datum value_end)
 {
@@ -208,6 +232,7 @@ static void camBindColumnCondBetween(CamScanDesc camScan, TupleDesc bind_desc, A
 
     camScan->constraints.push_back(std::move(constraint));
 }
+
 /*
  * Bind an array of scan keys for a column.
  */
@@ -694,14 +719,14 @@ static void camBindScanKeys(Relation relation,
 		bool is_column_bound[max_idx]; /* VLA - scratch space */
 		memset(is_column_bound, 0, sizeof(bool) * max_idx);
 
-		bool start_valid[max_idx]; /* VLA - scratch space */
-		memset(start_valid, 0, sizeof(bool) * max_idx);
+//		bool start_valid[max_idx]; /* VLA - scratch space */
+//		memset(start_valid, 0, sizeof(bool) * max_idx);
 
-		bool end_valid[max_idx]; /* VLA - scratch space */
-		memset(end_valid, 0, sizeof(bool) * max_idx);
+//		bool end_valid[max_idx]; /* VLA - scratch space */
+//		memset(end_valid, 0, sizeof(bool) * max_idx);
 
-		Datum start[max_idx]; /* VLA - scratch space */
-		Datum end[max_idx]; /* VLA - scratch space */
+//		Datum start[max_idx]; /* VLA - scratch space */
+//		Datum end[max_idx]; /* VLA - scratch space */
 
 		/*
 		 * find an order of relevant keys such that for the same column, an EQUAL
@@ -856,67 +881,95 @@ static void camBindScanKeys(Relation relation,
 					break;
 
 				case BTGreaterEqualStrategyNumber:
+					camBindColumnCondInequal(camScan,
+									scan_plan->bind_desc,
+									scan_plan->bind_key_attnums[i],
+									camScan->key[i].sk_argument,
+									(camScan->key[i].sk_flags & SK_ISNULL) == SK_ISNULL,
+									K2PgConstraintType::K2PG_CONSTRAINT_GTE);
+					is_column_bound[idx] = true;
+					break;
 				case BTGreaterStrategyNumber:
-					if (start_valid[idx]) {
-						/* take max of old value and new value */
-						bool is_gt = DatumGetBool(FunctionCall2Coll(&camScan->key[i].sk_func,
-						                                            camScan->key[i].sk_collation,
-						                                            start[idx],
-						                                            camScan->key[i].sk_argument));
-						if (!is_gt) {
-						start[idx] = camScan->key[i].sk_argument;
-						}
-					}
-					else
-					{
-						start[idx] = camScan->key[i].sk_argument;
-						start_valid[idx] = true;
-					}
+					// if (start_valid[idx]) {
+					// 	/* take max of old value and new value */
+					// 	bool is_gt = DatumGetBool(FunctionCall2Coll(&camScan->key[i].sk_func,
+					// 	                                            camScan->key[i].sk_collation,
+					// 	                                            start[idx],
+					// 	                                            camScan->key[i].sk_argument));
+					// 	if (!is_gt) {
+					// 	start[idx] = camScan->key[i].sk_argument;
+					// 	}
+					// }
+					// else
+					// {
+					// 	start[idx] = camScan->key[i].sk_argument;
+					// 	start_valid[idx] = true;
+					// }
+					camBindColumnCondInequal(camScan,
+									scan_plan->bind_desc,
+									scan_plan->bind_key_attnums[i],
+									camScan->key[i].sk_argument,
+									(camScan->key[i].sk_flags & SK_ISNULL) == SK_ISNULL,
+									K2PgConstraintType::K2PG_CONSTRAINT_GT);
+					is_column_bound[idx] = true;
 					break;
-
 				case BTLessStrategyNumber:
-				case BTLessEqualStrategyNumber:
-					if (end_valid[idx])
-					{
-						/* take min of old value and new value */
-						bool is_lt = DatumGetBool(FunctionCall2Coll(&camScan->key[i].sk_func,
-						                                            camScan->key[i].sk_collation,
-						                                            end[idx],
-						                                            camScan->key[i].sk_argument));
-						if (!is_lt) {
-							end[idx] = camScan->key[i].sk_argument;
-						}
-					}
-					else
-					{
-						end[idx] = camScan->key[i].sk_argument;
-						end_valid[idx] = true;
-					}
+					camBindColumnCondInequal(camScan,
+									scan_plan->bind_desc,
+									scan_plan->bind_key_attnums[i],
+									camScan->key[i].sk_argument,
+									(camScan->key[i].sk_flags & SK_ISNULL) == SK_ISNULL,
+									K2PgConstraintType::K2PG_CONSTRAINT_LT);
+					is_column_bound[idx] = true;
 					break;
-
+				case BTLessEqualStrategyNumber:
+					// if (end_valid[idx])
+					// {
+					// 	/* take min of old value and new value */
+					// 	bool is_lt = DatumGetBool(FunctionCall2Coll(&camScan->key[i].sk_func,
+					// 	                                            camScan->key[i].sk_collation,
+					// 	                                            end[idx],
+					// 	                                            camScan->key[i].sk_argument));
+					// 	if (!is_lt) {
+					// 		end[idx] = camScan->key[i].sk_argument;
+					// 	}
+					// }
+					// else
+					// {
+					// 	end[idx] = camScan->key[i].sk_argument;
+					// 	end_valid[idx] = true;
+					// }
+					camBindColumnCondInequal(camScan,
+									scan_plan->bind_desc,
+									scan_plan->bind_key_attnums[i],
+									camScan->key[i].sk_argument,
+									(camScan->key[i].sk_flags & SK_ISNULL) == SK_ISNULL,
+									K2PgConstraintType::K2PG_CONSTRAINT_LTE);
+					is_column_bound[idx] = true;
+					break;
 				default:
-					break; /* unreachable */
+					break;
 			}
 		}
 
 		/* Bind keys for BETWEEN */
-		int min_idx = K2PgAttnumToBmsIndex(relation, 1);
-		for (int idx = min_idx; idx < max_idx; idx++)
-		{
-			/* Do not bind more than one condition to a column */
-			if (is_column_bound[idx])
-				continue;
+		// int min_idx = K2PgAttnumToBmsIndex(relation, 1);
+		// for (int idx = min_idx; idx < max_idx; idx++)
+		// {
+		// 	/* Do not bind more than one condition to a column */
+		// 	if (is_column_bound[idx])
+		// 		continue;
 
-			if (!start_valid[idx] && !end_valid[idx])
-				continue;
+		// 	if (!start_valid[idx] && !end_valid[idx])
+		// 		continue;
 
-			camBindColumnCondBetween(camScan,
-			                         scan_plan->bind_desc,
-									 K2PgBmsIndexToAttnum(relation, idx),
-									 start_valid[idx], start[idx],
-									 end_valid[idx], end[idx]);
-			is_column_bound[idx] = true;
-		}
+		// 	camBindColumnCondBetween(camScan,
+		// 	                         scan_plan->bind_desc,
+		// 							 K2PgBmsIndexToAttnum(relation, idx),
+		// 							 start_valid[idx], start[idx],
+		// 							 end_valid[idx], end[idx]);
+		// 	is_column_bound[idx] = true;
+		// }
 	}
 }
 
