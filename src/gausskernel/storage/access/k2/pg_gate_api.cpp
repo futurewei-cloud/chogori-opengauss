@@ -913,8 +913,8 @@ K2PgStatus PgGate_ExecSelect(
 
     std::shared_ptr<skv::http::dto::Schema> schema = handle->secondarySchema ? handle->secondarySchema : handle->primarySchema;
     for (const K2PgConstraintDef& constraint: constraints) {
-        elog(INFO, "Processing BETWEEN constraint for %s", pg_table->table_name().c_str());
         if (constraint.constraint == K2PG_CONSTRAINT_BETWEEN) {
+            elog(INFO, "Processing BETWEEN constraint for %s", pg_table->table_name().c_str());
             // Special case for BETWEEN since SKV does not have a 1:1 match
             K2PgConstraintDef gteConstraint = constraint;
             gteConstraint.constraint = K2PG_CONSTRAINT_GTE;
