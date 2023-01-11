@@ -189,7 +189,7 @@ static StrategyNumber get_strategy_number(int operator_no) {
     if (result == operator_to_strategy_map.end()) {
         return InvalidStrategy;
     }
-    return result->second();
+    return result->second;
 }
 
 std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI);
