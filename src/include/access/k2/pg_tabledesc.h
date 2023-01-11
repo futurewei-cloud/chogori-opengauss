@@ -185,6 +185,10 @@ class PgTableDesc {
     return table_id_;
   }
 
+  const std::string& table_name() const {
+    return table_name_;
+  }
+  
   // if is_index_, this is id of the index, otherwise, it is id of this table.
   const std::string& table_id() {
     return table_id_;
@@ -235,6 +239,7 @@ class PgTableDesc {
   private:
   bool is_index_;
   std::string database_id_;
+  std::string table_name_;
   std::string table_id_;  // if is_index_, this is id of the index, otherwise, it is id of this table.
   PgOid base_table_oid_;  // if is_index_, this is oid of the base table, otherwise, it is oid of this table.
   PgOid index_oid_;       // if is_index_, this is oid of the index, otherwiese 0

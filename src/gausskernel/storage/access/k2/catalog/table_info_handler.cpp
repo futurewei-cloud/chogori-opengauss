@@ -689,7 +689,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
     std::string index_table_id = PgObjectId::GetTableId(index_params.table_oid);
     std::string index_table_uuid = PgObjectId::GetTableUuid(database_info->database_oid, index_params.table_oid);
 
-    K2LOG_D(log::catalog, "Creating index ns name: {}, index name: {}, base table oid: {}",
+    K2LOG_I(log::catalog, "Creating index ns name: {}, index name: {}, base table oid: {}",
             database_info->database_id, index_params.index_name, base_table_info->table_oid());
 
     if (base_table_info->has_secondary_indexes()) {
@@ -711,7 +711,7 @@ sh::Response<std::shared_ptr<IndexInfo>> TableInfoHandler::CreateIndexTable(std:
     }
     try {
        // use default index permission, could be customized by user/api
-        IndexInfo new_index_info = BuildIndexInfo(base_table_info, database_info->database_id, index_params.table_oid, index_table_uuid,
+        IndexInfo new_index_info = BuildIndexInfo(base_table_info, index_params.index_name, index_params.table_oid, index_table_uuid,
                 index_params.index_schema, index_params.is_unique, index_params.is_shared, index_params.index_permissions);
 
         K2LOG_D(log::catalog, "Persisting index table id: {}, name: {} in {}", new_index_info.table_id(), new_index_info.table_name(), database_info->database_id);

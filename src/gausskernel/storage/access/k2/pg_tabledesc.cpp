@@ -73,7 +73,8 @@ using k2pg::catalog::CatalogConsts;
     }
 
     PgTableDesc::PgTableDesc(std::shared_ptr<TableInfo> pg_table) : is_index_(false),
-        database_id_(pg_table->database_id()), table_id_(pg_table->table_id()), base_table_oid_(pg_table->table_oid()), index_oid_(0),
+        database_id_(pg_table->database_id()), table_name_(pg_table->table_name()),
+        table_id_(pg_table->table_id()), base_table_oid_(pg_table->table_oid()), index_oid_(0),
         schema_version_(pg_table->schema().version()),
         key_column_num_(pg_table->schema().num_key_columns())
     {
@@ -105,7 +106,8 @@ using k2pg::catalog::CatalogConsts;
     }
 
     PgTableDesc::PgTableDesc(const IndexInfo& index_info, const std::string& database_id) : is_index_(true),
-        database_id_(database_id), table_id_(index_info.table_id()), base_table_oid_(index_info.base_table_oid()), index_oid_(index_info.table_oid()),
+        database_id_(database_id), table_name_(index_info.table_name()),
+        table_id_(index_info.table_id()), base_table_oid_(index_info.base_table_oid()), index_oid_(index_info.table_oid()),
         schema_version_(index_info.version()),
         key_column_num_(index_info.key_column_count())
     {

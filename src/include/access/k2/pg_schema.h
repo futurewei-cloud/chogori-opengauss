@@ -400,27 +400,14 @@ namespace k2pg {
 
     class IndexInfo {
         public:
-        explicit IndexInfo(std::string table_name, uint32_t table_oid, std::string table_uuid,
+        IndexInfo(std::string table_name, uint32_t table_oid, std::string table_uuid,
                 std::string base_table_id, uint32_t schema_version, bool is_unique,
                 bool is_shared, std::vector<IndexColumn> columns,
                 size_t range_column_count,
                 std::vector<ColumnId> indexed_range_column_ids, IndexPermissions index_permissions,
-                bool use_mangled_column_name)
-                : table_name_(table_name),
-                table_oid_(table_oid),
-                table_id_(PgObjectId::GetTableId(table_oid)),
-                table_uuid_(table_uuid),
-                base_table_id_(base_table_id),
-                schema_version_(schema_version),
-                is_unique_(is_unique),
-                is_shared_(is_shared),
-                columns_(std::move(columns)),
-                range_column_count_(range_column_count),
-                indexed_range_column_ids_(std::move(indexed_range_column_ids)),
-                index_permissions_(index_permissions) {
-        }
+                bool use_mangled_column_name);
 
-        explicit IndexInfo(std::string table_name,
+        IndexInfo(std::string table_name,
                 uint32_t table_oid,
                 std::string table_uuid,
                 std::string base_table_id,
@@ -428,23 +415,7 @@ namespace k2pg {
                 bool is_unique,
                 bool is_shared,
                 std::vector<IndexColumn> columns,
-                IndexPermissions index_permissions)
-                : table_name_(table_name),
-                    table_oid_(table_oid),
-                    table_id_(PgObjectId::GetTableId(table_oid)),
-                    table_uuid_(table_uuid),
-                    base_table_id_(base_table_id),
-                    schema_version_(schema_version),
-                    is_unique_(is_unique),
-                    is_shared_(is_shared),
-                    columns_(std::move(columns)),
-                    index_permissions_(index_permissions) {
-                    for (auto& column : columns_) {
-                        if (column.is_range) {
-                            range_column_count_++;
-                        }
-                    }
-        }
+                IndexPermissions index_permissions);
 
         const std::string& table_id() const {
             return table_id_;
@@ -571,10 +542,7 @@ namespace k2pg {
 
         typedef std::shared_ptr<TableInfo> SharedPtr;
 
-        TableInfo(std::string database_id, std::string database_name, uint32_t table_oid, std::string table_name, std::string table_uuid, Schema schema) :
-            database_id_(database_id), database_name_(database_name), table_oid_(table_oid), table_id_(PgObjectId::GetTableId(table_oid)), table_name_(table_name),
-            table_uuid_(table_uuid), schema_(std::move(schema)) {
-        }
+        TableInfo(std::string database_id, std::string database_name, uint32_t table_oid, std::string table_name, std::string table_uuid, Schema schema);
 
         const std::string& database_id() const {
             return database_id_;
