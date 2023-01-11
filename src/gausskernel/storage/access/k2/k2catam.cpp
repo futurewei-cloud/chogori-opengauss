@@ -177,7 +177,7 @@ static void camBindColumn(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber a
     camScan->constraints.push_back(std::move(constraint));
 }
 
-// bind a column for a single condition for example, < or >
+// bind a column for an inequal condition for example, < or >
 static void camBindColumnCondInequal(CamScanDesc camScan, TupleDesc bind_desc, AttrNumber attnum, Datum value, bool is_null, K2PgConstraintType type)
 {
     Oid     atttypid;

@@ -903,7 +903,7 @@ K2PgStatus PgGate_ExecSelect(
     range_conds.op = Operation::AND;
     where_conds.op = Operation::AND;
     std::shared_ptr<k2pg::PgTableDesc> pg_table = handle->secondaryTable ? handle->secondaryTable : handle->primaryTable;
-    elog(INFO, "PgGate_ExecSelect for table %s: %s with %ld constraints", pg_table->table_name().c_str(), pg_table->schema_name().c_str(), constraints.size());
+    elog(DEBUG1, "PgGate_ExecSelect for table %s: %s with %ld constraints", pg_table->table_name().c_str(), pg_table->schema_name().c_str(), constraints.size());
 
     std::unordered_map<int, uint32_t> attr_to_offset;
     for (const auto& column : pg_table->columns()) {

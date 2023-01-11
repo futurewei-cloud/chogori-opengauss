@@ -398,7 +398,7 @@ static TableScanDesc InitBeginScan(SeqScanState* node, Relation current_relation
 
         std::vector<ScanKeyData> skeys = std::move(parse_conditions(node->ps.plan->qual, node->ps.state->es_param_list_info));
         if (!skeys.empty()) {
-            elog(INFO, "InitBeginScan with %lu skeys", skeys.size());
+            elog(DEBUG1, "InitBeginScan with %lu skeys", skeys.size());
             current_scan_desc = scan_handler_tbl_beginscan(current_relation,
                 scanSnap, skeys.size(), skeys.data(), (ScanState*)node);
         } else {
@@ -626,7 +626,7 @@ static inline void FlatTLtoBool(const List* targetList, bool* boolArr, AttrNumbe
 // }
 
 std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
-    elog(INFO, "K2: parsing %d remote expressions", list_length(exprs));
+    elog(DEBUG1, "K2: parsing %d remote expressions", list_length(exprs));
     ListCell   *lc;
     std::vector<ScanKeyData> result;
     foreach(lc, exprs)
@@ -637,7 +637,7 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
         if (IsA(expr, RestrictInfo)) {
             expr = ((RestrictInfo *) expr)->clause;
         }
-        elog(INFO, "K2: parsing expression: %s", nodeToString(expr));
+        elog(DEBUG1, "K2: parsing expression: %s", nodeToString(expr));
         // parse a single clause
         K2ExprRefValues ref_values;
         ref_values.column_refs = NIL;
@@ -715,7 +715,7 @@ void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
         elog(INFO, "K2: we only handle binary opclause, actual args length: %d for node %s", list_length(node->args), nodeToString(node));
         return;
     } else {
-        elog(INFO, "K2: handing binary opclause for node %s", nodeToString(node));
+        elog(DEBUG1, "K2: handing binary opclause for node %s", nodeToString(node));
     }
 
     ListCell *lc;
@@ -723,11 +723,10 @@ void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
     {
         case F_EQSEL: //  equal =
         case F_SCALARLTSEL: // Less than <
-          // TODO not supported by OG?
 //        case F_SCALARLESEL: // Less Equal <=
         case F_SCALARGTSEL: // Greater than >
 //        case F_SCALARGESEL: // Greater Equal >=
-            elog(INFO, "K2: parsing OpExpr: %d", get_oprrest(node->opno));
+            elog(DEBUG1, "K2: parsing OpExpr: %d", get_oprrest(node->opno));
 
             ref_values->opno = node->opno;
             ref_values->opfunc_id = node->opfuncid;
@@ -745,13 +744,13 @@ void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
 }
 
 void parse_relable_type(RelabelType *node, K2ExprRefValues *ref_values) {
-    elog(INFO, "K2: parsing RelabelType %s", nodeToString(node));
+    elog(DEBUG1, "K2: parsing RelabelType %s", nodeToString(node));
     // the condition is at the current level
     parse_expr(node->arg, ref_values);
 }
 
 void parse_var(Var *node, K2ExprRefValues *ref_values) {
-    elog(INFO, "K2: parsing Var %s", nodeToString(node));
+    elog(DEBUG1, "K2: parsing Var %s", nodeToString(node));
     // the condition is at the current level
     if (node->varlevelsup == 0) {
         K2ColumnRef *col_ref = (K2ColumnRef *)palloc0(sizeof(K2ColumnRef));
@@ -764,7 +763,7 @@ void parse_var(Var *node, K2ExprRefValues *ref_values) {
 }
 
 void parse_const(Const *node, K2ExprRefValues *ref_values) {
-    elog(INFO, "K2: parsing Const %s", nodeToString(node));
+    elog(DEBUG1, "K2: parsing Const %s", nodeToString(node));
     K2ConstValue *val = (K2ConstValue *)palloc0(sizeof(K2ConstValue));
     val->atttypid = node->consttype;
     val->is_null = node->constisnull;
@@ -781,15 +780,9 @@ void parse_const(Const *node, K2ExprRefValues *ref_values) {
 }
 
 void parse_param(Param *node, K2ExprRefValues *ref_values) {
-    elog(INFO, "K2: parsing Param %s", nodeToString(node));
+    elog(DEBUG1, "K2: parsing Param %s", nodeToString(node));
     ParamExternData *prm = NULL;
-   // TODO
-    // ParamExternData prmdata;
-    //if (ref_values->paramLI->paramFetch != NULL)
-    //    prm = ref_values->paramLI->paramFetch(ref_values->paramLI, node->paramid,
-    //            true, &prmdata);
-    //else
-        prm = &ref_values->paramLI->params[node->paramid - 1];
+    prm = &ref_values->paramLI->params[node->paramid - 1];
 
     if (!OidIsValid(prm->ptype) ||
         prm->ptype != node->paramtype ||
