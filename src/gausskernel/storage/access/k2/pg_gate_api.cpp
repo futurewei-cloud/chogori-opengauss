@@ -863,8 +863,8 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
         return K2PgStatus::OK;
     }
 
-    pg_table = k2pg::pg_session->LoadTable(database_oid, (*handle)->indexParams.index_oid);
-    if (pg_table == nullptr) {
+    std::shared_ptr<k2pg::PgTableDesc> pg_index = k2pg::pg_session->LoadTable(database_oid, (*handle)->indexParams.index_oid);
+    if (pg_index == nullptr) {
         K2PgStatus status {
             .pg_code = ERRCODE_INTERNAL_ERROR,
             .k2_code = 404,
@@ -873,9 +873,9 @@ K2PgStatus PgGate_NewSelect(K2PgOid database_oid,
         };
         return status;
     }
-    (*handle)->secondaryTable = pg_table;
+    (*handle)->secondaryTable = pg_index;
 
-    const std::string& secondarySchemaName = pg_table->schema_name();
+    const std::string& secondarySchemaName = pg_index->schema_name();
     auto [secondaryStatus, secondarySchema] = k2pg::TXMgr.getSchema((*handle)->collectionName, secondarySchemaName).get();
     if (!secondaryStatus.is2xxOK()) {
         return k2pg::K2StatusToK2PgStatus(std::move(secondaryStatus));
@@ -903,6 +903,7 @@ K2PgStatus PgGate_ExecSelect(
     range_conds.op = Operation::AND;
     where_conds.op = Operation::AND;
     std::shared_ptr<k2pg::PgTableDesc> pg_table = handle->secondaryTable ? handle->secondaryTable : handle->primaryTable;
+    elog(DEBUG5, "PgGate_ExecSelect for table %s: %s with %ld constraints", pg_table->table_name().c_str(), pg_table->schema_name().c_str(), constraints.size());
 
     std::unordered_map<int, uint32_t> attr_to_offset;
     for (const auto& column : pg_table->columns()) {
@@ -1007,7 +1008,7 @@ K2PgStatus PgGate_ExecSelect(
             }
         }
 
-        for(int i=0; i < schema->partitionKeyFields.size(); ++i) {
+        for(size_t i = 0; i < schema->partitionKeyFields.size(); ++i) {
             if (schema->fields[i].descending) {
                 elog(WARNING, "Trying to range scan wih a descending key, converting to full scan");
                 convertToFullScan = true;

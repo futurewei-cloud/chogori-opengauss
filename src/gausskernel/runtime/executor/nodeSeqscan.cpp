@@ -27,6 +27,8 @@
 
 #include "access/relscan.h"
 #include "access/tableam.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_operator.h"
 #include "commands/cluster.h"
 #include "executor/exec/execdebug.h"
 #include "executor/node/nodeModifyTable.h"
@@ -36,6 +38,7 @@
 #include "miscadmin.h"
 #include "storage/buf/bufmgr.h"
 #include "storage/tcap.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/rel_gs.h"
@@ -43,12 +46,165 @@
 #include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/pruning.h"
+#include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
 #include "access/ustore/knl_uheap.h"
 #include "access/ustore/knl_uscan.h"
 
 #include "optimizer/var.h"
 #include "optimizer/tlist.h"
+
+#include <vector>
+#include <set>
+#include <map>
+#include "access/k2/k2pg_aux.h"
+
+struct K2ColumnRef {
+   AttrNumber attr_num;
+   int attno;
+   int attr_typid;
+   int atttypmod;
+};
+
+struct K2ConstValue
+{
+   Oid   atttypid;
+   int attlen;
+   bool attbyval;
+   Datum value;
+   bool is_null;
+};
+
+struct K2ExprRefValues
+{
+   Oid opno;  // PG_OPERATOR OID of the operator
+   RegProcedure opfunc_id; // PG func oid
+   List *column_refs;
+   List *const_values;
+   ParamListInfo paramLI; // parameters binding information for prepare statements
+};
+
+static std::unordered_map<int, StrategyNumber> operator_to_strategy_map =
+{
+    {INT48EQOID, BTEqualStrategyNumber},
+    {BooleanEqualOperator, BTEqualStrategyNumber},
+    {CHAREQOID, BTEqualStrategyNumber},
+    {INT2EQOID, BTEqualStrategyNumber},
+    {INT4EQOID, BTEqualStrategyNumber},
+    {TEXTEQOID, BTEqualStrategyNumber},
+    {INT8EQOID, BTEqualStrategyNumber},
+    {INT84EQOID, BTEqualStrategyNumber},
+    {INT42EQOID, BTEqualStrategyNumber},
+    {FLOAT4EQOID, BTEqualStrategyNumber},
+    {INT1EQOID, BTEqualStrategyNumber},
+    {FLOAT8EQOID, BTEqualStrategyNumber},
+    {TIMETZEQOID, BTEqualStrategyNumber},
+    {FLOAT48EQOID, BTEqualStrategyNumber},
+    {FLOAT84EQOID, BTEqualStrategyNumber},
+    {INTERVALEQOID, BTEqualStrategyNumber},
+    {NUMEQOID, BTEqualStrategyNumber},
+    {NUMERICEQOID, BTEqualStrategyNumber},
+    {INT28EQOID, BTEqualStrategyNumber},
+    {INT82EQOID, BTEqualStrategyNumber},
+    {TIMESTAMPEQOID, BTEqualStrategyNumber},
+    {BPCHAREQOID, BTEqualStrategyNumber},
+    {DATEEQOID, BTEqualStrategyNumber},
+    {INT48LTOID, BTLessStrategyNumber},
+    {INT2LTOID, BTLessStrategyNumber},
+    {INT4LTOID, BTLessStrategyNumber},
+    {INT8LTOID, BTLessStrategyNumber},
+    {INT84LTOID, BTLessStrategyNumber},
+    {INT24LTOID, BTLessStrategyNumber},
+    {INT42LTOID, BTLessStrategyNumber},
+    {FLOAT4LTOID, BTLessStrategyNumber},
+    {TEXTLTOID, BTLessStrategyNumber},
+    {FLOAT8LTOID, BTLessStrategyNumber},
+    {BPCHARLTOID, BTLessStrategyNumber},
+    {DATELTOID, BTLessStrategyNumber},
+    {FLOAT48LTOID, BTLessStrategyNumber},
+    {FLOAT84LTOID, BTLessStrategyNumber},
+    {TIMESTAMPTZLTOID, BTLessStrategyNumber},
+    {NUMERICLTOID, BTLessStrategyNumber},
+    {INT28LTOID, BTLessStrategyNumber},
+    {INT82LTOID, BTLessStrategyNumber},
+    {TIMESTAMPLTOID, BTLessStrategyNumber},
+    {INT48LEOID, BTLessEqualStrategyNumber},
+    {INT8LEOID, BTLessEqualStrategyNumber},
+    {INT84LEOID, BTLessEqualStrategyNumber},
+    {INT2LEOID, BTLessEqualStrategyNumber},
+    {INT4LEOID, BTLessEqualStrategyNumber},
+    {INT24LEOID, BTLessEqualStrategyNumber},
+    {INT42LEOID, BTLessEqualStrategyNumber},
+    {FLOAT4LEOID, BTLessEqualStrategyNumber},
+    {FLOAT8LEOID, BTLessEqualStrategyNumber},
+    {DATELEOID, BTLessEqualStrategyNumber},
+    {FLOAT48LEOID, BTLessEqualStrategyNumber},
+    {FLOAT84LEOID, BTLessEqualStrategyNumber},
+    {TIMESTAMPTZLEOID, BTLessEqualStrategyNumber},
+    {INTERVALEQOID, BTLessEqualStrategyNumber},
+    {NUMERICLEOID, BTLessEqualStrategyNumber},
+    {INT28LEOID, BTLessEqualStrategyNumber},
+    {INT82LEOID, BTLessEqualStrategyNumber},
+    {TIMESTAMPLEOID, BTLessEqualStrategyNumber},
+    {INT48GTOID, BTGreaterStrategyNumber},
+    {INT8GTOID, BTGreaterStrategyNumber},
+    {INT84GTOID, BTGreaterStrategyNumber},
+    {INT2GTOID, BTGreaterStrategyNumber},
+    {INT4GTOID, BTGreaterStrategyNumber},
+    {INT24GTOID, BTGreaterStrategyNumber},
+    {INT42GTOID, BTGreaterStrategyNumber},
+    {FLOAT4GTOID, BTGreaterStrategyNumber},
+    {TEXTGTOID, BTGreaterStrategyNumber},
+    {FLOAT8GTOID, BTGreaterStrategyNumber},
+    {BPCHARGTOID, BTGreaterStrategyNumber},
+    {DATEGTOID, BTGreaterStrategyNumber},
+    {FLOAT48GTOID, BTGreaterStrategyNumber},
+    {FLOAT84GTOID, BTGreaterStrategyNumber},
+    {TIMESTAMPTZGTOID, BTGreaterStrategyNumber},
+    {NUMERICGTOID, BTGreaterStrategyNumber},
+    {INT28GTOID, BTGreaterStrategyNumber},
+    {INT82GTOID, BTGreaterStrategyNumber},
+    {TIMESTAMPGTOID, BTGreaterStrategyNumber},
+    {INT48GEOID, BTGreaterEqualStrategyNumber},
+    {INT8GEOID, BTGreaterEqualStrategyNumber},
+    {INT84GEOID, BTGreaterEqualStrategyNumber},
+    {INT2GEOID, BTGreaterEqualStrategyNumber},
+    {INT4GEOID, BTGreaterEqualStrategyNumber},
+    {INT24GEOID, BTGreaterEqualStrategyNumber},
+    {INT42GEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT4GEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT8GEOID, BTGreaterEqualStrategyNumber},
+    {DATEGEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT48GEOID, BTGreaterEqualStrategyNumber},
+    {FLOAT84GEOID, BTGreaterEqualStrategyNumber},
+    {TIMESTAMPTZGEOID, BTGreaterEqualStrategyNumber},
+    {NUMERICGEOID, BTGreaterEqualStrategyNumber},
+    {INT28GEOID, BTGreaterEqualStrategyNumber},
+    {INT82GEOID, BTGreaterEqualStrategyNumber},
+    {TIMESTAMPGEOID, BTGreaterEqualStrategyNumber}
+};
+
+static StrategyNumber get_strategy_number(int operator_no) {
+    auto result = operator_to_strategy_map.find(operator_no);
+    if (result == operator_to_strategy_map.end()) {
+        return InvalidStrategy;
+    }
+    return result->second;
+}
+
+std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI);
+
+void parse_expr(Expr *node,  K2ExprRefValues *ref_values);
+
+void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values);
+
+void parse_relable_type(RelabelType *node, K2ExprRefValues *ref_values);
+
+void parse_var(Var *node, K2ExprRefValues *ref_values);
+
+void parse_const(Const *node, K2ExprRefValues *ref_values);
+
+void parse_param(Param *node, K2ExprRefValues *ref_values);
 
 extern void StrategyGetRingPrefetchQuantityAndTrigger(BufferAccessStrategy strategy, int* quantity, int* trigger);
 /* ----------------------------------------------------------------
@@ -327,17 +483,29 @@ static TableScanDesc InitBeginScan(SeqScanState* node, Relation current_relation
     Snapshot scanSnap;
 
     /*
-     * Choose user-specified snapshot if TimeCapsule clause exists, otherwise 
+     * Choose user-specified snapshot if TimeCapsule clause exists, otherwise
      * estate->es_snapshot instead.
      */
     scanSnap = TvChooseScanSnap(current_relation, (Scan *)node->ps.plan, (ScanState *)node);
-
-    if (!node->isSampleScan) {
-        current_scan_desc = scan_handler_tbl_beginscan(current_relation, 
-            scanSnap, 0, NULL, (ScanState*)node);
+    if (IsK2PgRelation(current_relation)) {
+        std::vector<ScanKeyData> skeys = std::move(parse_conditions(node->ps.plan->qual, node->ps.state->es_param_list_info));
+        if (!skeys.empty()) {
+            elog(DEBUG1, "InitBeginScan with %lu skeys", skeys.size());
+            current_scan_desc = scan_handler_tbl_beginscan(current_relation,
+                scanSnap, skeys.size(), skeys.data(), (ScanState*)node);
+        } else {
+            current_scan_desc = scan_handler_tbl_beginscan(current_relation,
+                scanSnap, 0, NULL, (ScanState*)node);
+        }
     } else {
-        current_scan_desc = InitSampleScanDesc((ScanState*)node, current_relation);
+        if (!node->isSampleScan) {
+            current_scan_desc = scan_handler_tbl_beginscan(current_relation,
+                scanSnap, 0, NULL, (ScanState*)node);
+        } else {
+            current_scan_desc = InitSampleScanDesc((ScanState*)node, current_relation);
+        }
     }
+
     return current_scan_desc;
 }
 
@@ -348,7 +516,7 @@ TableScanDesc BeginScanRelation(SeqScanState* node, Relation relation, Transacti
     bool isUstoreRel = RelationIsUstoreFormat(relation);
 
     /*
-     * Choose user-specified snapshot if TimeCapsule clause exists, otherwise 
+     * Choose user-specified snapshot if TimeCapsule clause exists, otherwise
      * estate->es_snapshot instead.
      */
     scanSnap = TvChooseScanSnap(relation, (Scan *)node->ps.plan, (ScanState *)node);
@@ -455,7 +623,7 @@ void InitScanRelation(SeqScanState* node, EState* estate, int eflags)
             }
         }
         node->lockMode = lockmode;
-        /* Generate node->partitions if exists */ 
+        /* Generate node->partitions if exists */
         if (plan->itrs > 0) {
             Partition part = NULL;
             PruningResult* resultPlan = NULL;
@@ -503,6 +671,7 @@ void InitScanRelation(SeqScanState* node, EState* estate, int eflags)
 
     ExecAssignScanType(node, RelationGetDescr(current_relation));
 }
+
 static inline void InitSeqNextMtd(SeqScan* node, SeqScanState* scanstate)
 {
     if (!node->tablesample) {
@@ -533,6 +702,160 @@ static inline void FlatTLtoBool(const List* targetList, bool* boolArr, AttrNumbe
         elog(DEBUG1, "PMZ-InitSeq FlatTLtoBool: varoattno: %d", variable->varoattno);
     }
 }
+
+std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
+    elog(DEBUG1, "SeqScan parsing %d remote expressions", list_length(exprs));
+    ListCell   *lc;
+    std::vector<ScanKeyData> result;
+    foreach(lc, exprs)
+    {
+        Expr *expr = (Expr *) lfirst(lc);
+
+        /* Extract clause from RestrictInfo, if required */
+        if (IsA(expr, RestrictInfo)) {
+            expr = ((RestrictInfo *) expr)->clause;
+        }
+        elog(DEBUG1, "SeqScan parsing expression: %s", nodeToString(expr));
+        // parse a single clause
+        K2ExprRefValues ref_values;
+        ref_values.column_refs = NIL;
+        ref_values.const_values = NIL;
+        ref_values.paramLI = paramLI;
+        parse_expr(expr, &ref_values);
+        if (list_length(ref_values.column_refs) == 1 && list_length(ref_values.const_values) == 1) {
+            ScanKeyData skey;
+            K2ColumnRef *col_ref = (K2ColumnRef *)linitial(ref_values.column_refs);
+            K2ConstValue *const_value = (K2ConstValue *)linitial(ref_values.const_values);
+            StrategyNumber strategy_no = get_strategy_number(ref_values.opno);
+            if (strategy_no!= InvalidStrategy) {
+                elog(DEBUG1, "SeqScan using strategy number %d for operator: %d", strategy_no, ref_values.opno);
+                ScanKeyInit(&skey, col_ref->attr_num, strategy_no, ref_values.opfunc_id, const_value->value);
+                result.push_back(std::move(skey));
+            } else {
+                elog(WARNING, "Unsupported operator for SeqScan: %d", ref_values.opno);
+            }
+        }
+    }
+    return result;
+}
+
+void parse_expr(Expr *node,  K2ExprRefValues *ref_values) {
+    if (node == NULL)
+        return;
+
+    switch (nodeTag(node))
+    {
+        case T_Var:
+            parse_var((Var *) node, ref_values);
+            break;
+        case T_Const:
+            parse_const((Const *) node, ref_values);
+            break;
+        case T_OpExpr:
+            parse_op_expr((OpExpr *) node, ref_values);
+            break;
+        case T_Param:
+            parse_param((Param *) node, ref_values);
+            break;
+        case T_RelabelType:
+            parse_relable_type((RelabelType *)node, ref_values);
+            break;
+        default:
+            elog(INFO, "K2: unsupported expression type for expr: %s", nodeToString(node));
+            break;
+    }
+}
+
+void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
+    if (list_length(node->args) != 2) {
+        elog(WARNING, "K2: we only handle binary opclause, actual args length: %d for node %s", list_length(node->args), nodeToString(node));
+        return;
+    } else {
+        elog(DEBUG1, "K2: handing binary opclause for node %s", nodeToString(node));
+    }
+
+    StrategyNumber strategy_no = get_strategy_number(node->opno);
+    if (strategy_no!= InvalidStrategy) {
+        ref_values->opno = node->opno;
+        ref_values->opfunc_id = node->opfuncid;
+        ListCell *lc;
+        foreach(lc, node->args)
+        {
+            Expr *arg = (Expr *) lfirst(lc);
+            parse_expr(arg, ref_values);
+        }
+    } else {
+        elog(WARNING, "Unsupported operator for SeqScan: %d", node->opno);
+    }
+}
+
+void parse_relable_type(RelabelType *node, K2ExprRefValues *ref_values) {
+    elog(DEBUG1, "K2: parsing RelabelType %s", nodeToString(node));
+    // the condition is at the current level
+    parse_expr(node->arg, ref_values);
+}
+
+void parse_var(Var *node, K2ExprRefValues *ref_values) {
+    elog(DEBUG1, "K2: parsing Var %s", nodeToString(node));
+    // the condition is at the current level
+    if (node->varlevelsup == 0) {
+        K2ColumnRef *col_ref = (K2ColumnRef *)palloc0(sizeof(K2ColumnRef));
+        col_ref->attno = node->varno;
+        col_ref->attr_num = node->varattno;
+        col_ref->attr_typid = node->vartype;
+        col_ref->atttypmod = node->vartypmod;
+        ref_values->column_refs = lappend(ref_values->column_refs, col_ref);
+    }
+}
+
+void parse_const(Const *node, K2ExprRefValues *ref_values) {
+    elog(DEBUG1, "K2: parsing Const %s", nodeToString(node));
+    K2ConstValue *val = (K2ConstValue *)palloc0(sizeof(K2ConstValue));
+    val->atttypid = node->consttype;
+    val->is_null = node->constisnull;
+    val->attlen = node->constlen;
+    val->attbyval = node->constbyval;
+
+    val->value = 0;
+    if (node->constisnull || node->constbyval)
+        val->value = node->constvalue;
+    else
+        val->value = PointerGetDatum(node->constvalue);
+
+    ref_values->const_values = lappend(ref_values->const_values, val);
+}
+
+void parse_param(Param *node, K2ExprRefValues *ref_values) {
+    elog(DEBUG1, "K2: parsing Param %s", nodeToString(node));
+    ParamExternData *prm = NULL;
+    prm = &ref_values->paramLI->params[node->paramid - 1];
+
+    if (!OidIsValid(prm->ptype) ||
+        prm->ptype != node->paramtype ||
+        !(prm->pflags & PARAM_FLAG_CONST))
+    {
+        /* Planner should ensure this does not happen */
+        elog(ERROR, "Invalid parameter: %s", nodeToString(node));
+    }
+
+    K2ConstValue *val = (K2ConstValue *)palloc0(sizeof(K2ConstValue));
+    val->atttypid = prm->ptype;
+    val->is_null = prm->isnull;
+    int16        typLen = 0;
+    bool        typByVal = false;
+    val->value = 0;
+
+    get_typlenbyval(node->paramtype, &typLen, &typByVal);
+    val->attlen = typLen;
+    val->attbyval = typByVal;
+    if (prm->isnull || typByVal)
+        val->value = prm->value;
+    else
+        val->value = datumCopy(prm->value, typByVal, typLen);
+
+    ref_values->const_values = lappend(ref_values->const_values, val);
+}
+
 
 /*
  * Given a seq scan node's quals, extract all valid column numbers
@@ -690,7 +1013,7 @@ SeqScanState* ExecInitSeqScan(SeqScan* node, EState* estate, int eflags)
      */
     InitSeqNextMtd(node, scanstate);
     if (IsValidScanDesc(scanstate->ss_currentScanDesc)) {
-        scan_handler_tbl_init_parallel_seqscan(scanstate->ss_currentScanDesc, 
+        scan_handler_tbl_init_parallel_seqscan(scanstate->ss_currentScanDesc,
             scanstate->ps.plan->dop, scanstate->partScanDirection);
     } else {
         scanstate->ps.stubType = PST_Scan;
