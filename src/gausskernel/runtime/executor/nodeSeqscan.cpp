@@ -704,7 +704,7 @@ static inline void FlatTLtoBool(const List* targetList, bool* boolArr, AttrNumbe
 }
 
 std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
-    elog(INFO, "SeqScan parsing %d remote expressions", list_length(exprs));
+    elog(DEBUG1, "SeqScan parsing %d remote expressions", list_length(exprs));
     ListCell   *lc;
     std::vector<ScanKeyData> result;
     foreach(lc, exprs)
@@ -715,7 +715,7 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
         if (IsA(expr, RestrictInfo)) {
             expr = ((RestrictInfo *) expr)->clause;
         }
-        elog(INFO, "SeqScan parsing expression: %s", nodeToString(expr));
+        elog(DEBUG1, "SeqScan parsing expression: %s", nodeToString(expr));
         // parse a single clause
         K2ExprRefValues ref_values;
         ref_values.column_refs = NIL;
@@ -728,7 +728,7 @@ std::vector<ScanKeyData> parse_conditions(List *exprs, ParamListInfo paramLI) {
             K2ConstValue *const_value = (K2ConstValue *)linitial(ref_values.const_values);
             StrategyNumber strategy_no = get_strategy_number(ref_values.opno);
             if (strategy_no!= InvalidStrategy) {
-                elog(INFO, "SeqScan using strategy number %d for operator: %d", strategy_no, ref_values.opno);
+                elog(DEBUG1, "SeqScan using strategy number %d for operator: %d", strategy_no, ref_values.opno);
                 ScanKeyInit(&skey, col_ref->attr_num, strategy_no, ref_values.opfunc_id, const_value->value);
                 result.push_back(std::move(skey));
             } else {
@@ -768,7 +768,7 @@ void parse_expr(Expr *node,  K2ExprRefValues *ref_values) {
 
 void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
     if (list_length(node->args) != 2) {
-        elog(INFO, "K2: we only handle binary opclause, actual args length: %d for node %s", list_length(node->args), nodeToString(node));
+        elog(WARNING, "K2: we only handle binary opclause, actual args length: %d for node %s", list_length(node->args), nodeToString(node));
         return;
     } else {
         elog(DEBUG1, "K2: handing binary opclause for node %s", nodeToString(node));
