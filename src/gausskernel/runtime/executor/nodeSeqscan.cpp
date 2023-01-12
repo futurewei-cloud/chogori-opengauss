@@ -774,26 +774,18 @@ void parse_op_expr(OpExpr *node, K2ExprRefValues *ref_values) {
         elog(DEBUG1, "K2: handing binary opclause for node %s", nodeToString(node));
     }
 
-    ListCell *lc;
-    switch (get_oprrest(node->opno))
-    {
-        case F_EQSEL: //  equal =
-        case F_SCALARLTSEL: // Less than <
-        case F_SCALARGTSEL: // Greater than >
-            elog(DEBUG1, "K2: parsing OpExpr: %d", get_oprrest(node->opno));
-
-            ref_values->opno = node->opno;
-            ref_values->opfunc_id = node->opfuncid;
-            foreach(lc, node->args)
-            {
-                Expr *arg = (Expr *) lfirst(lc);
-                parse_expr(arg, ref_values);
-            }
-
-            break;
-        default:
-            elog(INFO, "K2: unsupported OpExpr type: %d", get_oprrest(node->opno));
-            break;
+    StrategyNumber strategy_no = get_strategy_number(node->opno);
+    if (strategy_no!= InvalidStrategy) {
+        ref_values->opno = node->opno;
+        ref_values->opfunc_id = node->opfuncid;
+        ListCell *lc;
+        foreach(lc, node->args)
+        {
+            Expr *arg = (Expr *) lfirst(lc);
+            parse_expr(arg, ref_values);
+        }
+    } else {
+        elog(WARNING, "Unsupported operator for SeqScan: %d", node->opno);
     }
 }
 
