@@ -984,8 +984,8 @@ CamScanDesc camBeginScan(Relation relation, Relation index, bool xs_want_itup, i
 	size_t size = sizeof(ScanKeyData) * nkeys;
 	ScanKeyData *s_keys = (ScanKeyData *)palloc0(size);
 	memcpy(s_keys, key, size);
-	camScan->key   = key;
-	camScan->nkeys = s_keys;
+	camScan->key   = s_keys;
+	camScan->nkeys = nkeys;
 	camScan->tableOid = RelationGetRelid(relation);
 
 	/* Setup the scan plan */
