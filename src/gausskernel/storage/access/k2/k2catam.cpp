@@ -980,8 +980,12 @@ CamScanDesc camBeginScan(Relation relation, Relation index, bool xs_want_itup, i
 
 	/* Set up K2PG scan description */
 	CamScanDesc camScan = (CamScanDesc) palloc0(sizeof(CamScanDescData));
+	// copy the keys to avoid the current keys go out of scope for subsequent scan operations
+	size_t size = sizeof(ScanKeyData) * nkeys;
+	ScanKeyData *s_keys = (ScanKeyData *)palloc0(size);
+	memcpy(s_keys, key, size);
 	camScan->key   = key;
-	camScan->nkeys = nkeys;
+	camScan->nkeys = s_keys;
 	camScan->tableOid = RelationGetRelid(relation);
 
 	/* Setup the scan plan */
