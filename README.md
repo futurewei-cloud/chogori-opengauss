@@ -1,3 +1,6 @@
+"This Project has been archived by the owner, who is no longer providing support.  The project remains available to authorized users on a "read only" basis."
+
+
 ![openGauss Logo](doc/openGauss-logo.png "openGauss logo")
 
 [English](./README.en.md) | 简体中文
